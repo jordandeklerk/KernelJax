@@ -2,7 +2,7 @@
 
 <img alt="KernelJAX" src="docs/source/_static/kerneljax-logo.png" width="650">
 
-<br>
+<br><br>
 
 <p>
   <em>A low-level JAX interface for nonparametric kernel smoothing of mixed-type data.</em>
