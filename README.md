@@ -39,6 +39,6 @@ naturally into the wider JAX ecosystem.
 <br>
 
 > [!WARNING]
-> KernelJAX is in early development and has not been released yet. The API is
+> KernelJax is in early development and has not been released yet. The API is
 > unstable, and installation instructions, documentation, and examples are
 > coming soon.
