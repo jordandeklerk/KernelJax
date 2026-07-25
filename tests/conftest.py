@@ -1,1 +1,1 @@
-"""Shared pytest fixtures and configuration for the KernelJAX test suite."""
+"""Shared pytest fixtures and configuration for the KernelJax test suite."""

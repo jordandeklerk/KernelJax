@@ -1,4 +1,4 @@
-"""Initialization tests for the KernelJAX package."""
+"""Initialization tests for the KernelJax package."""
 
 import kerneljax
 
