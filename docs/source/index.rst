@@ -3,10 +3,11 @@ KernelJAX
 
 **KernelJAX** is a low-level JAX library for nonparametric kernel smoothing of
 mixed-type data, aimed at researchers who want to develop new methodology from
-composable, differentiable building blocks. Written in JAX, it compiles to CPUs,
-GPUs, and TPUs through XLA and supports automatic differentiation and
-vectorization, so those pieces can be tailored, extended, and combined with other
-libraries to fit a project's needs.
+composable, differentiable building blocks. Each kernel, bandwidth selector, and
+smoother is designed to be understood, modified, and recombined, not just
+called. Through JAX and XLA, estimators built from these pieces run natively on
+CPUs, GPUs, and TPUs with automatic differentiation and vectorized operations,
+and fit naturally alongside the broader JAX ecosystem.
 
 .. warning::
 
