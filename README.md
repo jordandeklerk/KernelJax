@@ -1,8 +1,8 @@
 <div style="text-align: center;" align="center">
 
-<img alt="KernelJAX" src="docs/source/_static/kerneljax-logo.png" width="650">
+<img alt="KernelJAX" src="https://raw.githubusercontent.com/jordandeklerk/KernelJax/main/docs/source/_static/kerneljax-logo.png" width="650">
 
-<div><img src="docs/source/_static/spacer.png" width="1" height="32" alt=""></div>
+<div><img src="https://raw.githubusercontent.com/jordandeklerk/KernelJax/main/docs/source/_static/spacer.png" width="1" height="32" alt=""></div>
 
 <p>
   <em>A low-level JAX interface for nonparametric kernel smoothing of mixed-type data.</em>
