@@ -60,3 +60,9 @@ docs/source/api/generated/
 .idea/
 .vscode/
 .DS_Store
+
+/GPJax/
+/R-Package-np/
+/jax/
+
+/.superpowers/
