@@ -2234,10 +2234,10 @@ packages:
 - pypi: ./
   name: kerneljax
   version: 0.0.1
-  sha256: 3ac70b781574e91a6ec6ba183b21894e2be65dc0a538c7b98769dc10e3a0aa8f
+  sha256: 51f870e71583e13e14771f1b43ea04573182fa583b8f05300faadb5544f69d94
   requires_dist:
-  - jax>=0.4.35
-  - jaxlib>=0.4.35
+  - jax>=0.5.0,<0.11
+  - jaxlib>=0.5.0,<0.11
   - prek ; extra == 'dev'
   - ruff>=0.11.7 ; extra == 'dev'
   - mypy ; extra == 'dev'
@@ -2249,7 +2249,7 @@ packages:
   - sphinx-copybutton ; extra == 'doc'
   - sphinx-design ; extra == 'doc'
   - numpydoc ; extra == 'doc'
-  - jax[cuda12]>=0.4.35 ; extra == 'gpu'
+  - jax[cuda12]>=0.5.0,<0.11 ; extra == 'gpu'
   - pytest ; extra == 'test'
   - pytest-cov ; extra == 'test'
   - pytest-timeout ; extra == 'test'

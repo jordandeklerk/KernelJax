@@ -9,8 +9,8 @@ version = "0.0.1"
 [tasks]
 
 [dependencies]
-jax = ">=0.4.35"
-jaxlib = ">=0.4.35"
+jax = ">=0.5.0,<0.11"
+jaxlib = ">=0.5.0,<0.11"
 
 [feature.dev.dependencies]
 pytest = ">=7.0.0"
@@ -60,7 +60,7 @@ package = "flit build"
 platforms = ["linux-64"]
 
 [feature.gpu.pypi-dependencies]
-jax = { version = ">=0.4.35", extras = ["cuda12"] }
+jax = { version = ">=0.5.0,<0.11", extras = ["cuda12"] }
 
 [environments]
 dev = ["dev", "build"]
