@@ -18,7 +18,7 @@ Installation
 
 .. code-block:: bash
 
-   pip install kerneljax
+   uv pip install kerneljax
 
 Indices
 -------
