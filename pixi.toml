@@ -1,0 +1,70 @@
+[workspace]
+authors = ["Jordan DeKlerk <jordan.deklerk@gmail.com>"]
+description = "Low-level JAX interface for nonparametric kernel smoothing of mixed-type data."
+channels = ["conda-forge"]
+name = "kerneljax"
+platforms = ["linux-64", "osx-arm64", "osx-64"]
+version = "0.0.1"
+
+[tasks]
+
+[dependencies]
+jax = ">=0.5.0,<0.11"
+jaxlib = ">=0.5.0,<0.11"
+
+[feature.dev.dependencies]
+pytest = ">=7.0.0"
+pytest-cov = ">=4.0.0"
+pytest-timeout = ">=2.0.0"
+
+[feature.dev.tasks]
+tests = "pytest -vv"
+
+[feature.docs.dependencies]
+sphinx = "*"
+sphinx-book-theme = "*"
+sphinx-copybutton = "*"
+sphinx-design = "*"
+numpydoc = "*"
+
+[feature.docs.pypi-dependencies]
+myst-parser = { version = ">=2.0.0", extras = ["linkify"] }
+myst-nb = ">=1.0.0"
+
+[feature.docs.tasks]
+docs = "sphinx-build -d docs/_doctree docs/source docs/_build --color -v -bhtml"
+
+[feature.lint.dependencies]
+mypy = ">=1.0.0"
+
+[feature.lint.pypi-dependencies]
+prek = "*"
+ruff = ">=0.11.7"
+ty = "*"
+
+[feature.lint.tasks]
+lint = "prek run --all-files"
+typecheck = { cmd = "mypy kerneljax && ty check kerneljax" }
+
+[feature.build.dependencies]
+pip = "*"
+flit = ">=3.4,<4"
+
+[feature.build.pypi-dependencies]
+kerneljax = { path = ".", editable = true }
+
+[feature.build.tasks]
+package = "flit build"
+
+[feature.gpu]
+platforms = ["linux-64"]
+
+[feature.gpu.pypi-dependencies]
+jax = { version = ">=0.5.0,<0.11", extras = ["cuda12"] }
+
+[environments]
+dev = ["dev", "build"]
+docs = ["docs", "build"]
+check = ["lint"]
+build = ["build"]
+gpu = ["gpu"]

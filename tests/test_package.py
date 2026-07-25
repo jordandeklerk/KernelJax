@@ -1,0 +1,12 @@
+"""Initialization tests for the KernelJAX package."""
+
+import kerneljax
+
+
+def test_package_imports():
+    assert kerneljax is not None
+
+
+def test_version_is_exposed():
+    assert isinstance(kerneljax.__version__, str)
+    assert kerneljax.__version__
