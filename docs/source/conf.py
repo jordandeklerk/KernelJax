@@ -1,6 +1,6 @@
-"""Sphinx configuration for the KernelJAX documentation."""
+"""Sphinx configuration for the KernelJax documentation."""
 
-project = "KernelJAX"
+project = "KernelJax"
 copyright = "2026, Jordan DeKlerk"
 author = "Jordan DeKlerk"
 
@@ -19,7 +19,7 @@ exclude_patterns = []
 html_theme = "sphinx_book_theme"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
-html_title = "KernelJAX"
+html_title = "KernelJax"
 
 autosummary_generate = True
 numpydoc_show_class_members = False

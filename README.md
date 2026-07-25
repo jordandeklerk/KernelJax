@@ -1,6 +1,6 @@
 <div style="text-align: center;" align="center">
 
-<img alt="KernelJAX" src="https://raw.githubusercontent.com/jordandeklerk/KernelJax/main/docs/source/_static/kerneljax-logo.png" width="650">
+<img alt="KernelJax" src="https://raw.githubusercontent.com/jordandeklerk/KernelJax/main/docs/source/_static/kerneljax-logo.png" width="650">
 
 <div><img src="https://raw.githubusercontent.com/jordandeklerk/KernelJax/main/docs/source/_static/spacer.png" width="1" height="32" alt=""></div>
 

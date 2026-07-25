@@ -1,1 +1,1 @@
-"""Tests for KernelJAX."""
+"""Tests for KernelJax."""
