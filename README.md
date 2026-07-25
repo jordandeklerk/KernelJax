@@ -32,6 +32,8 @@ composable, differentiable building blocks. Written in JAX, it compiles to CPUs,
 GPUs, and TPUs through XLA and supports automatic differentiation and
 vectorization.
 
+<br>
+
 > [!WARNING]
 > KernelJAX is in early development and has not been released yet. The API is
 > unstable, and installation instructions, documentation, and examples are
