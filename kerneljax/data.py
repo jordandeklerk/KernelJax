@@ -185,14 +185,6 @@ class MixedData:
         -------
         MixedData
             The validated design matrix.
-
-        Raises
-        ------
-        ValueError
-            If ``con``, ``uno`` and ``orde`` are all omitted, if a block has
-            fewer than two dimensions, if a levels tuple has the wrong
-            length, if a level count is below 2, or if a code falls outside
-            ``[0, levels)``.
         """
         blocks = [b for b in (con, uno, orde) if b is not None]
         if not blocks:
