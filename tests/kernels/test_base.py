@@ -1,11 +1,9 @@
 """Tests for the kernel abstract base classes."""
 
-import dataclasses
-
 import jax.numpy as jnp
 import pytest
 
-from kerneljax.kernels.base import ContinuousKernel, Op, OrderedKernel
+from kerneljax.kernels.base import Op
 
 
 def test_op_constants_are_method_names():
@@ -34,31 +32,15 @@ def test_unimplemented_operators_raise_not_implemented(request, kernel_cls_fixtu
         fn(*call_args)
 
 
-def test_operator_resolves_by_getattr():
-    @dataclasses.dataclass(frozen=True)
-    class WithExtra(ContinuousKernel):
-        def value(self, x, y, h):
-            return jnp.ones_like(x * y * h)
-
-        def my_op(self, x, y, h):
-            return jnp.full_like(x * y * h, 7.0)
-
-    k = WithExtra()
+def test_operator_resolves_by_getattr(with_extra_kernel_cls):
+    k = with_extra_kernel_cls()
     op_name = "my_op"
     fn = getattr(k, op_name)
     assert fn(jnp.array(1.0), jnp.array(1.0), jnp.array(1.0)) == 7.0
 
 
-def test_ordered_kernel_value_uses_position_and_levels():
-    @dataclasses.dataclass(frozen=True)
-    class ToyOrdered(OrderedKernel):
-        def value(self, x, y, lam, levels):
-            return jnp.where(x == y, 1.0, jnp.power(lam, jnp.abs(x - y)) / levels)
-
-        def upper_bound(self, levels):
-            return 1.0
-
-    k = ToyOrdered()
+def test_ordered_kernel_value_uses_position_and_levels(toy_ordered_kernel_cls):
+    k = toy_ordered_kernel_cls()
     same = k.value(jnp.array(2), jnp.array(2), jnp.array(0.5), 4)
     apart = k.value(jnp.array(0), jnp.array(3), jnp.array(0.5), 4)
     assert same == 1.0
