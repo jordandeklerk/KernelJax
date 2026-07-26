@@ -193,9 +193,8 @@ def ksum(
         Static.
     chunk : int or tuple of int, optional
         Chunk sizes as ``(eval, train)``. A bare int chunks only the
-        evaluation axis. Each chunked axis runs a
-        ``jax.checkpoint``-wrapped ``lax.scan`` over equal blocks, padded
-        by repeating the last row. Static.
+        evaluation axis. Bounds the peak memory of the contraction at the
+        cost of additional compute. Static.
 
     Returns
     -------

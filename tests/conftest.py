@@ -204,3 +204,85 @@ def ksum_train_indexed_bandwidth():
 def ksum_eval_indexed_bandwidth():
     h = jnp.asarray(np.linspace(0.5, 1.0, 6)).reshape(6, 1)
     return Bandwidth(h=h, lam_uno=jnp.array([0.15]), lam_ord=jnp.zeros(0), h_axis="eval")
+
+
+@pytest.fixture
+def density_data():
+    rng = np.random.default_rng(3)
+    return MixedData.from_blocks(
+        con=jnp.asarray(rng.normal(size=(15, 1))),
+        uno=jnp.asarray(rng.integers(0, 3, size=(15, 1))),
+        orde=jnp.asarray(rng.integers(0, 4, size=(15, 1))),
+        uno_levels=(3,),
+        ord_levels=(4,),
+    )
+
+
+@pytest.fixture
+def density_bandwidth():
+    return Bandwidth(h=jnp.array([0.6]), lam_uno=jnp.array([0.25]), lam_ord=jnp.array([0.3]))
+
+
+@pytest.fixture
+def cv_mixed_data():
+    rng = np.random.default_rng(11)
+    combos = np.array([(u, o) for u in range(3) for o in range(3)] * 2)
+    rng.shuffle(combos)
+    con = jnp.asarray(rng.normal(size=(combos.shape[0], 1)))
+    return MixedData.from_blocks(
+        con=con,
+        uno=jnp.asarray(combos[:, :1]),
+        orde=jnp.asarray(combos[:, 1:]),
+        uno_levels=(3,),
+        ord_levels=(3,),
+    )
+
+
+@pytest.fixture
+def cv_mixed_bandwidth():
+    return Bandwidth(h=jnp.array([0.5]), lam_uno=jnp.array([0.3]), lam_ord=jnp.array([0.4]))
+
+
+@pytest.fixture
+def cv_continuous_data():
+    rng = np.random.default_rng(12)
+    return MixedData.continuous(jnp.asarray(rng.normal(size=(10, 1))))
+
+
+@pytest.fixture
+def cv_continuous_bandwidth():
+    return Bandwidth(h=jnp.array([0.6]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+
+
+@pytest.fixture
+def cv_discrete_data():
+    rng = np.random.default_rng(13)
+    combos = np.array([(u, o) for u in range(3) for o in range(3)] * 2)
+    rng.shuffle(combos)
+    return MixedData.from_blocks(
+        uno=jnp.asarray(combos[:, :1]),
+        orde=jnp.asarray(combos[:, 1:]),
+        uno_levels=(3,),
+        ord_levels=(3,),
+    )
+
+
+@pytest.fixture
+def cv_discrete_bandwidth():
+    return Bandwidth(h=jnp.zeros(0), lam_uno=jnp.array([0.3]), lam_ord=jnp.array([0.4]))
+
+
+@pytest.fixture
+def public_api_data():
+    return MixedData.from_blocks(
+        con=jnp.linspace(-1.0, 2.0, 8).reshape(8, 1),
+        uno=jnp.asarray([[i % 3] for i in range(8)]),
+        orde=jnp.asarray([[i % 2] for i in range(8)]),
+        uno_levels=(3,),
+        ord_levels=(2,),
+    )
+
+
+@pytest.fixture
+def public_api_bandwidth():
+    return Bandwidth(h=jnp.array([0.6]), lam_uno=jnp.array([0.2]), lam_ord=jnp.array([0.3]))
