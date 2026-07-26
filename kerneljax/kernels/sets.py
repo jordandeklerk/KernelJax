@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import dataclasses
 
+import jax
+
 from kerneljax.kernels.base import ContinuousKernel, OrderedKernel, UnorderedKernel
 from kerneljax.kernels.continuous import Gaussian
 from kerneljax.kernels.discrete import AitchisonAitken, WangVanRyzin
@@ -11,14 +13,13 @@ from kerneljax.kernels.discrete import AitchisonAitken, WangVanRyzin
 __all__ = ["KernelSet"]
 
 
+@jax.tree_util.register_static
 @dataclasses.dataclass(frozen=True)
 class KernelSet:
     """One kernel family per column kind.
 
-    A ``KernelSet`` sits in a static position on the jit boundary, so it is a
-    plain frozen value rather than a pytree. It can be paired in an ordinary
-    tuple, one set for the regressors and one for the response, to seam in
-    conditional density estimation later.
+    Registered as a static pytree node, so it carries no leaves and can be
+    passed straight into a jitted function without ``static_argnames``.
 
     Parameters
     ----------

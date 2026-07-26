@@ -2,6 +2,7 @@
 
 import jax
 import jax.numpy as jnp
+import pytest
 
 from kerneljax.kernels import AitchisonAitken, Gaussian, KernelSet, Op, WangVanRyzin
 
@@ -47,3 +48,39 @@ def test_static_argument_does_not_recompile_for_an_equal_kernel_set():
     assert jnp.isfinite(first)
     assert jnp.isfinite(second)
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    "kernel_obj",
+    [Gaussian(), AitchisonAitken(), WangVanRyzin(), KernelSet()],
+)
+def test_static_registration_leaves_no_pytree_leaves(kernel_obj):
+    assert jax.tree.leaves(kernel_obj) == []
+
+
+def test_jit_accepts_a_kernel_set_without_static_argnames():
+    def f(x, kernels):
+        return kernels.continuous.value(x, jnp.array(0.0), jnp.array(1.0))
+
+    assert jnp.isfinite(jax.jit(f)(jnp.array(0.5), KernelSet()))
+
+
+def test_jit_does_not_recompile_for_an_equal_kernel_set_without_static_argnames():
+    calls = {"n": 0}
+
+    def f(x, kernels):
+        calls["n"] += 1
+        return kernels.continuous.value(x, jnp.array(0.0), jnp.array(1.0))
+
+    jitted = jax.jit(f)
+    jitted(jnp.array(0.5), KernelSet())
+    jitted(jnp.array(0.9), KernelSet())
+    assert calls["n"] == 1
+
+
+def test_jit_accepts_a_user_defined_kernel_inside_a_kernel_set(bare_continuous_kernel_cls):
+    def f(x, kernels):
+        return kernels.continuous.value(x, jnp.array(0.0), jnp.array(1.0))
+
+    out = jax.jit(f)(jnp.array(0.5), KernelSet(continuous=bare_continuous_kernel_cls()))
+    assert jnp.isfinite(out)

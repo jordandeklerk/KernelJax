@@ -5,6 +5,7 @@ import dataclasses
 import jax.numpy as jnp
 import pytest
 
+from kerneljax.bandwidth import Bandwidth
 from kerneljax.data import ColumnSpec, Kind, MixedData
 from kerneljax.kernels.base import ContinuousKernel, OrderedKernel, UnorderedKernel
 from kerneljax.kernels.continuous import Gaussian
@@ -76,3 +77,8 @@ def aitchison_aitken():
 @pytest.fixture
 def wang_van_ryzin():
     return WangVanRyzin()
+
+
+@pytest.fixture
+def bandwidth():
+    return Bandwidth(h=jnp.array([0.5]), lam_uno=jnp.array([0.2]), lam_ord=jnp.array([0.3]))
