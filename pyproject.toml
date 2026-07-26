@@ -27,6 +27,7 @@ dynamic = ["version", "description"]
 dependencies = [
     "jax>=0.5.0,<0.11",
     "jaxlib>=0.5.0,<0.11",
+    "jaxtyping>=0.2.36",
 ]
 
 [tool.flit.module]
@@ -82,12 +83,16 @@ select = [
 ignore = [
     "D203", # one-blank-line-before-class
     "D213", # multi-line-summary-second-line
+    "F722", # jaxtyping shape strings are forward-annotation syntax errors to pyflakes
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "kerneljax/__init__.py" = ["I", "F401", "E402", "F403"]
 "kerneljax/**/__init__.py" = ["I", "F401", "E402", "F403"]
 "tests/**/*" = ["D", "E402"]
+
+[tool.ruff.lint.isort]
+known-third-party = ["jax", "jaxlib", "jaxtyping", "numpy", "scipy"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
@@ -96,7 +101,7 @@ convention = "numpy"
 docstring-code-format = false
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 warn_redundant_casts = true
 warn_unused_configs = true
 pretty = true
