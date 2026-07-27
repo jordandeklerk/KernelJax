@@ -4,6 +4,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
+from kerneljax.estimators.density import density
 from kerneljax.kernels import AitchisonAitken, Gaussian, KernelSet, Op, WangVanRyzin
 
 
@@ -84,3 +85,17 @@ def test_jit_accepts_a_user_defined_kernel_inside_a_kernel_set(bare_continuous_k
 
     out = jax.jit(f)(jnp.array(0.5), KernelSet(continuous=bare_continuous_kernel_cls()))
     assert jnp.isfinite(out)
+
+
+def test_kernel_set_jit_needs_no_static_argnames(public_api_data, public_api_bandwidth):
+    calls = {"n": 0}
+
+    def wrapped(data, bw, kernels):
+        calls["n"] += 1
+        return density(data, bw, kernels=kernels).value.sum()
+
+    jitted = jax.jit(wrapped)
+    jitted(public_api_data, public_api_bandwidth, KernelSet())
+    jitted(public_api_data, public_api_bandwidth, KernelSet())
+
+    assert calls["n"] == 1

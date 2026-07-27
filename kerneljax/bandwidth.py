@@ -57,43 +57,6 @@ class Bandwidth:
         return dataclasses.replace(self, **changes)
 
 
-def broadcast_h(bw: Bandwidth, p_con: int) -> Float[Array, "n_eval n_train p_con"]:
-    """Reshape ``bw.h`` to an explicit three axis form for the kernel sum.
-
-    ``bw.h_axis`` selects which of the leading two axes carries the
-    bandwidth, and the shape of ``h`` must match that tag.
-
-    Parameters
-    ----------
-    bw : Bandwidth
-        The bandwidth tree to reshape.
-    p_con : int
-        Number of continuous columns, the expected trailing width of ``h``.
-
-    Returns
-    -------
-    Float[Array, "n_eval n_train p_con"]
-        ``h`` reshaped to ``(1, 1, p_con)`` when shared, ``(n_eval, 1,
-        p_con)`` when eval indexed, or ``(1, n_train, p_con)`` when train
-        indexed.
-    """
-    h = bw.h
-    if bw.h_axis == "shared":
-        if h.ndim != 1:
-            raise ValueError(f"h_axis='shared' needs a one dimensional h, got shape {h.shape}")
-        if h.shape[0] != p_con:
-            raise ValueError(f"h has trailing width {h.shape[0]}, expected p_con={p_con}")
-        return h.reshape(1, 1, p_con)
-
-    if h.ndim != 2:
-        raise ValueError(f"h_axis={bw.h_axis!r} needs a two dimensional h of shape (n, p_con), got shape {h.shape}")
-    if h.shape[1] != p_con:
-        raise ValueError(f"h has trailing width {h.shape[1]}, expected p_con={p_con}")
-    if bw.h_axis == "eval":
-        return h[:, None, :]
-    return h[None, :, :]
-
-
 @partial(jax.tree_util.register_dataclass, data_fields=["x", "y"], meta_fields=[])
 @dataclasses.dataclass(frozen=True)
 class ConditionalBandwidth:
@@ -222,6 +185,43 @@ class BandwidthTransform:
         )
 
         return lower, upper
+
+
+def broadcast_h(bw: Bandwidth, p_con: int) -> Float[Array, "n_eval n_train p_con"]:
+    """Reshape ``bw.h`` to an explicit three axis form for the kernel sum.
+
+    ``bw.h_axis`` selects which of the leading two axes carries the
+    bandwidth, and the shape of ``h`` must match that tag.
+
+    Parameters
+    ----------
+    bw : Bandwidth
+        The bandwidth tree to reshape.
+    p_con : int
+        Number of continuous columns, the expected trailing width of ``h``.
+
+    Returns
+    -------
+    Float[Array, "n_eval n_train p_con"]
+        ``h`` reshaped to ``(1, 1, p_con)`` when shared, ``(n_eval, 1,
+        p_con)`` when eval indexed, or ``(1, n_train, p_con)`` when train
+        indexed.
+    """
+    h = bw.h
+    if bw.h_axis == "shared":
+        if h.ndim != 1:
+            raise ValueError(f"h_axis='shared' needs a one dimensional h, got shape {h.shape}")
+        if h.shape[0] != p_con:
+            raise ValueError(f"h has trailing width {h.shape[0]}, expected p_con={p_con}")
+        return h.reshape(1, 1, p_con)
+
+    if h.ndim != 2:
+        raise ValueError(f"h_axis={bw.h_axis!r} needs a two dimensional h of shape (n, p_con), got shape {h.shape}")
+    if h.shape[1] != p_con:
+        raise ValueError(f"h has trailing width {h.shape[1]}, expected p_con={p_con}")
+    if bw.h_axis == "eval":
+        return h[:, None, :]
+    return h[None, :, :]
 
 
 def normal_reference(data: MixedData, kernels: KernelSet) -> Bandwidth:
