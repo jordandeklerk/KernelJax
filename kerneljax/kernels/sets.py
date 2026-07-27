@@ -18,9 +18,6 @@ __all__ = ["KernelSet"]
 class KernelSet:
     """One kernel family per column kind.
 
-    Registered as a static pytree node, so it carries no leaves and can be
-    passed straight into a jitted function without ``static_argnames``.
-
     Parameters
     ----------
     continuous : ContinuousKernel

@@ -304,3 +304,19 @@ def singular_design():
     design = jnp.concatenate([base, base[:, :1]], axis=1)
     weights = jnp.ones(20)
     return design, weights
+
+
+@pytest.fixture
+def basis_train():
+    rng = np.random.default_rng(6)
+    return MixedData.continuous(jnp.asarray(rng.normal(size=(6, 2))))
+
+
+@pytest.fixture
+def basis_at():
+    return MixedData.continuous(jnp.array([[0.3, -0.2]]))
+
+
+@pytest.fixture
+def basis_bandwidth():
+    return Bandwidth(h=jnp.array([0.5, 0.8]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))

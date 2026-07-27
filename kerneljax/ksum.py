@@ -60,7 +60,7 @@ def kweights(
         Kernel families, one per column kind. Defaults to ``KernelSet()``.
         Static.
     op : str or Mapping[Kind, str] or tuple of str
-        Kernel operator, resolved to a method name at trace time. A string
+        Kernel operator, naming a method on the kernel. A string
         applies to every column, a mapping keyed by ``Kind`` applies one
         operator per kind, and a tuple gives one operator per column in
         original column order. Static.
