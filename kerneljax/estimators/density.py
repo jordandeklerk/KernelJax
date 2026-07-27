@@ -19,6 +19,23 @@ from kerneljax.typing import Array
 __all__ = ["DensityFit", "density"]
 
 
+@partial(jax.tree_util.register_dataclass, data_fields=["value", "bandwidth"], meta_fields=[])
+@dataclasses.dataclass(frozen=True)
+class DensityFit:
+    """Result of a mixed-type density estimate.
+
+    Parameters
+    ----------
+    value : Float[Array, " n_eval"]
+        The density estimate at each evaluation point.
+    bandwidth : Bandwidth
+        The bandwidth used to produce ``value``.
+    """
+
+    value: Float[Array, " n_eval"]
+    bandwidth: Bandwidth
+
+
 def density(
     train: MixedData,
     bw: Bandwidth,
@@ -74,20 +91,3 @@ def density(
         denom = kept.astype(total.dtype)[:, None]
 
     return DensityFit(value=(total / denom).reshape(-1), bandwidth=bw)
-
-
-@partial(jax.tree_util.register_dataclass, data_fields=["value", "bandwidth"], meta_fields=[])
-@dataclasses.dataclass(frozen=True)
-class DensityFit:
-    """Result of a mixed-type density estimate.
-
-    Parameters
-    ----------
-    value : Float[Array, " n_eval"]
-        The density estimate at each evaluation point.
-    bandwidth : Bandwidth
-        The bandwidth used to produce ``value``.
-    """
-
-    value: Float[Array, " n_eval"]
-    bandwidth: Bandwidth

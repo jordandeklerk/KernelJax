@@ -336,7 +336,7 @@ def _sum_over_eval_chunks(
     chunk_eval: int,
     chunk_train: int | None,
 ) -> Array:
-    """Chunk the evaluation axis with lax.scan, contracting each block against the training axis."""
+    """Chunk the evaluation axis, contracting each block against the training axis."""
     eval_blocks = jax.tree.map(lambda column: _pad_rows(column, chunk_eval), evaluate)
     idx_blocks = _pad_index(jnp.arange(evaluate.n), evaluate.n, chunk_eval)
     h_blocks = _pad_rows(bw.h, chunk_eval) if bw.h_axis == "eval" else None

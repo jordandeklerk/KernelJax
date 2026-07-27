@@ -1,4 +1,4 @@
-"""Bandwidth selection by minimizing a cross-validation criterion with a jittable solver."""
+"""Bandwidth selection by minimizing a cross-validation criterion."""
 
 from __future__ import annotations
 
@@ -17,6 +17,36 @@ from kerneljax.typing import Array, ScalarFloat
 __all__ = ["SelectionResult", "lbfgs", "select_bandwidth"]
 
 
+@partial(
+    jax.tree_util.register_dataclass,
+    data_fields=["bandwidth", "value", "n_iter", "converged"],
+    meta_fields=[],
+)
+@dataclasses.dataclass(frozen=True)
+class SelectionResult:
+    """Outcome of a bandwidth selection.
+
+    Parameters
+    ----------
+    bandwidth : Bandwidth
+        The selected bandwidth, in natural, constrained scale.
+    value : ScalarFloat
+        Criterion value at ``bandwidth``.
+    n_iter : Array
+        Number of solver iterations used by the full solve.
+    converged : Array
+        Whether the solver stopped because its progress stalled, either
+        the gradient or the objective value stopped moving, rather than
+        because it ran out of its iteration budget. ``True`` does not by
+        itself mean the gradient tolerance was the one that was met.
+    """
+
+    bandwidth: Bandwidth
+    value: ScalarFloat
+    n_iter: Array
+    converged: Array
+
+
 @partial(jax.jit, static_argnames=("criterion", "solver", "n_starts", "chunk"))
 def select_bandwidth(
     train: MixedData,
@@ -29,16 +59,8 @@ def select_bandwidth(
 ) -> SelectionResult:
     """Select a bandwidth by minimizing ``criterion`` in the unconstrained parameterization.
 
-    Multistart perturbs the normal-reference start along every dimension,
-    always including the unperturbed start itself, screens every candidate
-    with a forward-only ``jax.vmap``, then runs a full solve from
-    whichever candidate screened lowest, or from the unperturbed start
-    when every candidate screens non-finite. An unordered column
-    routinely converges to its upper bound under the default
-    :class:`kerneljax.kernels.discrete.AitchisonAitken` kernel, meaning
-    that variable is smoothed away entirely, a meaningful solution and
-    not a failure. The whole call runs under an internal ``jax.jit``, so
-    it also composes with an outer ``jax.vmap``.
+    A smoothing parameter returned at its upper bound smooths that column
+    away entirely.
 
     Parameters
     ----------
@@ -97,36 +119,6 @@ def select_bandwidth(
     )
 
 
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=["bandwidth", "value", "n_iter", "converged"],
-    meta_fields=[],
-)
-@dataclasses.dataclass(frozen=True)
-class SelectionResult:
-    """Outcome of a bandwidth selection.
-
-    Parameters
-    ----------
-    bandwidth : Bandwidth
-        The selected bandwidth, in natural, constrained scale.
-    value : ScalarFloat
-        Criterion value at ``bandwidth``.
-    n_iter : Array
-        Number of solver iterations used by the full solve.
-    converged : Array
-        Whether the solver stopped because its progress stalled, either
-        the gradient or the objective value stopped moving, rather than
-        because it ran out of its iteration budget. ``True`` does not by
-        itself mean the gradient tolerance was the one that was met.
-    """
-
-    bandwidth: Bandwidth
-    value: ScalarFloat
-    n_iter: Array
-    converged: Array
-
-
 def lbfgs(
     fun: Callable[[Array], ScalarFloat],
     z0: Array,
@@ -137,14 +129,12 @@ def lbfgs(
 ) -> tuple[Array, ScalarFloat, Array, Array]:
     """Minimize ``fun`` from ``z0`` with limited-memory BFGS and a backtracking line search.
 
-    Jittable and vmappable end to end. A step whose objective value comes
-    back non-finite is rejected.
+    A step whose objective value comes back non-finite is rejected.
 
     Parameters
     ----------
     fun : callable
-        Scalar objective, differentiated internally with
-        ``jax.value_and_grad``.
+        Scalar objective, differentiable in its argument.
     z0 : Array
         Starting point, shape ``(k,)``.
     max_iter : int
