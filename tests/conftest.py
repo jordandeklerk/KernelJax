@@ -286,3 +286,21 @@ def public_api_data():
 @pytest.fixture
 def public_api_bandwidth():
     return Bandwidth(h=jnp.array([0.6]), lam_uno=jnp.array([0.2]), lam_ord=jnp.array([0.3]))
+
+
+@pytest.fixture
+def wls_design():
+    rng = np.random.default_rng(7)
+    design = jnp.asarray(rng.normal(size=(30, 3)))
+    weights = jnp.asarray(rng.uniform(0.5, 2.0, size=30))
+    true_coef = jnp.asarray(rng.normal(size=(3, 2)))
+    return design, weights, true_coef
+
+
+@pytest.fixture
+def singular_design():
+    rng = np.random.default_rng(11)
+    base = jnp.asarray(rng.normal(size=(20, 2)))
+    design = jnp.concatenate([base, base[:, :1]], axis=1)
+    weights = jnp.ones(20)
+    return design, weights
