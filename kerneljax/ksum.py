@@ -1,4 +1,4 @@
-"""The generalized product kernel sum and its memory-efficient contraction."""
+"""The generalized product kernel weight matrix and its sum."""
 
 from __future__ import annotations
 
