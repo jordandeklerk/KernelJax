@@ -1,4 +1,4 @@
-"""The generalized product kernel sum and its memory-efficient contraction."""
+"""The generalized product kernel weight matrix and its sum."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from kerneljax.data import ColumnSpec, Kind, MixedData
 from kerneljax.kernels import KernelSet, Op
 from kerneljax.typing import Array
 
-__all__ = ["fold_mask", "ksum", "kweights"]
+__all__ = ["ksum", "kweights"]
 
 OpSpec = str | Mapping[Kind, str] | tuple[str, ...]
 WeightScale = Literal["none", "per_eval", "per_train"]
@@ -33,11 +33,17 @@ def kweights(
     r"""Compute the generalized product kernel weight matrix.
 
     Every entry multiplies one kernel factor per column across the
-    continuous, unordered and ordered blocks.
+    continuous, unordered and ordered blocks, following the generalized
+    product kernel of [1]_,
 
     .. math::
 
-        W_{ji} = \prod_{d} K_d(\mathrm{at}_{jd}, \mathrm{train}_{id})
+        W_{ji} = \prod_{d} K_d(\mathrm{at}_{jd}, \mathrm{train}_{id}).
+
+    The default kernel families are the Gaussian kernel for continuous
+    columns, the Aitchison and Aitken (1976) kernel for unordered columns
+    [2]_, and the Wang and van Ryzin (1981) kernel for ordered columns
+    [3]_.
 
     Parameters
     ----------
@@ -68,6 +74,32 @@ def kweights(
     -------
     Float[Array, "n_eval n_train"]
         The weight matrix.
+
+    Examples
+    --------
+    Compute the product kernel weight matrix for a continuous sample.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import jax.numpy as jnp
+           ...: import kerneljax as kj
+           ...:
+           ...: x = jnp.linspace(-2.0, 2.0, 5).reshape(-1, 1)
+           ...: train = kj.MixedData.continuous(x)
+           ...: bw = kj.Bandwidth(h=jnp.array([0.5]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+           ...: weights = kj.kweights(train, bw)
+           ...: print(weights.shape)
+
+    References
+    ----------
+    .. [1] Li, Q., & Racine, J. S. (2003). "Nonparametric estimation of
+           distributions with categorical and continuous data." Journal of
+           Multivariate Analysis, 86(2), 266-292.
+    .. [2] Aitchison, J., & Aitken, C. G. G. (1976). "Multivariate binary
+           discrimination by the kernel method." Biometrika, 63(3), 413-420.
+    .. [3] Wang, M. C., & van Ryzin, J. (1981). "A class of smooth
+           estimators for discrete distributions." Biometrika, 68(1), 301-309.
     """
     evaluate = train if at is None else at
     kernels = KernelSet() if kernels is None else kernels
@@ -111,29 +143,6 @@ def kweights(
     return weights
 
 
-def fold_mask(fold_eval: Array, fold_train: Array) -> Bool[Array, "n_eval n_train"]:
-    r"""Flag every evaluation and training pair that does not share a fold. ``True`` keeps the weight.
-
-    A single fold vector reused for both axes subsumes leave-one-out,
-    k-fold, blocked and clustered cross validation at the same shape.
-    Leave-one-out is ``fold_eval = fold_train = jnp.arange(n)``.
-
-    Parameters
-    ----------
-    fold_eval : Array
-        Fold label of every evaluation point, shape ``(n_eval,)``.
-    fold_train : Array
-        Fold label of every training point, shape ``(n_train,)``.
-
-    Returns
-    -------
-    Bool[Array, "n_eval n_train"]
-        ``True`` where the pair is kept, ``False`` where the fold agrees
-        and the pair is held out.
-    """
-    return fold_eval[:, None] != fold_train[None, :]
-
-
 def ksum(
     train: MixedData,
     bw: Bandwidth,
@@ -150,14 +159,22 @@ def ksum(
 ) -> Float[Array, "n_eval m"]:
     r"""Contract the product kernel weight matrix against ``v``.
 
+    Computes the weighted kernel sum
+
     .. math::
 
         \mathrm{out}_{jk} = \sum_{i} W_{ji} \, v_{ik}
 
-    with :math:`W` the matrix :func:`kweights` returns for the same
-    ``train``, ``bw``, ``at``, ``kernels``, ``op`` and ``power``, after any
-    pair sharing a fold is dropped. Passing ``chunk`` never changes the
-    result, only how much memory computing it needs.
+    with :math:`W` the generalized product kernel matrix [1]_ that
+    :func:`kweights` returns for the same ``train``, ``bw``, ``at``,
+    ``kernels``, ``op`` and ``power``, after any pair sharing a fold is
+    dropped.
+
+    This contraction is the primitive from which the density and
+    cross-validation estimators in this package are built.
+
+    Passing ``chunk`` never changes the result, only how much memory
+    computing it needs.
 
     Parameters
     ----------
@@ -188,9 +205,8 @@ def ksum(
     weight_scale : {"none", "per_eval", "per_train"}
         Placement of the :math:`1 / \prod h` divisor. ``"per_train"``
         folds it into ``v`` before the contraction, needed when
-        ``bw.h_axis`` is ``"train"`` since the divisor then varies with the
-        summation index. ``"per_eval"`` divides the contracted result.
-        Static.
+        ``bw.h_axis`` is ``"train"`` since the divisor varies with the
+        sum index. ``"per_eval"`` divides the contracted result. Static.
     chunk : int or tuple of int, optional
         Chunk sizes as ``(eval, train)``. A bare int chunks only the
         evaluation axis. Bounds the peak memory of the contraction at the
@@ -200,6 +216,28 @@ def ksum(
     -------
     Float[Array, "n_eval m"]
         The contracted result.
+
+    Examples
+    --------
+    Sum the product kernel weights across the training axis.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import jax.numpy as jnp
+           ...: import kerneljax as kj
+           ...:
+           ...: x = jnp.linspace(-2.0, 2.0, 20).reshape(-1, 1)
+           ...: train = kj.MixedData.continuous(x)
+           ...: bw = kj.Bandwidth(h=jnp.array([0.5]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+           ...: total = kj.ksum(train, bw)
+           ...: print(total.shape)
+
+    References
+    ----------
+    .. [1] Li, Q., & Racine, J. S. (2003). "Nonparametric estimation of
+           distributions with categorical and continuous data." Journal of
+           Multivariate Analysis, 86(2), 266-292.
     """
     evaluate = train if at is None else at
     kernels = KernelSet() if kernels is None else kernels
@@ -301,7 +339,7 @@ def _sum_over_train(
     if chunk_train is None:
         weights = kweights(train, bw, at=eval_block, kernels=kernels, op=op, power=power)
         if fold is not None:
-            weights = weights * fold_mask(fold[eval_idx], fold)
+            weights = weights * (fold[eval_idx][:, None] != fold[None, :])
         return weights @ v
 
     train_blocks = jax.tree.map(lambda column: _pad_rows(column, chunk_train), train)
@@ -314,7 +352,7 @@ def _sum_over_train(
         bw_block = bw if h_block is None else bw.replace(h=h_block)
 
         valid = (idx_block < train.n)[None, :]
-        mask = valid if fold is None else valid & fold_mask(fold[eval_idx], fold[idx_block])
+        mask = valid if fold is None else valid & (fold[eval_idx][:, None] != fold[idx_block][None, :])
 
         weights = kweights(train_block, bw_block, at=eval_block, kernels=kernels, op=op, power=power)
         return accumulated + (weights * mask) @ v_block, None

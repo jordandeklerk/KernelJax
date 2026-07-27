@@ -1,6 +1,6 @@
 """Low-level JAX interface for nonparametric kernel smoothing of mixed-type data."""
 
-from kerneljax.bandwidth import Bandwidth, BandwidthTransform, ConditionalBandwidth, broadcast_h, normal_reference
+from kerneljax.bandwidth import Bandwidth, BandwidthTransform, ConditionalBandwidth, normal_reference
 from kerneljax.data import ColumnSpec, Kind, MixedData
 from kerneljax.estimators import DensityFit, density
 from kerneljax.kernels import (
@@ -13,7 +13,7 @@ from kerneljax.kernels import (
     UnorderedKernel,
     WangVanRyzin,
 )
-from kerneljax.ksum import fold_mask, ksum, kweights
+from kerneljax.ksum import ksum, kweights
 from kerneljax.tuning import SelectionResult, cv_ls_density, cv_ml_density, lbfgs, select_bandwidth
 
 __version__ = "0.0.1"
@@ -35,11 +35,9 @@ __all__ = [
     "SelectionResult",
     "UnorderedKernel",
     "WangVanRyzin",
-    "broadcast_h",
     "cv_ls_density",
     "cv_ml_density",
     "density",
-    "fold_mask",
     "ksum",
     "kweights",
     "lbfgs",

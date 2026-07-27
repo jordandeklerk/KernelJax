@@ -24,12 +24,20 @@ def cv_ml_density(
 ) -> ScalarFloat:
     r"""Likelihood cross-validation criterion for a density.
 
+    The likelihood cross validation criterion of [1]_ is
+
     .. math::
 
-        \mathrm{CV}_{ml} = -\sum_{i=1}^{n} \log \hat f_{-i}(X_i)
+        \mathrm{CV}_{ml}(h, \lambda) = -\sum_{i=1}^{n} \log \hat f_{-i}(X_i)
 
     where :math:`\hat f_{-i}` is the leave-one-out density, normalized by
-    :math:`(n - 1) \prod h`. np reports the negative of this value.
+    :math:`(n - 1) \prod h`.
+
+    Minimizing this criterion over :math:`(h, \lambda)`, as
+    :func:`kerneljax.tuning.optimize.select_bandwidth` does, gives the
+    likelihood cross validated bandwidth.
+
+    np reports the negative of this value.
 
     Parameters
     ----------
@@ -45,7 +53,28 @@ def cv_ml_density(
     Returns
     -------
     ScalarFloat
-        The criterion value.
+        The criterion value, minimized over ``bw`` to select a bandwidth.
+
+    Examples
+    --------
+    Evaluate the likelihood cross validation criterion at a bandwidth.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import jax.numpy as jnp
+           ...: import kerneljax as kj
+           ...:
+           ...: x = jnp.linspace(-2.0, 2.0, 50).reshape(-1, 1)
+           ...: train = kj.MixedData.continuous(x)
+           ...: bw = kj.Bandwidth(h=jnp.array([0.3]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+           ...: print(kj.cv_ml_density(train, bw))
+
+    References
+    ----------
+    .. [1] Hall, P., Racine, J., & Li, Q. (2004). "Cross-validation and the
+           estimation of conditional probability densities." Journal of the
+           American Statistical Association, 99(468), 1015-1026.
     """
     kernels = KernelSet() if kernels is None else kernels
 
@@ -62,21 +91,32 @@ def cv_ls_density(
 ) -> ScalarFloat:
     r"""Least squares cross-validation criterion for a density.
 
+    The least squares cross validation criterion of [1]_ is
+
     .. math::
 
-        \mathrm{CV}_{ls} = \int \hat f^2 - \frac{2}{n} \sum_{i=1}^{n} \hat f_{-i}(X_i)
+        \mathrm{CV}_{ls}(h, \lambda) = \int \hat f^2
+        - \frac{2}{n} \sum_{i=1}^{n} \hat f_{-i}(X_i)
 
-    with
+    with the integrated square term given explicitly by
 
     .. math::
 
         \int \hat f^2 = \frac{1}{n^2 \prod h} \sum_{i} \sum_{j} \bar K(X_i, X_j)
 
     where :math:`\bar K` is the convolution product across every column
-    kind, continuous and categorical alike, and :math:`\hat f_{-i}` is the
-    same leave-one-out density used by :func:`cv_ml_density`. The double
-    sum runs over the full matrix including its diagonal. np reports the
-    negative of this value.
+    kind, continuous and categorical alike.
+
+    The double sum runs over the full matrix including its diagonal.
+
+    Here :math:`\hat f_{-i}` is the same leave-one-out density used by
+    :func:`cv_ml_density`.
+
+    Minimizing this criterion over :math:`(h, \lambda)`, as
+    :func:`kerneljax.tuning.optimize.select_bandwidth` does, gives the
+    least squares cross validated bandwidth.
+
+    np reports the negative of this value.
 
     Parameters
     ----------
@@ -92,7 +132,28 @@ def cv_ls_density(
     Returns
     -------
     ScalarFloat
-        The criterion value.
+        The criterion value, minimized over ``bw`` to select a bandwidth.
+
+    Examples
+    --------
+    Evaluate the least squares cross validation criterion at a bandwidth.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import jax.numpy as jnp
+           ...: import kerneljax as kj
+           ...:
+           ...: x = jnp.linspace(-2.0, 2.0, 50).reshape(-1, 1)
+           ...: train = kj.MixedData.continuous(x)
+           ...: bw = kj.Bandwidth(h=jnp.array([0.3]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+           ...: print(kj.cv_ls_density(train, bw))
+
+    References
+    ----------
+    .. [1] Hall, P., Racine, J., & Li, Q. (2004). "Cross-validation and the
+           estimation of conditional probability densities." Journal of the
+           American Statistical Association, 99(468), 1015-1026.
     """
     kernels = KernelSet() if kernels is None else kernels
     n = train.n

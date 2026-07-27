@@ -6,15 +6,7 @@ import numpy as np
 import pytest
 
 from kerneljax.data import MixedData
-from kerneljax.ksum import fold_mask, ksum, kweights
-
-
-def test_fold_mask_matches_pairwise_inequality():
-    fold_eval = jnp.array([0, 0, 1])
-    fold_train = jnp.array([0, 1, 1])
-    mask = fold_mask(fold_eval, fold_train)
-    expected = jnp.array([[False, True, True], [False, True, True], [True, False, False]])
-    assert jnp.array_equal(mask, expected)
+from kerneljax.ksum import ksum, kweights
 
 
 def test_default_v_is_ones(ksum_data, ksum_bandwidth):
@@ -37,7 +29,7 @@ def test_sample_weight_scales_columns(ksum_data, ksum_bandwidth):
     assert jnp.allclose(got, want, rtol=1e-6)
 
 
-def test_fold_mask_leave_one_out(ksum_data, ksum_bandwidth):
+def test_fold_leave_one_out_zeroes_the_diagonal(ksum_data, ksum_bandwidth):
     fold = jnp.arange(6)
     got = ksum(ksum_data, ksum_bandwidth, fold=fold)
     weights = np.asarray(kweights(ksum_data, ksum_bandwidth)).copy()
