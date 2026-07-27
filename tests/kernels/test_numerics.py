@@ -34,13 +34,13 @@ def test_safe_pow_gradient_is_finite_at_zero_base(exponent, dtype):
     assert jnp.isfinite(g)
 
 
-def test_naive_power_nans_with_float_exponent_but_safe_pow_stays_finite():
+def test_naive_power_nans_but_safe_pow_is_finite():
     naive_grad = jax.grad(lambda base: jnp.power(base, jnp.array(0.0)))(jnp.array(0.0))
     safe_grad = jax.grad(lambda base: safe_pow(base, jnp.array(0.0)))(jnp.array(0.0))
     assert not jnp.isfinite(naive_grad)
     assert jnp.isfinite(safe_grad)
 
 
-def test_safe_div_gradient_is_finite_at_zero_denominator():
+def test_safe_div_gradient_finite_at_zero_denom():
     g = jax.grad(lambda denominator: safe_div(jnp.array(1.0), denominator))(jnp.array(0.0))
     assert jnp.isfinite(g)

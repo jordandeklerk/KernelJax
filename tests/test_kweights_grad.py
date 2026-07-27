@@ -34,9 +34,7 @@ def test_shape_is_p_con_by_n_eval_by_n_train(request, train_fixture, at_fixture,
         ("kweights_grad_two_con_train", "kweights_grad_two_con_at", "kweights_grad_two_con_bandwidth"),
     ],
 )
-def test_matches_jacfwd_of_kweights_with_respect_to_the_evaluation_points(
-    request, train_fixture, at_fixture, bandwidth_fixture
-):
+def test_matches_jacfwd_at_eval_points(request, train_fixture, at_fixture, bandwidth_fixture):
     train = request.getfixturevalue(train_fixture)
     at = request.getfixturevalue(at_fixture)
     bw = request.getfixturevalue(bandwidth_fixture)
@@ -52,7 +50,7 @@ def test_matches_jacfwd_of_kweights_with_respect_to_the_evaluation_points(
     assert jnp.allclose(got, expected, rtol=1e-6)
 
 
-def test_matches_explicit_numpy_construction_with_two_continuous_columns(
+def test_matches_explicit_numpy_two_continuous(
     kweights_grad_two_con_train, kweights_grad_two_con_at, kweights_grad_two_con_bandwidth
 ):
     train = kweights_grad_two_con_train
@@ -89,9 +87,7 @@ def test_matches_explicit_numpy_construction_with_two_continuous_columns(
     assert np.allclose(np.asarray(got), expected, rtol=1e-6)
 
 
-def test_purely_continuous_design_gives_finite_results(
-    kweights_grad_purely_continuous_train, kweights_grad_purely_continuous_bandwidth
-):
+def test_purely_continuous_is_finite(kweights_grad_purely_continuous_train, kweights_grad_purely_continuous_bandwidth):
     got = kweights_grad(kweights_grad_purely_continuous_train, kweights_grad_purely_continuous_bandwidth)
     assert got.shape == (2, 6, 6)
     assert jnp.all(jnp.isfinite(got))
@@ -105,7 +101,7 @@ def test_mixed_design_gives_finite_results(
     assert jnp.all(jnp.isfinite(got))
 
 
-def test_single_continuous_column_matches_the_single_derivative_factor_times_the_categorical_product(
+def test_single_column_matches_explicit_product(
     kweights_grad_mixed_train, kweights_grad_mixed_at, kweights_grad_mixed_bandwidth
 ):
     train = kweights_grad_mixed_train
@@ -162,9 +158,7 @@ def test_chunking_matches_unchunked(
     assert jnp.allclose(got, ref, rtol=1e-6, atol=1e-8)
 
 
-def test_jit_grad_and_vmap_all_work_and_give_finite_results(
-    kweights_grad_mixed_train, kweights_grad_mixed_at, kweights_grad_mixed_bandwidth
-):
+def test_jit_grad_vmap_are_finite(kweights_grad_mixed_train, kweights_grad_mixed_at, kweights_grad_mixed_bandwidth):
     train = kweights_grad_mixed_train
     at = kweights_grad_mixed_at
 
@@ -187,7 +181,7 @@ def test_jit_grad_and_vmap_all_work_and_give_finite_results(
     assert jnp.all(jnp.isfinite(out))
 
 
-def test_no_division_gives_a_finite_result_when_a_continuous_factor_underflows_to_zero():
+def test_finite_when_a_factor_underflows():
     train = MixedData.continuous(jnp.array([[0.0, 0.1], [0.0, -0.2]]))
     at = MixedData.continuous(jnp.array([[500.0, 0.05]]))
     bw = Bandwidth(h=jnp.array([1e-4, 0.5]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
@@ -201,7 +195,7 @@ def test_no_division_gives_a_finite_result_when_a_continuous_factor_underflows_t
 
 
 @pytest.mark.parametrize("chunk", [None, 1, 2, (2, 2)])
-def test_a_design_with_no_continuous_columns_gives_an_empty_leading_axis(chunk):
+def test_no_continuous_columns_empty_axis(chunk):
     data = MixedData.from_blocks(uno=jnp.array([[0], [1], [2], [0]]), uno_levels=(3,))
     bandwidth = Bandwidth(h=jnp.zeros(0), lam_uno=jnp.array([0.3]), lam_ord=jnp.zeros(0))
 

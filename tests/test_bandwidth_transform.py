@@ -55,7 +55,7 @@ def test_bounds_match_the_kernel_upper_bounds(mixed_bandwidth_transform):
     assert hi[2] == pytest.approx(1.0)
 
 
-def test_normal_reference_is_positive_and_right_shaped(mixed_bandwidth_data):
+def test_normal_reference_positive_and_shaped(mixed_bandwidth_data):
     bw = normal_reference(mixed_bandwidth_data, KernelSet())
     assert bw.h.shape == (1,)
     assert bw.h[0] > 0.0

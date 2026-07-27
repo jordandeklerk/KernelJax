@@ -37,12 +37,12 @@ def test_conv_matches_numeric_self_convolution(gaussian):
     assert float(got) == pytest.approx(numeric, rel=1e-6)
 
 
-def test_conv_at_coincident_points_equals_closed_form_constant(gaussian):
+def test_conv_at_coincident_points_has_closed_form(gaussian):
     got = gaussian.conv(jnp.array(0.0), jnp.array(0.0), jnp.array(1.0))
     assert float(got) == pytest.approx(1.0 / (2.0 * np.sqrt(np.pi)), rel=1e-6)
 
 
-def test_value_integrates_to_one_once_bandwidth_is_supplied(gaussian):
+def test_value_integrates_to_one(gaussian):
     h = 1.3
     grid = np.linspace(-60.0 * h, 60.0 * h, 400_001)
     step = grid[1] - grid[0]
@@ -58,7 +58,7 @@ def test_value_is_symmetric_in_x_and_y(gaussian, x, y, h):
     assert float(forward) == pytest.approx(float(backward), rel=1e-12)
 
 
-def test_value_is_strictly_decreasing_in_absolute_difference(gaussian):
+def test_value_decreases_in_abs_difference(gaussian):
     diffs = jnp.array([0.0, 0.2, 0.5, 1.0, 2.0, 3.0])
     values = gaussian.value(diffs, jnp.array(0.0), jnp.array(1.0))
     assert jnp.all(jnp.diff(values) < 0.0)
@@ -77,7 +77,7 @@ def test_is_jittable_grad_and_vmap_compatible(gaussian, op):
     ("x", "y", "h"),
     [(1.0, 0.5, 0.7), (-2.0, 3.0, 1.5), (0.0, 0.0, 2.0), (5.0, 5.2, 0.3), (-0.4, -1.9, 1.1)],
 )
-def test_deriv_matches_grad_of_value_with_respect_to_x(gaussian, x, y, h):
+def test_deriv_matches_grad_of_value(gaussian, x, y, h):
     grad_of_value = jax.grad(gaussian.value, argnums=0)
     expected = grad_of_value(jnp.array(x), jnp.array(y), jnp.array(h))
     got = gaussian.deriv(jnp.array(x), jnp.array(y), jnp.array(h))
@@ -92,7 +92,7 @@ def test_deriv_is_zero_at_coincident_points(gaussian, point, h):
 
 
 @pytest.mark.parametrize(("x", "y", "h"), [(1.0, -2.0, 0.5), (3.3, 0.1, 1.0), (-1.0, 4.0, 2.0)])
-def test_deriv_is_antisymmetric_under_swapping_x_and_y(gaussian, x, y, h):
+def test_deriv_is_antisymmetric_in_x_and_y(gaussian, x, y, h):
     forward = gaussian.deriv(jnp.array(x), jnp.array(y), jnp.array(h))
     backward = gaussian.deriv(jnp.array(y), jnp.array(x), jnp.array(h))
     assert float(forward) == pytest.approx(-float(backward), rel=1e-12)
@@ -109,7 +109,7 @@ def test_deriv_scales_as_inverse_bandwidth_at_fixed_u(gaussian, u, h_first, h_se
     assert float(deriv_first) * h_first == pytest.approx(float(deriv_second) * h_second, rel=1e-6)
 
 
-def test_default_gaussian_equals_and_hashes_equal_to_another():
+def test_default_instances_compare_and_hash_equal():
     assert Gaussian() == Gaussian()
     assert hash(Gaussian()) == hash(Gaussian())
 

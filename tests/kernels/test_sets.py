@@ -20,7 +20,7 @@ def test_two_instances_compare_equal_and_hash_equal():
     assert hash(KernelSet()) == hash(KernelSet())
 
 
-def test_a_different_kernel_is_not_equal_to_the_default(bare_continuous_kernel_cls):
+def test_different_kernel_not_equal_to_default(bare_continuous_kernel_cls):
     assert KernelSet(continuous=bare_continuous_kernel_cls()) != KernelSet()
 
 
@@ -35,7 +35,7 @@ def test_module_exposes_kernel_set_without_a_cycle():
     assert m.KernelSet is KernelSet
 
 
-def test_static_argument_does_not_recompile_for_an_equal_kernel_set():
+def test_static_arg_equal_sets_do_not_recompile():
     calls = []
 
     def f(x, ks):
@@ -59,14 +59,14 @@ def test_static_registration_leaves_no_pytree_leaves(kernel_obj):
     assert jax.tree.leaves(kernel_obj) == []
 
 
-def test_jit_accepts_a_kernel_set_without_static_argnames():
+def test_jit_accepts_kernel_set_no_static_argnames():
     def f(x, kernels):
         return kernels.continuous.value(x, jnp.array(0.0), jnp.array(1.0))
 
     assert jnp.isfinite(jax.jit(f)(jnp.array(0.5), KernelSet()))
 
 
-def test_jit_does_not_recompile_for_an_equal_kernel_set_without_static_argnames():
+def test_equal_sets_do_not_recompile():
     calls = {"n": 0}
 
     def f(x, kernels):
@@ -79,7 +79,7 @@ def test_jit_does_not_recompile_for_an_equal_kernel_set_without_static_argnames(
     assert calls["n"] == 1
 
 
-def test_jit_accepts_a_user_defined_kernel_inside_a_kernel_set(bare_continuous_kernel_cls):
+def test_jit_accepts_user_defined_kernel_in_set(bare_continuous_kernel_cls):
     def f(x, kernels):
         return kernels.continuous.value(x, jnp.array(0.0), jnp.array(1.0))
 

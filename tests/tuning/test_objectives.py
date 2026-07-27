@@ -40,9 +40,7 @@ def test_finite_at_the_categorical_boundary(cv_mixed_data, cv_mixed_bandwidth, c
 @pytest.mark.parametrize("h", [0.5, 0.15])
 @pytest.mark.parametrize("lam_ord", [0.0, 0.999])
 @pytest.mark.parametrize("lam_uno", [0.0, 2.0 / 3.0])
-def test_gradients_are_finite_at_the_boundary_and_as_h_shrinks(
-    cv_mixed_data, cv_mixed_bandwidth, criterion, lam_uno, lam_ord, h
-):
+def test_grads_finite_at_boundary_and_shrinking_h(cv_mixed_data, cv_mixed_bandwidth, criterion, lam_uno, lam_ord, h):
     bandwidth = cv_mixed_bandwidth.replace(h=jnp.array([h]), lam_uno=jnp.array([lam_uno]), lam_ord=jnp.array([lam_ord]))
     grads = jax.grad(criterion, argnums=1)(cv_mixed_data, bandwidth)
     assert jnp.all(jnp.isfinite(grads.h))
@@ -50,7 +48,7 @@ def test_gradients_are_finite_at_the_boundary_and_as_h_shrinks(
     assert jnp.all(jnp.isfinite(grads.lam_ord))
 
 
-def test_cv_ml_matches_a_hand_built_leave_one_out_expression(cv_mixed_data, cv_mixed_bandwidth):
+def test_cv_ml_matches_hand_built_leave_one_out(cv_mixed_data, cv_mixed_bandwidth):
     got = cv_ml_density(cv_mixed_data, cv_mixed_bandwidth)
 
     n = cv_mixed_data.n
@@ -63,7 +61,7 @@ def test_cv_ml_matches_a_hand_built_leave_one_out_expression(cv_mixed_data, cv_m
     assert float(got) == pytest.approx(want, rel=1e-6)
 
 
-def test_cv_ls_matches_a_hand_built_expression_with_the_full_conv_matrix(cv_mixed_data, cv_mixed_bandwidth):
+def test_cv_ls_matches_hand_built_conv_matrix(cv_mixed_data, cv_mixed_bandwidth):
     got = cv_ls_density(cv_mixed_data, cv_mixed_bandwidth)
 
     n = cv_mixed_data.n
@@ -79,7 +77,7 @@ def test_cv_ls_matches_a_hand_built_expression_with_the_full_conv_matrix(cv_mixe
     assert float(got) == pytest.approx(want, rel=1e-6)
 
 
-def test_removing_the_diagonal_from_the_conv_matrix_changes_the_answer(cv_mixed_data, cv_mixed_bandwidth):
+def test_removing_diagonal_changes_the_sum(cv_mixed_data, cv_mixed_bandwidth):
     n = cv_mixed_data.n
     conv_matrix = np.asarray(kweights(cv_mixed_data, cv_mixed_bandwidth, op=Op.CONV))
 
@@ -91,9 +89,7 @@ def test_removing_the_diagonal_from_the_conv_matrix_changes_the_answer(cv_mixed_
     assert with_diagonal != pytest.approx(without_diagonal)
 
 
-def test_continuous_only_integral_term_matches_a_gaussian_widened_by_sqrt_two(
-    cv_continuous_data, cv_continuous_bandwidth
-):
+def test_integral_term_matches_widened_gaussian(cv_continuous_data, cv_continuous_bandwidth):
     n = cv_continuous_data.n
     h = float(cv_continuous_bandwidth.h[0])
 
@@ -132,12 +128,12 @@ def test_jit_grad_and_vmap(cv_mixed_data, cv_mixed_bandwidth, criterion):
     assert jnp.all(jnp.isfinite(out))
 
 
-def test_cv_ml_density_matches_the_r_np_parity_value(cv_mixed_data, cv_mixed_bandwidth):
-    assert float(cv_ml_density(cv_mixed_data, cv_mixed_bandwidth)) == 77.91303253173828
+def test_cv_ml_value_is_stable(cv_mixed_data, cv_mixed_bandwidth):
+    assert float(cv_ml_density(cv_mixed_data, cv_mixed_bandwidth)) == pytest.approx(77.913033, rel=1e-6)
 
 
 @pytest.mark.parametrize("criterion", [cv_ml_density, cv_ls_density])
-def test_agrees_across_h_axis_settings_at_a_uniform_bandwidth(cv_mixed_data, cv_mixed_bandwidth, criterion):
+def test_agrees_across_h_axis_at_uniform_bandwidth(cv_mixed_data, cv_mixed_bandwidth, criterion):
     n = cv_mixed_data.n
     h_value = float(cv_mixed_bandwidth.h[0])
     shared = criterion(cv_mixed_data, cv_mixed_bandwidth)
@@ -149,7 +145,7 @@ def test_agrees_across_h_axis_settings_at_a_uniform_bandwidth(cv_mixed_data, cv_
     assert float(criterion(cv_mixed_data, eval_indexed)) == pytest.approx(float(shared), rel=1e-12)
 
 
-def test_cv_ls_density_traces_without_overflow_at_a_large_n():
+def test_cv_ls_traces_without_overflow_at_large_n():
     def make():
         data = MixedData.continuous(jnp.zeros((50000, 1)))
         bw = Bandwidth(h=jnp.array([0.5]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))

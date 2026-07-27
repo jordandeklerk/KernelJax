@@ -62,7 +62,7 @@ def test_selected_bandwidth_is_inside_the_box(cv_mixed_data, criterion):
 
 @pytest.mark.parametrize("n_starts", [1, 2, 3])
 @pytest.mark.parametrize("criterion", [cv_ml_density, cv_ls_density])
-def test_selected_value_is_no_worse_than_the_starting_value(cv_mixed_data, criterion, n_starts):
+def test_selected_value_no_worse_than_start(cv_mixed_data, criterion, n_starts):
     start = normal_reference(cv_mixed_data, KernelSet())
     start_value = criterion(cv_mixed_data, start)
 
@@ -70,7 +70,7 @@ def test_selected_value_is_no_worse_than_the_starting_value(cv_mixed_data, crite
     assert float(result.value) <= float(start_value) + 1e-6
 
 
-def test_selection_is_vmappable_over_bootstrap_replicates(cv_mixed_data):
+def test_selection_vmaps_over_bootstrap_replicates(cv_mixed_data):
     key = jax.random.key(0)
     idx = jax.random.randint(key, (8, cv_mixed_data.n), 0, cv_mixed_data.n)
 
@@ -86,7 +86,7 @@ def test_selection_is_vmappable_over_bootstrap_replicates(cv_mixed_data):
     assert jnp.all(out > 0)
 
 
-def test_a_user_supplied_solver_is_accepted_and_called(cv_mixed_data):
+def test_custom_solver_is_accepted_and_called(cv_mixed_data):
     calls = {"count": 0}
 
     def custom_solver(fun, z0, **kwargs):

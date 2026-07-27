@@ -63,7 +63,7 @@ def test_discrete_only_design(discrete_only_data, discrete_only_bandwidth):
     assert jnp.all(jnp.isfinite(weights))
 
 
-def test_mask_zeroes_exactly_the_masked_entries_and_leaves_the_rest(kweights_train, kweights_bandwidth):
+def test_mask_zeroes_only_the_masked_entries(kweights_train, kweights_bandwidth):
     rng = np.random.default_rng(1)
     mask = jnp.asarray(rng.integers(0, 2, size=(6, 6)).astype(bool))
 
@@ -96,7 +96,7 @@ def test_op_conv_matches_the_kernels_called_directly(kweights_train, kweights_ba
     assert jnp.allclose(weights, expected, rtol=1e-12)
 
 
-def test_op_per_kind_mapping_differs_from_the_all_value_result(kweights_train, kweights_bandwidth):
+def test_per_kind_mapping_differs_from_default(kweights_train, kweights_bandwidth):
     mapping = {Kind.CONTINUOUS: Op.CONV, Kind.UNORDERED: Op.VALUE, Kind.ORDERED: Op.VALUE}
     default = kweights(kweights_train, kweights_bandwidth)
     mapped = kweights(kweights_train, kweights_bandwidth, op=mapping)
@@ -105,7 +105,7 @@ def test_op_per_kind_mapping_differs_from_the_all_value_result(kweights_train, k
     assert not jnp.allclose(mapped, default)
 
 
-def test_op_per_column_tuple_agrees_with_the_equivalent_mapping(kweights_train, kweights_bandwidth):
+def test_per_column_tuple_agrees_with_mapping(kweights_train, kweights_bandwidth):
     mapping = {Kind.CONTINUOUS: Op.CONV, Kind.UNORDERED: Op.VALUE, Kind.ORDERED: Op.VALUE}
     per_column = (Op.CONV, Op.VALUE, Op.VALUE)
 
@@ -116,7 +116,7 @@ def test_op_per_column_tuple_agrees_with_the_equivalent_mapping(kweights_train, 
     assert not jnp.allclose(tupled, kweights(kweights_train, kweights_bandwidth))
 
 
-def test_op_tuple_resolves_a_different_operator_per_column_within_one_kind(two_unordered_data, two_unordered_bandwidth):
+def test_tuple_op_varies_within_one_kind(two_unordered_data, two_unordered_bandwidth):
     kernels = KernelSet()
     first = two_unordered_data.uno[:, 0]
     second = two_unordered_data.uno[:, 1]
@@ -129,7 +129,7 @@ def test_op_tuple_resolves_a_different_operator_per_column_within_one_kind(two_u
     assert jnp.allclose(weights, expected, rtol=1e-12)
 
 
-def test_jit_accepts_train_and_kernels_without_static_argnames(kweights_train, kweights_bandwidth):
+def test_jit_accepts_without_static_argnames(kweights_train, kweights_bandwidth):
     def total_weight(data, bw, kernels):
         return kweights(data, bw, kernels=kernels).sum()
 
@@ -156,13 +156,13 @@ def test_vmap_over_the_bandwidth_is_finite(kweights_train, kweights_bandwidth):
     assert jnp.all(jnp.isfinite(out))
 
 
-def test_mismatched_kinds_between_train_and_at_raise_value_error(kweights_train, kweights_bandwidth):
+def test_mismatched_kinds_raise_value_error(kweights_train, kweights_bandwidth):
     at = MixedData.continuous(jnp.zeros((4, 1)))
     with pytest.raises(ValueError, match="kinds"):
         kweights(kweights_train, kweights_bandwidth, at=at)
 
 
-def test_mismatched_levels_between_train_and_at_raise_value_error(kweights_train, kweights_bandwidth):
+def test_mismatched_levels_raise_value_error(kweights_train, kweights_bandwidth):
     at = MixedData.from_blocks(
         con=jnp.zeros((4, 1)),
         uno=jnp.zeros((4, 1), jnp.int32),

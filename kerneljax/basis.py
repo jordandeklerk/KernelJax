@@ -101,7 +101,7 @@ class LocalPolyBasis:
     r"""Multivariate monomial basis of the bandwidth-scaled evaluation coordinate.
 
     For :math:`p` continuous columns and a total degree :math:`d`, the
-    basis holds every monomial of :math:`u = (x - X_i) / h` with total
+    basis holds every monomial of :math:`u = (X_i - x) / h` with total
     degree at most :math:`d`, giving
 
     .. math::
@@ -187,11 +187,11 @@ class LocalPolyBasis:
         -------
         Float[Array, "n k"]
             The design matrix, one row per training point and one
-            column per monomial of :math:`u = (x - X_i) / h`.
+            column per monomial of :math:`u = (X_i - x) / h`.
         """
         p_con = train.spec.p_con
         h = broadcast_h(bw, p_con)[0]
-        u = (at.con - train.con) / h
+        u = (train.con - at.con) / h
 
         columns = [_monomial_column(u, exponent) for exponent in _monomial_exponents(p_con, self.degree)]
         return jnp.stack(columns, axis=-1)
@@ -199,22 +199,28 @@ class LocalPolyBasis:
     def deriv(self, train: MixedData, at: MixedData, bw: Bandwidth, var: int, order: int) -> Float[Array, "n k"]:
         r"""Differentiate every design column with respect to one evaluation coordinate.
 
-        Since :math:`u_j = (x_j - X_{ij}) / h_j` and only :math:`u_j`
-        depends on :math:`x_j`, the first derivative of a monomial is
+        Since :math:`u_j = (X_{ij} - x_j) / h_j` and only :math:`u_j`
+        depends on :math:`x_j`, its derivative is
+        :math:`\partial u_j / \partial x_j = -1 / h_j`, so the first
+        derivative of a monomial is
 
         .. math::
 
             \frac{\partial}{\partial x_j} \prod_d u_d^{e_d}
-                = e_j \, u_j^{e_j - 1} \prod_{d \neq j} u_d^{e_d} \, \frac{1}{h_j}
+                = -e_j \, u_j^{e_j - 1} \prod_{d \neq j} u_d^{e_d} \, \frac{1}{h_j}
 
         Differentiating once more with respect to the same coordinate
-        scales by another factor of :math:`1 / h_j` and reduces the
+        picks up another factor of :math:`-1 / h_j` and reduces the
         power of :math:`u_j` by one more,
 
         .. math::
 
             \frac{\partial^2}{\partial x_j^2} \prod_d u_d^{e_d}
                 = e_j (e_j - 1) \, u_j^{e_j - 2} \prod_{d \neq j} u_d^{e_d} \, \frac{1}{h_j^2}
+
+        Every order of differentiation contributes a factor of
+        :math:`-1 / h_j`, so odd orders carry an overall minus sign
+        and even orders do not.
 
         Supports order 1 and order 2.
 
@@ -240,13 +246,14 @@ class LocalPolyBasis:
         """
         p_con = train.spec.p_con
         h = broadcast_h(bw, p_con)[0]
-        u = (at.con - train.con) / h
+        u = (train.con - at.con) / h
         scale = h[..., var] ** order
+        sign = (-1) ** order
 
         columns = []
         for exponent in _monomial_exponents(p_con, self.degree):
             coefficient, reduced = _derivative_exponent(exponent, var, order)
-            columns.append(coefficient * _monomial_column(u, reduced) / scale)
+            columns.append(sign * coefficient * _monomial_column(u, reduced) / scale)
 
         return jnp.stack(columns, axis=-1)
 

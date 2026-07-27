@@ -23,7 +23,7 @@ def test_aitchison_aitken_value_matches_numpy_formula(aitchison_aitken, lam_f, l
 
 @pytest.mark.parametrize("levels", [2, 3, 5, 8])
 @pytest.mark.parametrize("lam_f", [0.0, 0.05, 0.2, 0.4, 0.6, 0.8, 0.95])
-def test_aitchison_aitken_value_sums_to_one_over_support(aitchison_aitken, lam_f, levels):
+def test_aitchison_aitken_sums_to_one(aitchison_aitken, lam_f, levels):
     lam = jnp.array(lam_f)
     for x in range(levels):
         total = sum(float(aitchison_aitken.value(jnp.array(x), jnp.array(s), lam, levels)) for s in range(levels))
@@ -37,7 +37,7 @@ def test_aitchison_aitken_upper_bound(aitchison_aitken, levels, expected):
 
 @pytest.mark.parametrize("levels", [2, 3, 5, 7])
 @pytest.mark.parametrize("lam_f", [0.0, 0.05, 0.31, 0.49, 0.7])
-def test_aitchison_aitken_conv_matches_brute_force_support_sum(aitchison_aitken, lam_f, levels):
+def test_aitchison_aitken_conv_matches_brute_sum(aitchison_aitken, lam_f, levels):
     lam = jnp.array(lam_f)
     for x in range(levels):
         for y in range(levels):
@@ -51,7 +51,7 @@ def test_aitchison_aitken_conv_matches_brute_force_support_sum(aitchison_aitken,
 
 
 @pytest.mark.parametrize("lam_f", [0.0, 0.33, 0.6])
-def test_aitchison_aitken_conv_matches_brute_force_for_random_pairs_at_large_levels(aitchison_aitken, lam_f):
+def test_aitchison_aitken_conv_matches_random_pairs(aitchison_aitken, lam_f):
     levels = 12
     lam = jnp.array(lam_f)
     rng = np.random.default_rng(0)
@@ -68,7 +68,7 @@ def test_aitchison_aitken_conv_matches_brute_force_for_random_pairs_at_large_lev
 
 @pytest.mark.parametrize(("x", "y"), [(0, 0), (0, 1)])
 @pytest.mark.parametrize("levels", [2, 3, 5, 8])
-def test_aitchison_aitken_value_and_conv_gradients_are_finite_at_boundaries(aitchison_aitken, levels, x, y):
+def test_aitchison_aitken_grads_finite_at_boundaries(aitchison_aitken, levels, x, y):
     for lam_f in (0.0, aitchison_aitken.upper_bound(levels)):
         lam0 = jnp.array(lam_f)
         gv = jax.grad(lambda lam: aitchison_aitken.value(jnp.array(x), jnp.array(y), lam, levels))(lam0)
@@ -94,7 +94,7 @@ def test_wang_van_ryzin_upper_bound(wang_van_ryzin, levels):
 
 @pytest.mark.parametrize("d", [0, 1, 2, 3, 4, 5])
 @pytest.mark.parametrize("lam_f", [0.05, 0.2, 0.4, 0.6, 0.9, 0.99])
-def test_wang_van_ryzin_conv_matches_infinite_lattice_sum(wang_van_ryzin, lam_f, d):
+def test_wang_van_ryzin_conv_matches_lattice_sum(wang_van_ryzin, lam_f, d):
     lattice = np.arange(-4000, 4001)
 
     def l_np(a, b):
@@ -108,7 +108,7 @@ def test_wang_van_ryzin_conv_matches_infinite_lattice_sum(wang_van_ryzin, lam_f,
 
 @pytest.mark.parametrize(("x", "y"), [(0, 0), (0, 2), (1, 4)])
 @pytest.mark.parametrize("lam_f", [0.0, 0.999])
-def test_wang_van_ryzin_value_and_conv_gradients_are_finite_near_boundaries(wang_van_ryzin, lam_f, x, y):
+def test_wang_van_ryzin_grads_finite_near_boundaries(wang_van_ryzin, lam_f, x, y):
     lam0 = jnp.array(lam_f)
     gv = jax.grad(lambda lam: wang_van_ryzin.value(jnp.array(x), jnp.array(y), lam, 6))(lam0)
     gc = jax.grad(lambda lam: wang_van_ryzin.conv(jnp.array(x), jnp.array(y), lam, 6))(lam0)
@@ -118,7 +118,7 @@ def test_wang_van_ryzin_value_and_conv_gradients_are_finite_near_boundaries(wang
 
 @pytest.mark.parametrize("op", ["value", "conv"])
 @pytest.mark.parametrize("kernel_fixture", ["aitchison_aitken", "wang_van_ryzin"])
-def test_discrete_kernels_are_jittable_grad_and_vmappable(request, kernel_fixture, op):
+def test_kernels_are_jit_grad_vmappable(request, kernel_fixture, op):
     kernel = request.getfixturevalue(kernel_fixture)
     fn = getattr(kernel, op)
     f = jax.jit(lambda lam: fn(jnp.array(0), jnp.array(2), lam, 5))
@@ -128,7 +128,7 @@ def test_discrete_kernels_are_jittable_grad_and_vmappable(request, kernel_fixtur
 
 
 @pytest.mark.parametrize("kernel_cls", [AitchisonAitken, WangVanRyzin])
-def test_discrete_kernel_is_frozen_hashable_and_compares_by_value(kernel_cls):
+def test_kernel_is_frozen_and_hashable_by_value(kernel_cls):
     a = kernel_cls()
     b = kernel_cls()
     assert a == b

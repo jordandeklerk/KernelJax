@@ -39,7 +39,7 @@ def test_matches_an_independent_numpy_expression(density_data, density_bandwidth
     assert np.max(np.abs(got - want) / np.abs(want)) < 1e-6
 
 
-def test_continuous_only_density_integrates_to_approximately_one():
+def test_density_integrates_to_one():
     rng = np.random.default_rng(0)
     x = rng.normal(size=(200, 1))
     data = MixedData.continuous(jnp.asarray(x))
@@ -56,7 +56,7 @@ def test_gaussian_estimate_is_strictly_positive(density_data, density_bandwidth)
     assert jnp.all(value > 0)
 
 
-def test_doubling_every_bandwidth_changes_the_estimate(density_data, density_bandwidth):
+def test_doubling_bandwidth_changes_estimate(density_data, density_bandwidth):
     base = density(density_data, density_bandwidth).value
     doubled = density_bandwidth.replace(
         h=density_bandwidth.h * 2.0,
@@ -67,7 +67,7 @@ def test_doubling_every_bandwidth_changes_the_estimate(density_data, density_ban
     assert not jnp.allclose(base, changed)
 
 
-def test_large_h_flattens_the_estimate_toward_a_constant():
+def test_large_h_flattens_toward_constant():
     rng = np.random.default_rng(4)
     data = MixedData.continuous(jnp.asarray(rng.normal(size=(30, 1))))
     grid = jnp.asarray(np.linspace(-3.0, 3.0, 25)).reshape(-1, 1)
@@ -78,7 +78,7 @@ def test_large_h_flattens_the_estimate_toward_a_constant():
     assert jnp.std(value) < 1e-3 * jnp.mean(value)
 
 
-def test_leave_one_out_differs_from_full_fit_and_stays_positive(density_data, density_bandwidth):
+def test_leave_one_out_differs_and_is_positive(density_data, density_bandwidth):
     fold = jnp.arange(density_data.n)
     loo = density(density_data, density_bandwidth, fold=fold).value
     full = density(density_data, density_bandwidth).value
@@ -97,7 +97,7 @@ def test_leave_one_out_divides_by_the_retained_count(density_data, density_bandw
     assert np.allclose(np.asarray(got), want, rtol=1e-6)
 
 
-def test_k_fold_normalizes_by_the_per_row_retained_count(density_data, density_bandwidth):
+def test_k_fold_normalizes_by_retained_count(density_data, density_bandwidth):
     fold = jnp.asarray([i % 3 for i in range(density_data.n)])
     got = density(density_data, density_bandwidth, fold=fold).value
 
@@ -126,7 +126,7 @@ def test_chunked_matches_unchunked(density_data, density_bandwidth, chunk):
     assert jnp.allclose(got, ref, rtol=1e-6, atol=1e-8)
 
 
-def test_chunked_with_fold_avoids_the_pairwise_fold_memory_blowup():
+def test_chunked_fold_avoids_pairwise_memory():
     n = 4000
     data = MixedData.continuous(jnp.zeros((n, 1)))
     bw = Bandwidth(h=jnp.array([0.5]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))

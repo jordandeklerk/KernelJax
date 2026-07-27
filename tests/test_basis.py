@@ -12,6 +12,22 @@ from kerneljax.bandwidth import Bandwidth
 from kerneljax.basis import LocalPolyBasis
 from kerneljax.data import ColumnSpec, Kind, MixedData
 from kerneljax.ksum import kweights
+from kerneljax.linalg import wls
+
+
+def _fit_local_polynomial(x, y, at_x, h, degree):
+    train = MixedData.continuous(jnp.asarray(x).reshape(-1, 1))
+    at = MixedData.continuous(jnp.array([[at_x]]))
+    bw = Bandwidth(h=jnp.array([h]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+
+    design = LocalPolyBasis(degree=degree).design(train, at, bw)
+    weights = kweights(train, bw, at=at)[0]
+    response = jnp.asarray(y).reshape(-1, 1)
+
+    weighted = design * weights[:, None]
+    xtwx = weighted.T @ design
+    xtwy = weighted.T @ response
+    return wls(xtwx, xtwy).coef
 
 
 @pytest.mark.parametrize("degree", [0, 1, 2, 3])
@@ -32,22 +48,22 @@ def test_degree_zero_gives_a_single_column_of_ones(basis_train, basis_at, basis_
     assert jnp.allclose(design, jnp.ones_like(design))
 
 
-def test_degree_one_matches_an_explicit_numpy_construction(basis_train, basis_at, basis_bandwidth):
+def test_degree_one_matches_explicit_numpy(basis_train, basis_at, basis_bandwidth):
     train = np.asarray(basis_train.con, dtype=np.float64)
     at = np.asarray(basis_at.con, dtype=np.float64)
     h = np.asarray(basis_bandwidth.h, dtype=np.float64)
-    u = (at - train) / h
+    u = (train - at) / h
 
     expected = np.concatenate([np.ones((train.shape[0], 1)), u], axis=1)
     got = LocalPolyBasis(degree=1).design(basis_train, basis_at, basis_bandwidth)
     assert np.allclose(np.asarray(got), expected, rtol=1e-6)
 
 
-def test_degree_two_includes_every_square_and_cross_product_exactly_once(basis_train, basis_at, basis_bandwidth):
+def test_degree_two_covers_squares_and_cross_terms(basis_train, basis_at, basis_bandwidth):
     train = np.asarray(basis_train.con, dtype=np.float64)
     at = np.asarray(basis_at.con, dtype=np.float64)
     h = np.asarray(basis_bandwidth.h, dtype=np.float64)
-    u = (at - train) / h
+    u = (train - at) / h
 
     expected = np.stack(
         [np.ones(train.shape[0]), u[:, 0], u[:, 1], u[:, 0] ** 2, u[:, 0] * u[:, 1], u[:, 1] ** 2],
@@ -64,8 +80,29 @@ def test_degree_two_includes_every_square_and_cross_product_exactly_once(basis_t
         assert not np.allclose(got[:, first], got[:, second])
 
 
+@pytest.mark.parametrize(
+    "degree, coefficients",
+    [(1, (3.0, 2.0)), (2, (1.0, -2.0, 0.5))],
+)
+def test_coefficients_recover_value_and_slope(degree, coefficients):
+    rng = np.random.default_rng(14 + degree)
+    x = rng.normal(size=60)
+    at_x, h = 0.3, 0.6
+
+    y = sum(coefficient * x**power for power, coefficient in enumerate(coefficients))
+    true_value = sum(coefficient * at_x**power for power, coefficient in enumerate(coefficients))
+    true_slope = sum(
+        power * coefficient * at_x ** (power - 1) for power, coefficient in enumerate(coefficients) if power >= 1
+    )
+
+    coef = _fit_local_polynomial(x, y, at_x, h, degree)
+
+    assert float(coef[0, 0]) == pytest.approx(true_value, rel=1e-6)
+    assert float(coef[1, 0]) / h == pytest.approx(true_slope, rel=1e-6)
+
+
 @pytest.mark.parametrize("degree", [1, 2])
-def test_design_at_the_evaluation_point_itself_has_a_constant_first_column(basis_train, basis_bandwidth, degree):
+def test_eval_point_gives_constant_first_column(basis_train, basis_bandwidth, degree):
     at = MixedData.continuous(basis_train.con[:1])
     design = LocalPolyBasis(degree=degree).design(basis_train, at, basis_bandwidth)
 
@@ -74,7 +111,7 @@ def test_design_at_the_evaluation_point_itself_has_a_constant_first_column(basis
 
 
 @pytest.mark.parametrize("scale", [1.0, 100.0, 1000.0])
-def test_condition_number_of_the_weighted_gram_stays_bounded_across_data_scales(scale):
+def test_conditioning_is_scale_invariant(scale):
     rng = np.random.default_rng(4)
     points = rng.uniform(-scale, scale, size=40).reshape(-1, 1)
     train = MixedData.continuous(jnp.asarray(points))
@@ -106,7 +143,7 @@ def test_deriv_order_one_matches_jacfwd_of_design(basis_train, basis_at, basis_b
 
 @pytest.mark.parametrize("var", [0, 1])
 @pytest.mark.parametrize("degree", [0, 1, 2])
-def test_deriv_order_two_matches_the_second_jacfwd_of_design(basis_train, basis_at, basis_bandwidth, degree, var):
+def test_deriv_order_two_matches_second_jacfwd(basis_train, basis_at, basis_bandwidth, degree, var):
     basis = LocalPolyBasis(degree=degree)
     coordinate = basis_at.con[0]
 
@@ -122,9 +159,7 @@ def test_deriv_order_two_matches_the_second_jacfwd_of_design(basis_train, basis_
 
 @pytest.mark.parametrize("var", [0, 1])
 @pytest.mark.parametrize("degree", [1, 2])
-def test_deriv_stays_finite_when_the_evaluation_point_coincides_with_a_training_point(
-    basis_train, basis_bandwidth, degree, var
-):
+def test_deriv_finite_at_a_training_point(basis_train, basis_bandwidth, degree, var):
     at = MixedData.continuous(basis_train.con[:1])
     basis = LocalPolyBasis(degree=degree)
 
@@ -140,7 +175,7 @@ def test_local_poly_basis_carries_no_pytree_leaves():
     assert leaves == []
 
 
-def test_two_instances_with_the_same_degree_compare_and_hash_equal():
+def test_same_degree_compares_and_hashes_equal():
     first = LocalPolyBasis(degree=2)
     second = LocalPolyBasis(degree=2)
 
@@ -148,7 +183,7 @@ def test_two_instances_with_the_same_degree_compare_and_hash_equal():
     assert hash(first) == hash(second)
 
 
-def test_jit_accepts_the_basis_without_static_argnames(basis_train, basis_at, basis_bandwidth):
+def test_jit_accepts_without_static_argnames(basis_train, basis_at, basis_bandwidth):
     def total(basis, train, at, bw):
         return basis.design(train, at, bw).sum()
 
@@ -156,7 +191,7 @@ def test_jit_accepts_the_basis_without_static_argnames(basis_train, basis_at, ba
     assert jnp.isfinite(result)
 
 
-def test_jit_does_not_retrace_for_a_new_instance_with_the_same_degree(basis_train, basis_at, basis_bandwidth):
+def test_no_retrace_for_same_degree_instance(basis_train, basis_at, basis_bandwidth):
     calls = {"n": 0}
 
     @jax.jit
@@ -169,7 +204,7 @@ def test_jit_does_not_retrace_for_a_new_instance_with_the_same_degree(basis_trai
     assert calls["n"] == 1
 
 
-def test_jit_accepts_deriv_with_var_and_order_marked_static(basis_train, basis_at, basis_bandwidth):
+def test_jit_accepts_deriv_var_and_order_static(basis_train, basis_at, basis_bandwidth):
     basis = LocalPolyBasis(degree=2)
 
     total = jax.jit(
@@ -197,7 +232,7 @@ def test_vmap_over_the_bandwidth_is_finite(basis_train, basis_at, basis_bandwidt
     assert jnp.all(jnp.isfinite(out))
 
 
-def test_design_under_vmap_over_evaluation_points_gives_a_leading_batch_axis(basis_train, basis_bandwidth):
+def test_vmap_over_eval_points_adds_batch_axis(basis_train, basis_bandwidth):
     basis = LocalPolyBasis(degree=1)
     eval_points = jnp.array([[0.1, -0.2], [0.3, 0.4], [0.0, 0.0]])
 

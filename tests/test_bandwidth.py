@@ -25,7 +25,7 @@ def test_grad_returns_a_bandwidth_of_gradients(bandwidth):
     assert g.h.shape == bandwidth.h.shape
 
 
-def test_replace_returns_a_new_instance_with_a_field_swapped(bandwidth):
+def test_replace_swaps_a_field(bandwidth):
     updated = bandwidth.replace(h_axis="train")
     assert updated.h_axis == "train"
     assert bandwidth.h_axis == "shared"
@@ -41,7 +41,7 @@ def test_empty_blocks_have_zero_width(attr, shape):
     assert getattr(bw, attr).shape == shape
 
 
-def test_jit_does_not_retrace_when_only_leaf_values_change():
+def test_jit_no_retrace_when_leaf_values_change():
     calls = {"n": 0}
 
     @jax.jit
@@ -64,7 +64,7 @@ def test_jit_does_not_retrace_when_only_leaf_values_change():
         ("train", (5, 2), (1, 5, 2)),
     ],
 )
-def test_broadcast_h_produces_explicit_three_axis_shapes(axis, shape, expected):
+def test_broadcast_h_produces_three_axis_shapes(axis, shape, expected):
     bw = Bandwidth(h=jnp.ones(shape), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0), h_axis=axis)
     assert broadcast_h(bw, p_con=2).shape == expected
 
@@ -97,7 +97,7 @@ def test_broadcast_h_rejects_wrong_rank_for_the_tag(axis, shape):
         broadcast_h(bw, p_con=2)
 
 
-def test_a_per_observation_vector_cannot_silently_become_cubic():
+def test_ambiguous_per_observation_vector_raises():
     bw = Bandwidth(h=jnp.ones((5,)), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0), h_axis="train")
     with pytest.raises(ValueError, match="two dimensional"):
         broadcast_h(bw, p_con=1)

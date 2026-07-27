@@ -20,7 +20,7 @@ def _singular_moments(design, weights):
     return xtwx - 1e-2 * jnp.eye(design.shape[1]), xtwy
 
 
-def test_recovers_the_solve_of_an_independent_numpy_expression(wls_design):
+def test_matches_independent_numpy_solve(wls_design):
     design, weights, true_coef = wls_design
     rng = np.random.default_rng(21)
     noise = jnp.asarray(rng.normal(scale=0.05, size=(design.shape[0], true_coef.shape[1])))
@@ -31,7 +31,7 @@ def test_recovers_the_solve_of_an_independent_numpy_expression(wls_design):
     assert np.allclose(np.asarray(got), want, rtol=1e-6)
 
 
-def test_reproduces_an_exactly_linear_response_with_no_error(wls_design):
+def test_exact_linear_response_has_no_error(wls_design):
     design, weights, true_coef = wls_design
     xtwx, xtwy = _moments(design, weights, design @ true_coef)
 
@@ -45,7 +45,7 @@ def test_ok_is_true_for_a_well_posed_system(wls_design):
     assert bool(wls(xtwx, xtwy).ok)
 
 
-def test_rcond_is_near_one_for_a_well_conditioned_scaled_identity():
+def test_rcond_near_one_for_scaled_identity():
     xtwx = 3.0 * jnp.eye(4)
     xtwy = jnp.ones((4, 1))
 
@@ -55,7 +55,7 @@ def test_rcond_is_near_one_for_a_well_conditioned_scaled_identity():
 
 
 @pytest.mark.parametrize("scale", [1.0, 10.0, 100.0, 1000.0])
-def test_rcond_tracks_the_true_reciprocal_condition_number_across_scales(scale):
+def test_rcond_tracks_condition_number(scale):
     rng = np.random.default_rng(5)
     points = rng.uniform(-scale, scale, size=40)
     design = np.stack([np.ones_like(points), points, points**2], axis=1)
@@ -70,7 +70,7 @@ def test_rcond_tracks_the_true_reciprocal_condition_number_across_scales(scale):
 
 @pytest.mark.parametrize("seed", [0, 1, 2, 3, 4])
 @pytest.mark.parametrize("dim", [2, 3, 5])
-def test_rcond_lies_in_the_unit_interval_for_random_spd_systems(dim, seed):
+def test_rcond_in_unit_interval_for_spd(dim, seed):
     rng = np.random.default_rng(seed)
     factor = rng.normal(size=(dim, dim))
     spd = factor @ factor.T + dim * np.eye(dim)
@@ -89,7 +89,7 @@ def test_cho_reproduces_the_regularized_gram_matrix(wls_design, penalty):
     assert jnp.allclose(cho @ cho.T, want, rtol=1e-6)
 
 
-def test_scalar_penalty_shrinks_coefficients_monotonically(wls_design):
+def test_penalty_shrinks_coef_monotonically(wls_design):
     design, weights, true_coef = wls_design
     xtwx, xtwy = _moments(design, weights, design @ true_coef)
 
@@ -98,7 +98,7 @@ def test_scalar_penalty_shrinks_coefficients_monotonically(wls_design):
     assert norms[0] > norms[-1]
 
 
-def test_full_matrix_penalty_matches_the_equivalent_scalar(wls_design):
+def test_matrix_penalty_matches_equivalent_scalar(wls_design):
     design, weights, true_coef = wls_design
     xtwx, xtwy = _moments(design, weights, design @ true_coef)
     dim = xtwx.shape[0]
@@ -108,7 +108,7 @@ def test_full_matrix_penalty_matches_the_equivalent_scalar(wls_design):
     assert jnp.allclose(scalar_fit.coef, matrix_fit.coef, rtol=1e-12)
 
 
-def test_singular_gram_sets_ok_false_and_keeps_coef_finite(singular_design):
+def test_singular_gram_sets_ok_false_coef_finite(singular_design):
     design, weights = singular_design
     xtwx, xtwy = _singular_moments(design, weights)
 
@@ -117,7 +117,7 @@ def test_singular_gram_sets_ok_false_and_keeps_coef_finite(singular_design):
     assert jnp.all(jnp.isfinite(fit.coef))
 
 
-def test_singular_gram_sets_rcond_to_zero_and_keeps_it_finite(singular_design):
+def test_singular_gram_sets_rcond_zero_and_finite(singular_design):
     design, weights = singular_design
     xtwx, xtwy = _singular_moments(design, weights)
 
@@ -134,7 +134,7 @@ def test_singular_gram_keeps_gradients_finite(singular_design):
     assert jnp.all(jnp.isfinite(gradient))
 
 
-def test_rcond_gradient_stays_finite_for_a_well_posed_and_a_singular_system(wls_design, singular_design):
+def test_rcond_gradient_finite_for_both_systems(wls_design, singular_design):
     design, weights, true_coef = wls_design
     xtwx, xtwy = _moments(design, weights, design @ true_coef)
     gradient = jax.grad(lambda matrix: wls(matrix, xtwy).rcond)(xtwx)
@@ -159,7 +159,7 @@ def test_hat_diagonal_matches_a_numpy_hat_matrix(wls_design):
     assert np.allclose(np.asarray(got), want, rtol=1e-6)
 
 
-def test_leverage_lies_in_the_unit_interval_for_a_weighted_problem(wls_design):
+def test_leverage_in_unit_interval_for_weighted(wls_design):
     design, weights, _ = wls_design
     xtwx, xtwy = _moments(design, weights, jnp.zeros((design.shape[0], 1)))
     cho = wls(xtwx, xtwy).cho
@@ -210,7 +210,7 @@ def test_jit_grad_vmap(wls_design, singular_design):
     assert jnp.all(jnp.isfinite(jax.grad(total)(xtwx_s, xtwy_s)))
 
 
-def test_rcond_flags_the_ill_conditioned_scale_1000_quadratic_design():
+def test_rcond_flags_ill_conditioned_design():
     rng = np.random.default_rng(0)
     points = rng.uniform(-1000.0, 1000.0, size=30)
     design = jnp.asarray(np.stack([np.ones_like(points), points, points**2], axis=1), dtype=jnp.float32)
