@@ -47,20 +47,17 @@ def density(
 ) -> DensityFit:
     r"""Estimate a mixed-type probability density.
 
-    Implements the generalized product kernel estimator of [1]_ for data
-    with continuous, unordered categorical and ordered categorical columns.
+    Implements the generalized product kernel estimator of [1]_ for data with continuous,
+    unordered categorical and ordered categorical columns.
 
     .. math::
 
         \hat f(x) = \frac{1}{n \prod_d h_d} \sum_{i=1}^{n} \prod_d K_d(x_d, X_{id})
 
-    The product over :math:`d` runs across the continuous, unordered and
-    ordered columns, each with the kernel :math:`K_d` appropriate to its
-    kind.
-
-    Kernels supplied through ``kernels`` must return values with no
-    bandwidth factor of their own, since this applies :math:`1 / \prod_d
-    h_d` exactly once.
+    The product over :math:`d` runs across the continuous, unordered and ordered columns,
+    each with the kernel :math:`K_d` appropriate to its kind. Kernels supplied through
+    ``kernels`` must return values with no bandwidth factor of their own, since this applies
+    :math:`1 / \prod_d h_d` exactly once.
 
     Parameters
     ----------

@@ -32,18 +32,16 @@ def kweights(
 ) -> Float[Array, "n_eval n_train"]:
     r"""Compute the generalized product kernel weight matrix.
 
-    Every entry multiplies one kernel factor per column across the
-    continuous, unordered and ordered blocks, following the generalized
-    product kernel of [1]_,
+    Every entry multiplies one kernel factor per column across the continuous, unordered and
+    ordered blocks, following the generalized product kernel of [1]_,
 
     .. math::
 
         W_{ji} = \prod_{d} K_d(\mathrm{at}_{jd}, \mathrm{train}_{id}).
 
-    The default kernel families are the Gaussian kernel for continuous
-    columns, the Aitchison and Aitken (1976) kernel for unordered columns
-    [2]_, and the Wang and van Ryzin (1981) kernel for ordered columns
-    [3]_.
+    The default kernel families are the Gaussian kernel for continuous columns, the
+    Aitchison and Aitken (1976) kernel for unordered columns [2]_, and the Wang and van
+    Ryzin (1981) kernel for ordered columns [3]_.
 
     Parameters
     ----------
@@ -154,10 +152,9 @@ def kweights_grad(
 ) -> Float[Array, "p_con n_eval n_train"]:
     r"""Compute the derivative weight tensor, one continuous factor differentiated at a time.
 
-    Every entry multiplies one kernel factor per column exactly as
-    :func:`kweights` does with ``op=Op.VALUE``, except that the
-    :math:`l`-th continuous factor is replaced by its derivative with
-    respect to the evaluation coordinate,
+    Every entry multiplies one kernel factor per column exactly as :func:`kweights` does
+    with ``op=Op.VALUE``, except that the :math:`l`-th continuous factor is replaced by its
+    derivative with respect to the evaluation coordinate,
 
     .. math::
 
@@ -165,14 +162,13 @@ def kweights_grad(
                     \!\left(\mathrm{at}_{jl}, \mathrm{train}_{il}\right)
                     \prod_{d \neq l} K_d(\mathrm{at}_{jd}, \mathrm{train}_{id}).
 
-    Only continuous columns are differentiated, so the leading axis has
-    length :math:`p_{\mathrm{con}}` rather than :math:`p`. Categorical
-    factors always enter through their value.
+    Only continuous columns are differentiated, so the leading axis has length
+    :math:`p_{\mathrm{con}}`, not :math:`p`. Categorical factors always enter through their
+    value.
 
-    The product over :math:`d \neq l` is formed from prefix and suffix
-    cumulative products over the continuous factor axis, so no factor
-    is ever divided out. A zero factor in one continuous column then
-    never turns into a division by zero when differentiating another.
+    The product over :math:`d \neq l` is formed from prefix and suffix cumulative products
+    over the continuous factor axis, so no factor is ever divided out. A zero factor in one
+    continuous column then never turns into a division by zero when differentiating another.
 
     Parameters
     ----------
@@ -272,16 +268,13 @@ def ksum(
 
         \mathrm{out}_{jk} = \sum_{i} W_{ji} \, v_{ik}
 
-    with :math:`W` the generalized product kernel matrix [1]_ that
-    :func:`kweights` returns for the same ``train``, ``bw``, ``at``,
-    ``kernels``, ``op`` and ``power``, after any pair sharing a fold is
-    dropped.
+    with :math:`W` the generalized product kernel matrix [1]_ that :func:`kweights` returns
+    for the same ``train``, ``bw``, ``at``, ``kernels``, ``op`` and ``power``, after any
+    pair sharing a fold is dropped.
 
-    This contraction is the primitive from which the density and
-    cross-validation estimators in this package are built.
-
-    Passing ``chunk`` never changes the result, only how much memory
-    computing it needs.
+    This contraction is the primitive from which the density and cross-validation estimators
+    in this package are built. Passing ``chunk`` never changes the result, only how much
+    memory computing it needs.
 
     Parameters
     ----------

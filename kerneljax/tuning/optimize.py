@@ -59,30 +59,25 @@ def select_bandwidth(
 ) -> SelectionResult:
     r"""Select a bandwidth by minimizing a cross-validation criterion.
 
-    A data-driven bandwidth minimizes a criterion :math:`\mathrm{CV}` such
-    as :func:`kerneljax.tuning.objectives.cv_ml_density` or
-    :func:`kerneljax.tuning.objectives.cv_ls_density`, following [1]_ and
-    [2]_.
+    A data-driven bandwidth minimizes a criterion :math:`\mathrm{CV}` such as
+    :func:`kerneljax.tuning.objectives.cv_ml_density` or
+    :func:`kerneljax.tuning.objectives.cv_ls_density`, following [1]_ and [2]_.
 
     .. math::
 
         (\hat h, \hat\lambda)
         = \arg\min_{h > 0,\ 0 \le \lambda \le \lambda_{\max}} \mathrm{CV}(h, \lambda)
 
-    The box constraints are removed by optimizing over an unconstrained
-    vector :math:`z`.
+    The box constraints are removed by optimizing over an unconstrained vector :math:`z`.
 
     .. math::
 
         h = \operatorname{softplus}(z), \qquad
         \lambda = \lambda_{\max}\, \sigma(z)
 
-    Here :math:`\sigma` is the logistic function and :math:`\lambda_{\max}`
-    is the kernel's upper bound for that column, see
-    :class:`kerneljax.bandwidth.BandwidthTransform`.
-
-    A smoothing parameter returned at its upper bound smooths that column
-    away entirely.
+    Here :math:`\sigma` is the logistic function and :math:`\lambda_{\max}` is the kernel's
+    upper bound for that column, see :class:`kerneljax.bandwidth.BandwidthTransform`. A
+    smoothing parameter returned at its upper bound smooths that column away entirely.
 
     Parameters
     ----------
@@ -172,34 +167,29 @@ def lbfgs(
 ) -> tuple[Array, ScalarFloat, Array, Array]:
     r"""Minimize ``fun`` from ``z0`` with limited-memory BFGS.
 
-    Limited-memory BFGS builds an implicit approximation to the inverse
-    Hessian from the ``history`` most recent curvature pairs, following
-    [1]_ and [2]_.
+    Limited-memory BFGS builds an implicit approximation to the inverse Hessian from the
+    ``history`` most recent curvature pairs, following [1]_ and [2]_.
 
     .. math::
 
         s_k = z_{k+1} - z_k, \qquad y_k = g_{k+1} - g_k
 
-    Here :math:`s_k` and :math:`y_k` are the step and gradient differences
-    between consecutive iterates.
-
-    The search direction is recovered from these pairs by the two loop
+    Here :math:`s_k` and :math:`y_k` are the step and gradient differences between
+    consecutive iterates. The search direction is recovered from these pairs by the two loop
     recursion, without ever forming the Hessian.
 
-    A step length :math:`\alpha` is accepted once backtracking from
-    :math:`\alpha = 1` satisfies the Armijo condition
+    A step length :math:`\alpha` is accepted once backtracking from :math:`\alpha = 1`
+    satisfies the Armijo condition
 
     .. math::
 
         f(z + \alpha p) \le f(z) + c_1 \alpha\, p^{\top} g
 
-    with :math:`p` the search direction and :math:`g` the gradient at
-    :math:`z`.
+    with :math:`p` the search direction and :math:`g` the gradient at :math:`z`. A step
+    whose objective value comes back non-finite is rejected.
 
-    A step whose objective value comes back non-finite is rejected.
-
-    A curvature pair is stored only when :math:`s_k^{\top} y_k` is
-    positive, keeping the inverse Hessian approximation well defined.
+    A curvature pair is stored only when :math:`s_k^{\top} y_k` is positive, keeping the
+    inverse Hessian approximation well defined.
 
     Parameters
     ----------

@@ -385,3 +385,61 @@ def kweights_grad_purely_continuous_train():
 @pytest.fixture
 def kweights_grad_purely_continuous_bandwidth():
     return Bandwidth(h=jnp.array([0.5, 0.7]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+
+
+@pytest.fixture
+def poly_train():
+    rng = np.random.default_rng(40)
+    return MixedData.continuous(jnp.asarray(rng.normal(size=(50, 1))))
+
+
+@pytest.fixture
+def poly_at():
+    return MixedData.continuous(jnp.array([[-1.0], [-0.3], [0.4], [1.1]]))
+
+
+@pytest.fixture
+def poly_bandwidth():
+    return Bandwidth(h=jnp.array([0.5]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+
+
+@pytest.fixture
+def poly_response(poly_train):
+    rng = np.random.default_rng(41)
+    x = np.asarray(poly_train.con)[:, 0]
+    return jnp.asarray(np.sin(x) + rng.normal(scale=0.2, size=x.shape[0]))
+
+
+@pytest.fixture
+def poly_mixed_train():
+    rng = np.random.default_rng(42)
+    return MixedData.from_blocks(
+        con=jnp.asarray(rng.normal(size=(40, 1))),
+        uno=jnp.asarray(rng.integers(0, 3, size=(40, 1))),
+        orde=jnp.asarray(rng.integers(0, 4, size=(40, 1))),
+        uno_levels=(3,),
+        ord_levels=(4,),
+    )
+
+
+@pytest.fixture
+def poly_mixed_bandwidth():
+    return Bandwidth(h=jnp.array([0.5]), lam_uno=jnp.array([0.2]), lam_ord=jnp.array([0.3]))
+
+
+@pytest.fixture
+def poly_mixed_response(poly_mixed_train):
+    rng = np.random.default_rng(43)
+    return jnp.asarray(rng.normal(size=poly_mixed_train.n))
+
+
+@pytest.fixture
+def poly_eval_indexed_bandwidth():
+    h = jnp.array([[0.25], [0.4], [0.65], [0.9]])
+    return Bandwidth(h=h, lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0), h_axis="eval")
+
+
+@pytest.fixture
+def poly_train_indexed_bandwidth():
+    h = jnp.linspace(0.3, 0.9, 50).reshape(-1, 1)
+    return Bandwidth(h=h, lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0), h_axis="train")

@@ -34,10 +34,8 @@ def cv_ml_density(
     :math:`(n - 1) \prod h`.
 
     Minimizing this criterion over :math:`(h, \lambda)`, as
-    :func:`kerneljax.tuning.optimize.select_bandwidth` does, gives the
-    likelihood cross validated bandwidth.
-
-    np reports the negative of this value.
+    :func:`kerneljax.tuning.optimize.select_bandwidth` does, gives the likelihood cross
+    validated bandwidth. The R np package reports the negative of this value.
 
     Parameters
     ----------
@@ -104,19 +102,15 @@ def cv_ls_density(
 
         \int \hat f^2 = \frac{1}{n^2 \prod h} \sum_{i} \sum_{j} \bar K(X_i, X_j)
 
-    where :math:`\bar K` is the convolution product across every column
-    kind, continuous and categorical alike.
-
-    The double sum runs over the full matrix including its diagonal.
+    where :math:`\bar K` is the convolution product across every column kind, continuous and
+    categorical alike. The double sum runs over the full matrix including its diagonal.
 
     Here :math:`\hat f_{-i}` is the same leave-one-out density used by
     :func:`cv_ml_density`.
 
     Minimizing this criterion over :math:`(h, \lambda)`, as
-    :func:`kerneljax.tuning.optimize.select_bandwidth` does, gives the
-    least squares cross validated bandwidth.
-
-    np reports the negative of this value.
+    :func:`kerneljax.tuning.optimize.select_bandwidth` does, gives the least squares cross
+    validated bandwidth. The R np package reports the negative of this value.
 
     Parameters
     ----------

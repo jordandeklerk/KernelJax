@@ -18,9 +18,9 @@ def safe_pow(base: Array, exponent: Array) -> Array:
 
         \frac{\partial}{\partial \lambda} \lambda^{d} = d \, \lambda^{d - 1}
 
-    is :math:`0 \cdot \infty` at :math:`\lambda = 0` with :math:`d = 0`. The
-    ordered categorical kernels hit this, because :math:`\lambda = 0` is a real
-    optimum meaning no smoothing.
+    is :math:`0 \cdot \infty` at :math:`\lambda = 0` with :math:`d = 0`. The ordered
+    categorical kernels hit this, because :math:`\lambda = 0` is a real optimum meaning no
+    smoothing.
 
     Parameters
     ----------
@@ -56,8 +56,8 @@ def safe_div(numerator: Array, denominator: Array) -> Array:
 
         \frac{\partial}{\partial y} \frac{x}{y} = -\frac{x}{y^{2}}.
 
-    Kernel weight ratios such as a Nadaraya-Watson denominator can be exactly
-    zero at an isolated evaluation point.
+    Kernel weight ratios such as a Nadaraya-Watson denominator can be exactly zero at an
+    isolated evaluation point.
 
     Parameters
     ----------

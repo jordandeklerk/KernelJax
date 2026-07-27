@@ -50,27 +50,24 @@ class WLS:
 def wls(xtwx: FloatArray, xtwy: FloatArray, *, penalty: FloatArray | float = 0.0) -> WLS:
     r"""Solve a weighted least squares moment system by Cholesky factorization.
 
-    Local polynomial regression centers its design at each evaluation
-    point, so this takes the normal equation moments already formed
-    rather than a design matrix and a response.
+    Local polynomial regression centers its design at each evaluation point, so this takes
+    the normal equation moments already formed, not a design matrix and a response.
 
     .. math::
 
         (X^\top W X + P) \beta = X^\top W y
 
-    Here :math:`P` is a ridge penalty, either a scalar added to the
-    diagonal of :math:`X^\top W X` or a full matrix added to it
-    directly.
+    Here :math:`P` is a ridge penalty, either a scalar added to the diagonal of
+    :math:`X^\top W X` or a full matrix added to it directly.
 
-    The reciprocal condition number of the regularized Gram matrix is
-    estimated from the diagonal of its Cholesky factor :math:`L`,
+    The reciprocal condition number of the regularized Gram matrix is estimated from the
+    diagonal of its Cholesky factor :math:`L`,
 
     .. math::
 
         \mathrm{rcond} \approx \left(\frac{\min_i L_{ii}}{\max_i L_{ii}}\right)^{2}
 
-    a lower bound on the true reciprocal condition number rather than
-    an exact value.
+    a lower bound on the true reciprocal condition number, not an exact value.
 
     Parameters
     ----------
@@ -143,20 +140,18 @@ def hat_diagonal(cho: FloatArray, basis_row: FloatArray, weight_self: ScalarFloa
 
         h = w \, b^\top (X^\top W X)^{-1} b
 
-    where :math:`b` is the design row at the evaluation point and
-    :math:`w` is its own weight.
+    where :math:`b` is the design row at the evaluation point and :math:`w`
+    is its own weight.
 
-    Writing :math:`X^\top W X = L L^\top` for the retained factor
-    :math:`L` and solving :math:`L z = b` by forward substitution,
+    Writing :math:`X^\top W X = L L^\top` for the retained factor :math:`L` and solving
+    :math:`L z = b` by forward substitution,
 
     .. math::
 
         h = w \, z^\top z
 
-    which avoids ever forming the inverse.
-
-    Summed across evaluation points, :math:`h` gives the effective
-    degrees of freedom that AICc penalizes.
+    which avoids ever forming the inverse. Summed across evaluation points, :math:`h` gives
+    the effective degrees of freedom that AICc penalizes.
 
     Parameters
     ----------

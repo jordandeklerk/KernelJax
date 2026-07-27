@@ -70,9 +70,8 @@ class Gaussian(ContinuousKernel):
             \frac{\partial}{\partial x} K\!\left(\frac{x - y}{h}\right)
             = -\frac{u}{h}\, \frac{1}{\sqrt{2 \pi}} \exp\left(-\frac{u^2}{2}\right).
 
-        Unlike ``value`` and ``conv``, this carries a :math:`1/h` factor
-        from the chain rule, which is exactly what a derivative in
-        ``x`` requires.
+        Unlike ``value`` and ``conv``, this carries a :math:`1/h` factor from the chain
+        rule, which is exactly what a derivative in ``x`` requires.
 
         Parameters
         ----------

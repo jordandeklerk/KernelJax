@@ -100,29 +100,24 @@ class Basis(Protocol):
 class LocalPolyBasis:
     r"""Multivariate monomial basis of the bandwidth-scaled evaluation coordinate.
 
-    For :math:`p` continuous columns and a total degree :math:`d`, the
-    basis holds every monomial of :math:`u = (X_i - x) / h` with total
-    degree at most :math:`d`, giving
+    For :math:`p` continuous columns and a total degree :math:`d`, the basis holds every
+    monomial of :math:`u = (X_i - x) / h` with total degree at most :math:`d`, giving
 
     .. math::
 
         k = \binom{p + d}{d}
 
-    columns, following the local polynomial convention of [1]_.
+    columns, following the local polynomial convention of [1]_. Degree 0 gives the constant
+    column alone, the Nadaraya-Watson estimator. Degree 1 adds each :math:`u_j`, giving
+    local linear regression. Degree 2 further adds every square and cross product of the
+    :math:`u_j`, each appearing exactly once.
 
-    Degree 0 gives the constant column alone, the Nadaraya-Watson
-    estimator. Degree 1 adds each :math:`u_j`, giving local linear
-    regression. Degree 2 further adds every square and cross product of
-    the :math:`u_j`, each appearing exactly once.
+    Only continuous columns enter the basis. Categorical columns are smoothed entirely
+    through the kernel weights, so ``design`` and ``deriv`` ignore ``uno`` and ``orde``.
 
-    Only continuous columns enter the basis. Categorical columns are
-    smoothed entirely through the kernel weights, so ``design`` and
-    ``deriv`` ignore ``uno`` and ``orde``.
-
-    Fitted coefficients come back in bandwidth units. For a degree 1
-    fit, the constant column recovers the fitted value, while the
-    coefficient of :math:`u_j` recovers :math:`h_j` times the
-    derivative in :math:`x_j`, not the derivative itself.
+    Fitted coefficients come back in bandwidth units. For a degree 1 fit, the constant
+    column recovers the fitted value, while the coefficient of :math:`u_j` recovers
+    :math:`h_j` times the derivative in :math:`x_j`, not the derivative itself.
 
     Parameters
     ----------
@@ -199,30 +194,26 @@ class LocalPolyBasis:
     def deriv(self, train: MixedData, at: MixedData, bw: Bandwidth, var: int, order: int) -> Float[Array, "n k"]:
         r"""Differentiate every design column with respect to one evaluation coordinate.
 
-        Since :math:`u_j = (X_{ij} - x_j) / h_j` and only :math:`u_j`
-        depends on :math:`x_j`, its derivative is
-        :math:`\partial u_j / \partial x_j = -1 / h_j`, so the first
-        derivative of a monomial is
+        Since :math:`u_j = (X_{ij} - x_j) / h_j` and only :math:`u_j` depends on
+        :math:`x_j`, its derivative is :math:`\partial u_j / \partial x_j = -1 / h_j`, so
+        the first derivative of a monomial is
 
         .. math::
 
             \frac{\partial}{\partial x_j} \prod_d u_d^{e_d}
                 = -e_j \, u_j^{e_j - 1} \prod_{d \neq j} u_d^{e_d} \, \frac{1}{h_j}
 
-        Differentiating once more with respect to the same coordinate
-        picks up another factor of :math:`-1 / h_j` and reduces the
-        power of :math:`u_j` by one more,
+        Differentiating once more with respect to the same coordinate picks up another
+        factor of :math:`-1 / h_j` and reduces the power of :math:`u_j` by one more,
 
         .. math::
 
             \frac{\partial^2}{\partial x_j^2} \prod_d u_d^{e_d}
                 = e_j (e_j - 1) \, u_j^{e_j - 2} \prod_{d \neq j} u_d^{e_d} \, \frac{1}{h_j^2}
 
-        Every order of differentiation contributes a factor of
-        :math:`-1 / h_j`, so odd orders carry an overall minus sign
-        and even orders do not.
-
-        Supports order 1 and order 2.
+        Every order of differentiation contributes a factor of :math:`-1 / h_j`, so odd
+        orders carry an overall minus sign and even orders do not. Supports order 1 and
+        order 2.
 
         Parameters
         ----------
