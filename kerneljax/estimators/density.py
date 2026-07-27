@@ -47,13 +47,20 @@ def density(
 ) -> DensityFit:
     r"""Estimate a mixed-type probability density.
 
+    Implements the generalized product kernel estimator of [1]_ for data
+    with continuous, unordered categorical and ordered categorical columns.
+
     .. math::
 
         \hat f(x) = \frac{1}{n \prod_d h_d} \sum_{i=1}^{n} \prod_d K_d(x_d, X_{id})
 
+    The product over :math:`d` runs across the continuous, unordered and
+    ordered columns, each with the kernel :math:`K_d` appropriate to its
+    kind.
+
     Kernels supplied through ``kernels`` must return values with no
-    bandwidth factor of their own, since this applies
-    :math:`1 / \prod_d h_d` exactly once.
+    bandwidth factor of their own, since this applies :math:`1 / \prod_d
+    h_d` exactly once.
 
     Parameters
     ----------
@@ -66,12 +73,10 @@ def density(
     kernels : KernelSet, optional
         Kernel families, one per column kind. Defaults to ``KernelSet()``.
     fold : Array, optional
-        Fold label of every training point, shape ``(n,)``. When given,
-        the training points sharing a fold with evaluation row ``j`` are
-        dropped from its sum, and the divisor for row ``j`` is the number
-        of training points retained for that row. ``at`` must be ``None``
-        or a sample of the same length as ``train`` whenever ``fold`` is
-        given.
+        Fold label of every training point, shape ``(n,)``. Training
+        points sharing a fold with evaluation row ``j`` are dropped from
+        its sum, and the divisor becomes the number retained for that
+        row. ``at`` must then be ``None`` or match ``train`` in length.
     chunk : int or tuple of int, optional
         Chunk sizes passed through to :func:`kerneljax.ksum.ksum`.
 
@@ -79,6 +84,28 @@ def density(
     -------
     DensityFit
         The density estimate and the bandwidth used to produce it.
+
+    Examples
+    --------
+    Estimate a density from a sample of continuous data.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import jax.numpy as jnp
+           ...: import kerneljax as kj
+           ...:
+           ...: x = jnp.linspace(-2.0, 2.0, 50).reshape(-1, 1)
+           ...: train = kj.MixedData.continuous(x)
+           ...: bw = kj.Bandwidth(h=jnp.array([0.3]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+           ...: fit = kj.density(train, bw)
+           ...: print(fit.value[:5])
+
+    References
+    ----------
+    .. [1] Li, Q., & Racine, J. S. (2003). "Nonparametric estimation of
+           distributions with categorical and continuous data." Journal of
+           Multivariate Analysis, 86(2), 266-292.
     """
     kernels = KernelSet() if kernels is None else kernels
     scale: Literal["per_train", "per_eval"] = "per_train" if bw.h_axis == "train" else "per_eval"

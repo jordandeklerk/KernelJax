@@ -33,11 +33,17 @@ def kweights(
     r"""Compute the generalized product kernel weight matrix.
 
     Every entry multiplies one kernel factor per column across the
-    continuous, unordered and ordered blocks.
+    continuous, unordered and ordered blocks, following the generalized
+    product kernel of [1]_,
 
     .. math::
 
-        W_{ji} = \prod_{d} K_d(\mathrm{at}_{jd}, \mathrm{train}_{id})
+        W_{ji} = \prod_{d} K_d(\mathrm{at}_{jd}, \mathrm{train}_{id}).
+
+    The default kernel families are the Gaussian kernel for continuous
+    columns, the Aitchison and Aitken (1976) kernel for unordered columns
+    [2]_, and the Wang and van Ryzin (1981) kernel for ordered columns
+    [3]_.
 
     Parameters
     ----------
@@ -68,6 +74,32 @@ def kweights(
     -------
     Float[Array, "n_eval n_train"]
         The weight matrix.
+
+    Examples
+    --------
+    Compute the product kernel weight matrix for a continuous sample.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import jax.numpy as jnp
+           ...: import kerneljax as kj
+           ...:
+           ...: x = jnp.linspace(-2.0, 2.0, 5).reshape(-1, 1)
+           ...: train = kj.MixedData.continuous(x)
+           ...: bw = kj.Bandwidth(h=jnp.array([0.5]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+           ...: weights = kj.kweights(train, bw)
+           ...: print(weights.shape)
+
+    References
+    ----------
+    .. [1] Li, Q., & Racine, J. S. (2003). "Nonparametric estimation of
+           distributions with categorical and continuous data." Journal of
+           Multivariate Analysis, 86(2), 266-292.
+    .. [2] Aitchison, J., & Aitken, C. G. G. (1976). "Multivariate binary
+           discrimination by the kernel method." Biometrika, 63(3), 413-420.
+    .. [3] Wang, M. C., & van Ryzin, J. (1981). "A class of smooth
+           estimators for discrete distributions." Biometrika, 68(1), 301-309.
     """
     evaluate = train if at is None else at
     kernels = KernelSet() if kernels is None else kernels
@@ -150,14 +182,22 @@ def ksum(
 ) -> Float[Array, "n_eval m"]:
     r"""Contract the product kernel weight matrix against ``v``.
 
+    Computes the weighted kernel sum
+
     .. math::
 
         \mathrm{out}_{jk} = \sum_{i} W_{ji} \, v_{ik}
 
-    with :math:`W` the matrix :func:`kweights` returns for the same
-    ``train``, ``bw``, ``at``, ``kernels``, ``op`` and ``power``, after any
-    pair sharing a fold is dropped. Passing ``chunk`` never changes the
-    result, only how much memory computing it needs.
+    with :math:`W` the generalized product kernel matrix [1]_ that
+    :func:`kweights` returns for the same ``train``, ``bw``, ``at``,
+    ``kernels``, ``op`` and ``power``, after any pair sharing a fold is
+    dropped.
+
+    This contraction is the primitive from which the density and
+    cross-validation estimators in this package are built.
+
+    Passing ``chunk`` never changes the result, only how much memory
+    computing it needs.
 
     Parameters
     ----------
@@ -188,9 +228,8 @@ def ksum(
     weight_scale : {"none", "per_eval", "per_train"}
         Placement of the :math:`1 / \prod h` divisor. ``"per_train"``
         folds it into ``v`` before the contraction, needed when
-        ``bw.h_axis`` is ``"train"`` since the divisor then varies with the
-        summation index. ``"per_eval"`` divides the contracted result.
-        Static.
+        ``bw.h_axis`` is ``"train"`` since the divisor varies with the
+        sum index. ``"per_eval"`` divides the contracted result. Static.
     chunk : int or tuple of int, optional
         Chunk sizes as ``(eval, train)``. A bare int chunks only the
         evaluation axis. Bounds the peak memory of the contraction at the
@@ -200,6 +239,28 @@ def ksum(
     -------
     Float[Array, "n_eval m"]
         The contracted result.
+
+    Examples
+    --------
+    Sum the product kernel weights across the training axis.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import jax.numpy as jnp
+           ...: import kerneljax as kj
+           ...:
+           ...: x = jnp.linspace(-2.0, 2.0, 20).reshape(-1, 1)
+           ...: train = kj.MixedData.continuous(x)
+           ...: bw = kj.Bandwidth(h=jnp.array([0.5]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+           ...: total = kj.ksum(train, bw)
+           ...: print(total.shape)
+
+    References
+    ----------
+    .. [1] Li, Q., & Racine, J. S. (2003). "Nonparametric estimation of
+           distributions with categorical and continuous data." Journal of
+           Multivariate Analysis, 86(2), 266-292.
     """
     evaluate = train if at is None else at
     kernels = KernelSet() if kernels is None else kernels

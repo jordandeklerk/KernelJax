@@ -57,7 +57,29 @@ def select_bandwidth(
     n_starts: int = 3,
     chunk: int | tuple[int, int] | None = None,
 ) -> SelectionResult:
-    """Select a bandwidth by minimizing ``criterion`` in the unconstrained parameterization.
+    r"""Select a bandwidth by minimizing a cross-validation criterion.
+
+    A data-driven bandwidth minimizes a criterion :math:`\mathrm{CV}` such
+    as :func:`kerneljax.tuning.objectives.cv_ml_density` or
+    :func:`kerneljax.tuning.objectives.cv_ls_density`, following [1]_ and
+    [2]_.
+
+    .. math::
+
+        (\hat h, \hat\lambda)
+        = \arg\min_{h > 0,\ 0 \le \lambda \le \lambda_{\max}} \mathrm{CV}(h, \lambda)
+
+    The box constraints are removed by optimizing over an unconstrained
+    vector :math:`z`.
+
+    .. math::
+
+        h = \operatorname{softplus}(z), \qquad
+        \lambda = \lambda_{\max}\, \sigma(z)
+
+    Here :math:`\sigma` is the logistic function and :math:`\lambda_{\max}`
+    is the kernel's upper bound for that column, see
+    :class:`kerneljax.bandwidth.BandwidthTransform`.
 
     A smoothing parameter returned at its upper bound smooths that column
     away entirely.
@@ -69,17 +91,15 @@ def select_bandwidth(
     criterion : callable
         Cross-validation criterion, called as
         ``criterion(train, bandwidth, kernels=kernels, chunk=chunk)`` and
-        minimized. Matches the signature of
-        :func:`kerneljax.tuning.objectives.cv_ml_density` and
-        :func:`kerneljax.tuning.objectives.cv_ls_density`. Static.
+        minimized. Matches :func:`kerneljax.tuning.objectives.cv_ml_density`
+        and :func:`kerneljax.tuning.objectives.cv_ls_density`. Static.
     kernels : KernelSet, optional
         Kernel families, one per column kind. Defaults to ``KernelSet()``.
     solver : callable, optional
         Optimizer called as ``solver(objective, z0)`` in the unconstrained
         parameterization, returning ``(z, value, n_iter, converged)``.
-        Defaults to :func:`lbfgs`. Any callable matching this signature is
-        accepted, so a custom solver needs no change to this package.
-        Static.
+        Defaults to :func:`lbfgs`; any callable matching this signature is
+        accepted. Static.
     n_starts : int
         Number of perturbed starting points screened before the full
         solve. Static.
@@ -91,6 +111,29 @@ def select_bandwidth(
     SelectionResult
         The selected bandwidth together with the criterion value and
         solver diagnostics from the full solve.
+
+    Examples
+    --------
+    Select a bandwidth by minimizing likelihood cross validation.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import jax.numpy as jnp
+           ...: import kerneljax as kj
+           ...:
+           ...: x = jnp.linspace(-2.0, 2.0, 50).reshape(-1, 1)
+           ...: train = kj.MixedData.continuous(x)
+           ...: result = kj.select_bandwidth(train, kj.cv_ml_density, n_starts=1)
+           ...: print(result.bandwidth.h)
+
+    References
+    ----------
+    .. [1] Hall, P., Racine, J., & Li, Q. (2004). "Cross-validation and the
+           estimation of conditional probability densities." Journal of the
+           American Statistical Association, 99(468), 1015-1026.
+    .. [2] Li, Q., & Racine, J. S. (2007). Nonparametric Econometrics: Theory
+           and Practice. Princeton University Press.
     """
     kernels = KernelSet() if kernels is None else kernels
     solver = lbfgs if solver is None else solver
@@ -127,9 +170,36 @@ def lbfgs(
     tol: float = 1e-8,
     history: int = 10,
 ) -> tuple[Array, ScalarFloat, Array, Array]:
-    """Minimize ``fun`` from ``z0`` with limited-memory BFGS and a backtracking line search.
+    r"""Minimize ``fun`` from ``z0`` with limited-memory BFGS.
+
+    Limited-memory BFGS builds an implicit approximation to the inverse
+    Hessian from the ``history`` most recent curvature pairs, following
+    [1]_ and [2]_.
+
+    .. math::
+
+        s_k = z_{k+1} - z_k, \qquad y_k = g_{k+1} - g_k
+
+    Here :math:`s_k` and :math:`y_k` are the step and gradient differences
+    between consecutive iterates.
+
+    The search direction is recovered from these pairs by the two loop
+    recursion, without ever forming the Hessian.
+
+    A step length :math:`\alpha` is accepted once backtracking from
+    :math:`\alpha = 1` satisfies the Armijo condition
+
+    .. math::
+
+        f(z + \alpha p) \le f(z) + c_1 \alpha\, p^{\top} g
+
+    with :math:`p` the search direction and :math:`g` the gradient at
+    :math:`z`.
 
     A step whose objective value comes back non-finite is rejected.
+
+    A curvature pair is stored only when :math:`s_k^{\top} y_k` is
+    positive, keeping the inverse Hessian approximation well defined.
 
     Parameters
     ----------
@@ -151,6 +221,14 @@ def lbfgs(
         ``(z, value, n_iter, converged)``, the minimizer, the objective
         value there, the number of iterations used and whether ``tol`` was
         reached before ``max_iter``.
+
+    References
+    ----------
+    .. [1] Nocedal, J. (1980). "Updating quasi-Newton matrices with limited
+           storage." Mathematics of Computation, 35(151), 773-782.
+    .. [2] Liu, D. C., & Nocedal, J. (1989). "On the limited memory BFGS
+           method for large scale optimization." Mathematical Programming,
+           45(1), 503-528.
     """
     value_and_grad_fn = jax.value_and_grad(fun)
     dim = z0.shape[0]
