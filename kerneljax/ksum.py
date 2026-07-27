@@ -14,7 +14,7 @@ from kerneljax.data import ColumnSpec, Kind, MixedData
 from kerneljax.kernels import KernelSet, Op
 from kerneljax.typing import Array
 
-__all__ = ["fold_mask", "ksum", "kweights"]
+__all__ = ["ksum", "kweights"]
 
 OpSpec = str | Mapping[Kind, str] | tuple[str, ...]
 WeightScale = Literal["none", "per_eval", "per_train"]
@@ -141,29 +141,6 @@ def kweights(
         weights = jnp.where(mask, weights, 0.0)
 
     return weights
-
-
-def fold_mask(fold_eval: Array, fold_train: Array) -> Bool[Array, "n_eval n_train"]:
-    r"""Flag every evaluation and training pair that does not share a fold. ``True`` keeps the weight.
-
-    A single fold vector reused for both axes subsumes leave-one-out,
-    k-fold, blocked and clustered cross validation at the same shape.
-    Leave-one-out is ``fold_eval = fold_train = jnp.arange(n)``.
-
-    Parameters
-    ----------
-    fold_eval : Array
-        Fold label of every evaluation point, shape ``(n_eval,)``.
-    fold_train : Array
-        Fold label of every training point, shape ``(n_train,)``.
-
-    Returns
-    -------
-    Bool[Array, "n_eval n_train"]
-        ``True`` where the pair is kept, ``False`` where the fold agrees
-        and the pair is held out.
-    """
-    return fold_eval[:, None] != fold_train[None, :]
 
 
 def ksum(
@@ -362,7 +339,7 @@ def _sum_over_train(
     if chunk_train is None:
         weights = kweights(train, bw, at=eval_block, kernels=kernels, op=op, power=power)
         if fold is not None:
-            weights = weights * fold_mask(fold[eval_idx], fold)
+            weights = weights * (fold[eval_idx][:, None] != fold[None, :])
         return weights @ v
 
     train_blocks = jax.tree.map(lambda column: _pad_rows(column, chunk_train), train)
@@ -375,7 +352,7 @@ def _sum_over_train(
         bw_block = bw if h_block is None else bw.replace(h=h_block)
 
         valid = (idx_block < train.n)[None, :]
-        mask = valid if fold is None else valid & fold_mask(fold[eval_idx], fold[idx_block])
+        mask = valid if fold is None else valid & (fold[eval_idx][:, None] != fold[idx_block][None, :])
 
         weights = kweights(train_block, bw_block, at=eval_block, kernels=kernels, op=op, power=power)
         return accumulated + (weights * mask) @ v_block, None
