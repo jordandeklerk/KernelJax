@@ -320,3 +320,68 @@ def basis_at():
 @pytest.fixture
 def basis_bandwidth():
     return Bandwidth(h=jnp.array([0.5, 0.8]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+
+
+@pytest.fixture
+def kweights_grad_mixed_train():
+    rng = np.random.default_rng(31)
+    return MixedData.from_blocks(
+        con=jnp.asarray(rng.normal(size=(5, 1))),
+        uno=jnp.asarray(rng.integers(0, 3, size=(5, 1))),
+        orde=jnp.asarray(rng.integers(0, 4, size=(5, 1))),
+        uno_levels=(3,),
+        ord_levels=(4,),
+    )
+
+
+@pytest.fixture
+def kweights_grad_mixed_at():
+    rng = np.random.default_rng(32)
+    return MixedData.from_blocks(
+        con=jnp.asarray(rng.normal(size=(4, 1))),
+        uno=jnp.asarray(rng.integers(0, 3, size=(4, 1))),
+        orde=jnp.asarray(rng.integers(0, 4, size=(4, 1))),
+        uno_levels=(3,),
+        ord_levels=(4,),
+    )
+
+
+@pytest.fixture
+def kweights_grad_mixed_bandwidth():
+    return Bandwidth(h=jnp.array([0.6]), lam_uno=jnp.array([0.2]), lam_ord=jnp.array([0.25]))
+
+
+@pytest.fixture
+def kweights_grad_two_con_train():
+    rng = np.random.default_rng(33)
+    return MixedData.from_blocks(
+        con=jnp.asarray(rng.normal(size=(5, 2))),
+        uno=jnp.asarray(rng.integers(0, 3, size=(5, 1))),
+        uno_levels=(3,),
+    )
+
+
+@pytest.fixture
+def kweights_grad_two_con_at():
+    rng = np.random.default_rng(34)
+    return MixedData.from_blocks(
+        con=jnp.asarray(rng.normal(size=(4, 2))),
+        uno=jnp.asarray(rng.integers(0, 3, size=(4, 1))),
+        uno_levels=(3,),
+    )
+
+
+@pytest.fixture
+def kweights_grad_two_con_bandwidth():
+    return Bandwidth(h=jnp.array([0.6, 0.4]), lam_uno=jnp.array([0.2]), lam_ord=jnp.zeros(0))
+
+
+@pytest.fixture
+def kweights_grad_purely_continuous_train():
+    rng = np.random.default_rng(35)
+    return MixedData.continuous(jnp.asarray(rng.normal(size=(6, 2))))
+
+
+@pytest.fixture
+def kweights_grad_purely_continuous_bandwidth():
+    return Bandwidth(h=jnp.array([0.5, 0.7]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))

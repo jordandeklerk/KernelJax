@@ -60,6 +60,37 @@ class Gaussian(ContinuousKernel):
         u = (x - y) / h
         return jnp.exp(-0.5 * u * u) / jnp.sqrt(2.0 * jnp.pi)
 
+    def deriv(self, x: FloatArray, y: FloatArray, h: FloatArray) -> FloatArray:
+        r"""Differentiate the kernel with respect to ``x``.
+
+        With :math:`u = (x - y) / h`, this returns
+
+        .. math::
+
+            \frac{\partial}{\partial x} K\!\left(\frac{x - y}{h}\right)
+            = -\frac{u}{h}\, \frac{1}{\sqrt{2 \pi}} \exp\left(-\frac{u^2}{2}\right).
+
+        Unlike ``value`` and ``conv``, this carries a :math:`1/h` factor
+        from the chain rule, which is exactly what a derivative in
+        ``x`` requires.
+
+        Parameters
+        ----------
+        x : FloatArray
+            Evaluation points.
+        y : FloatArray
+            Data points, broadcastable against ``x``.
+        h : FloatArray
+            Bandwidth, broadcastable against ``x`` and ``y``.
+
+        Returns
+        -------
+        FloatArray
+            The derivative of the kernel value with respect to ``x``.
+        """
+        u = (x - y) / h
+        return -u / h * jnp.exp(-0.5 * u * u) / jnp.sqrt(2.0 * jnp.pi)
+
     def conv(self, x: FloatArray, y: FloatArray, h: FloatArray) -> FloatArray:
         r"""Evaluate the self-convolution of the kernel, unnormalized.
 
