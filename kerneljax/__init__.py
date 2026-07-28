@@ -22,6 +22,7 @@ from kerneljax.kernels import (
 )
 from kerneljax.ksum import ksum, kweights
 from kerneljax.linalg import WLS, hat_diagonal, wls
+from kerneljax.summary import Summary, summary
 from kerneljax.tuning import (
     DensityCriterion,
     RegressionCriterion,
@@ -55,6 +56,7 @@ __all__ = [
     "OrderedKernel",
     "RegressionCriterion",
     "SelectionResult",
+    "Summary",
     "UnorderedKernel",
     "WangVanRyzin",
     "aic_c_regression",
@@ -69,5 +71,6 @@ __all__ = [
     "local_poly",
     "normal_reference",
     "select_bandwidth",
+    "summary",
     "wls",
 ]
