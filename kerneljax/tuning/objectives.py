@@ -35,7 +35,7 @@ def cv_ml_density(
 
     Minimizing this criterion over :math:`(h, \lambda)`, as
     :func:`kerneljax.tuning.optimize.select_bandwidth` does, gives the likelihood cross
-    validated bandwidth. The R np package reports the negative of this value.
+    validated bandwidth.
 
     Parameters
     ----------
@@ -110,7 +110,7 @@ def cv_ls_density(
 
     Minimizing this criterion over :math:`(h, \lambda)`, as
     :func:`kerneljax.tuning.optimize.select_bandwidth` does, gives the least squares cross
-    validated bandwidth. The R np package reports the negative of this value.
+    validated bandwidth.
 
     Parameters
     ----------

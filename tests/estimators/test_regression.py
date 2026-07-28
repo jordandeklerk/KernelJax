@@ -1,5 +1,7 @@
 """Tests for local polynomial regression."""
 
+import itertools
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -172,3 +174,175 @@ def test_jit_grad_vmap(poly_train, poly_at, poly_bandwidth, poly_response):
     out = jax.vmap(lambda h: total(poly_bandwidth.replace(h=h)))(jnp.array([[0.4], [0.6]]))
     assert out.shape == (2,)
     assert jnp.all(jnp.isfinite(out))
+
+
+def test_se_matches_manual_formula(poly_mixed_train, poly_mixed_bandwidth, poly_mixed_response):
+    fit = local_poly(poly_mixed_train, poly_mixed_response, poly_mixed_bandwidth, degree=1, se=True)
+
+    weights = np.asarray(kweights(poly_mixed_train, poly_mixed_bandwidth))
+    response = np.asarray(poly_mixed_response)
+    weight_total = weights.sum(axis=1)
+    mean_response = (weights * response[None, :]).sum(axis=1) / weight_total
+    mean_square = (weights * (response**2)[None, :]).sum(axis=1) / weight_total
+    variance = np.clip(mean_square - mean_response**2, 0.0, None)
+
+    roughness = 1.0 / (2.0 * np.sqrt(np.pi))
+    want = np.sqrt(variance * roughness / weight_total)
+
+    assert np.allclose(np.asarray(fit.se), want, rtol=1e-6, atol=1e-5)
+
+
+def test_se_nonnegative_and_finite(poly_train, poly_at, poly_bandwidth, poly_response):
+    fit = local_poly(poly_train, poly_response, poly_bandwidth, at=poly_at, degree=1, se=True)
+    assert jnp.all(jnp.isfinite(fit.se))
+    assert jnp.all(fit.se >= 0.0)
+
+
+def test_se_zero_for_constant_response(poly_train, poly_at, poly_bandwidth):
+    y = jnp.full((poly_train.n,), 1.0)
+    fit = local_poly(poly_train, y, poly_bandwidth, at=poly_at, degree=1, se=True)
+    assert jnp.allclose(fit.se, 0.0, atol=1e-3)
+
+
+def test_se_shrinks_with_bandwidth(poly_flat_train, poly_at, poly_bandwidth, poly_flat_response):
+    se_by_bandwidth = []
+    for h in (0.3, 0.6, 1.2, 2.4):
+        bandwidth = poly_bandwidth.replace(h=jnp.array([h]))
+        fit = local_poly(poly_flat_train, poly_flat_response, bandwidth, at=poly_at, degree=1, se=True)
+        se_by_bandwidth.append(np.asarray(fit.se))
+
+    for smaller, larger in itertools.pairwise(se_by_bandwidth):
+        assert np.all(larger < smaller)
+
+
+def test_se_shrinks_with_sample_size(poly_growing_sample):
+    trains, responses, at, bandwidth = poly_growing_sample
+    se_by_size = [
+        float(local_poly(train, y, bandwidth, at=at, degree=1, se=True).se[0])
+        for train, y in zip(trains, responses, strict=True)
+    ]
+
+    assert se_by_size[0] > se_by_size[1] > se_by_size[2]
+
+
+def test_se_none_without_request(poly_train, poly_at, poly_bandwidth, poly_response):
+    fit = local_poly(poly_train, poly_response, poly_bandwidth, at=poly_at, degree=1)
+    assert fit.se is None
+
+
+def test_se_train_axis_gives_finite_values(poly_train, poly_at, poly_train_indexed_bandwidth, poly_response):
+    fit = local_poly(poly_train, poly_response, poly_train_indexed_bandwidth, at=poly_at, degree=1, se=True)
+    assert jnp.all(jnp.isfinite(fit.se))
+    assert jnp.all(fit.se >= 0.0)
+
+
+def test_roughness_matches_gaussian_constant(poly_train, poly_at, poly_bandwidth, poly_response):
+    fit = local_poly(poly_train, poly_response, poly_bandwidth, at=poly_at, degree=1, se=True)
+
+    weights = np.asarray(kweights(poly_train, poly_bandwidth, at=poly_at))
+    response = np.asarray(poly_response)
+    weight_total = weights.sum(axis=1)
+    mean_response = (weights * response[None, :]).sum(axis=1) / weight_total
+    mean_square = (weights * (response**2)[None, :]).sum(axis=1) / weight_total
+    variance = np.clip(mean_square - mean_response**2, 0.0, None)
+
+    implied_roughness = np.asarray(fit.se) ** 2 * weight_total / variance
+    want = 1.0 / (2.0 * np.sqrt(np.pi))
+    assert np.allclose(implied_roughness, want, rtol=1e-4, atol=1e-4)
+
+
+def test_roughness_is_product_over_columns(
+    kweights_grad_purely_continuous_train, kweights_grad_purely_continuous_bandwidth
+):
+    train = kweights_grad_purely_continuous_train
+    bandwidth = kweights_grad_purely_continuous_bandwidth
+    rng = np.random.default_rng(36)
+    y = jnp.asarray(rng.normal(size=train.n))
+
+    fit = local_poly(train, y, bandwidth, degree=1, se=True)
+
+    weights = np.asarray(kweights(train, bandwidth))
+    response = np.asarray(y)
+    weight_total = weights.sum(axis=1)
+    mean_response = (weights * response[None, :]).sum(axis=1) / weight_total
+    mean_square = (weights * (response**2)[None, :]).sum(axis=1) / weight_total
+    variance = np.clip(mean_square - mean_response**2, 0.0, None)
+
+    implied_roughness = np.asarray(fit.se) ** 2 * weight_total / variance
+    want = (1.0 / (2.0 * np.sqrt(np.pi))) ** 2
+    assert np.allclose(implied_roughness, want, rtol=1e-4, atol=1e-4)
+
+
+def test_se_composes_with_gradient(poly_train, poly_at, poly_bandwidth, poly_response):
+    fit = local_poly(poly_train, poly_response, poly_bandwidth, at=poly_at, degree=1, gradient=True, se=True)
+    assert jnp.all(jnp.isfinite(fit.grad))
+    assert jnp.all(jnp.isfinite(fit.se))
+
+
+def test_se_composes_with_fold(poly_train, poly_bandwidth, poly_response):
+    fold = jnp.arange(poly_train.n)
+    fit = local_poly(poly_train, poly_response, poly_bandwidth, fold=fold, degree=1, se=True)
+    assert jnp.all(jnp.isfinite(fit.se))
+    assert jnp.all(fit.se >= 0.0)
+
+
+@pytest.mark.parametrize("chunk", [1, 3, 5, (2, 7), (3, 40)])
+def test_se_chunked_matches_unchunked(poly_train, poly_at, poly_bandwidth, poly_response, chunk):
+    ref = local_poly(poly_train, poly_response, poly_bandwidth, at=poly_at, degree=1, se=True)
+    got = local_poly(poly_train, poly_response, poly_bandwidth, at=poly_at, degree=1, se=True, chunk=chunk)
+
+    assert jnp.allclose(got.se, ref.se, rtol=1e-6, atol=1e-8)
+
+
+def test_se_pytree_survives_vmap(poly_train, poly_at, poly_bandwidth, poly_response):
+    def run(h):
+        return local_poly(poly_train, poly_response, poly_bandwidth.replace(h=h), at=poly_at, degree=1, se=True)
+
+    fits = jax.vmap(run)(jnp.array([[0.3], [0.5], [0.8]]))
+
+    assert isinstance(fits, LocalPolyFit)
+    assert fits.se.shape == (3, poly_at.n)
+
+
+def test_se_jit_grad_vmap(poly_train, poly_at, poly_bandwidth, poly_response):
+    eager = local_poly(poly_train, poly_response, poly_bandwidth, at=poly_at, degree=1, se=True)
+    assert jnp.all(jnp.isfinite(eager.se))
+
+    jitted = jax.jit(lambda bw: local_poly(poly_train, poly_response, bw, at=poly_at, degree=1, se=True))
+    assert jnp.allclose(jitted(poly_bandwidth).se, eager.se, rtol=1e-6)
+
+    def total(bw):
+        return local_poly(poly_train, poly_response, bw, at=poly_at, degree=1, se=True).se.sum()
+
+    gradient = jax.grad(total)(poly_bandwidth)
+    assert jnp.all(jnp.isfinite(gradient.h))
+
+    out = jax.vmap(lambda h: total(poly_bandwidth.replace(h=h)))(jnp.array([[0.4], [0.6]]))
+    assert out.shape == (2,)
+    assert jnp.all(jnp.isfinite(out))
+
+
+def test_se_matches_equal_weight_closed_form(
+    poly_degenerate_train, poly_degenerate_at, poly_degenerate_bandwidth, poly_degenerate_response
+):
+    fit = local_poly(
+        poly_degenerate_train,
+        poly_degenerate_response,
+        poly_degenerate_bandwidth,
+        at=poly_degenerate_at,
+        degree=0,
+        se=True,
+    )
+
+    response = np.asarray(poly_degenerate_response)
+    variance = np.mean((response - response.mean()) ** 2)
+    want = np.sqrt(variance / (response.shape[0] * np.sqrt(2.0)))
+
+    assert np.allclose(np.asarray(fit.se), want, rtol=1e-6)
+
+
+def test_se_scale_invariant_in_response(poly_train, poly_at, poly_bandwidth, poly_response):
+    base = local_poly(poly_train, poly_response, poly_bandwidth, at=poly_at, degree=1, se=True)
+    scaled = local_poly(poly_train, 3.0 * poly_response, poly_bandwidth, at=poly_at, degree=1, se=True)
+
+    assert np.allclose(np.asarray(scaled.se), 3.0 * np.asarray(base.se), rtol=1e-6)

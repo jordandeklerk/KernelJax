@@ -443,3 +443,51 @@ def poly_eval_indexed_bandwidth():
 def poly_train_indexed_bandwidth():
     h = jnp.linspace(0.3, 0.9, 50).reshape(-1, 1)
     return Bandwidth(h=h, lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0), h_axis="train")
+
+
+@pytest.fixture
+def poly_flat_train():
+    rng = np.random.default_rng(77)
+    return MixedData.continuous(jnp.asarray(rng.uniform(-3.0, 3.0, size=3000)).reshape(-1, 1))
+
+
+@pytest.fixture
+def poly_flat_response(poly_flat_train):
+    rng = np.random.default_rng(78)
+    return jnp.asarray(rng.normal(size=poly_flat_train.n))
+
+
+@pytest.fixture
+def poly_degenerate_train():
+    return MixedData.continuous(jnp.zeros((30, 1)))
+
+
+@pytest.fixture
+def poly_degenerate_at():
+    return MixedData.continuous(jnp.zeros((1, 1)))
+
+
+@pytest.fixture
+def poly_degenerate_bandwidth():
+    return Bandwidth(h=jnp.array([0.4]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+
+
+@pytest.fixture
+def poly_degenerate_response():
+    rng = np.random.default_rng(44)
+    return jnp.asarray(rng.normal(size=30))
+
+
+@pytest.fixture
+def poly_growing_sample():
+    at = MixedData.continuous(jnp.array([[0.0]]))
+    bandwidth = Bandwidth(h=jnp.array([0.5]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+
+    trains = []
+    responses = []
+    for size in (20, 80, 320):
+        rng = np.random.default_rng(1000 + size)
+        trains.append(MixedData.continuous(jnp.asarray(rng.normal(size=(size, 1)))))
+        responses.append(jnp.asarray(rng.normal(size=size)))
+
+    return trains, responses, at, bandwidth

@@ -22,7 +22,7 @@ __all__ = ["LocalPolyFit", "local_poly"]
 
 @partial(
     jax.tree_util.register_dataclass,
-    data_fields=["mean", "grad", "coef", "rcond", "bandwidth"],
+    data_fields=["mean", "grad", "coef", "rcond", "bandwidth", "se"],
     meta_fields=[],
 )
 @dataclasses.dataclass(frozen=True)
@@ -56,6 +56,9 @@ class LocalPolyFit:
         at every evaluation point, from :func:`~kerneljax.linalg.wls`.
     bandwidth : Bandwidth
         The bandwidth used to produce the fit.
+    se : Float[Array, " n_eval"] or None
+        The standard error of the fitted mean at every evaluation
+        point, or ``None`` when the fit did not request one.
     """
 
     mean: Float[Array, " n_eval"]
@@ -63,6 +66,7 @@ class LocalPolyFit:
     coef: Float[Array, "n_eval k"]
     rcond: Float[Array, " n_eval"]
     bandwidth: Bandwidth
+    se: Float[Array, " n_eval"] | None
 
 
 def local_poly(
@@ -74,6 +78,7 @@ def local_poly(
     kernels: KernelSet | None = None,
     degree: int = 1,
     gradient: bool = False,
+    se: bool = False,
     fold: Array | None = None,
     chunk: int | tuple[int, int] | None = None,
     penalty: FloatArray | float = 0.0,
@@ -94,6 +99,21 @@ def local_poly(
 
     Only continuous columns enter the polynomial basis. Categorical columns
     still shape the fit entirely through the kernel weights.
+
+    When ``se=True``, the fit also returns the standard error of the fitted mean,
+    built from the constant basis row alone whatever ``degree`` is fit. Writing
+    :math:`w_i` for the product kernel weight of training point :math:`i` at the
+    evaluation point,
+
+    .. math::
+
+        \hat\sigma^2(x) = \frac{\sum_i w_i y_i^2}{\sum_i w_i}
+                        - \left(\frac{\sum_i w_i y_i}{\sum_i w_i}\right)^{2}, \qquad
+        \widehat{\mathrm{se}}(\hat m(x))
+          = \sqrt{\frac{\hat\sigma^2(x)\, R(K)}{\sum_i w_i}}
+
+    with :math:`R(K) = \int K^2(u)\,du` the roughness of the continuous kernel and
+    :math:`\hat\sigma^2` clamped at zero before the square root.
 
     Parameters
     ----------
@@ -123,6 +143,12 @@ def local_poly(
         evaluation point, so no per point gradient is defined, and
         ``gradient=True`` with ``bw.h_axis="train"`` raises
         ``ValueError``.
+    se : bool, optional
+        Whether to also return the standard error of the fitted mean at every
+        evaluation point. The variance is estimated from the constant basis row
+        whatever the ``degree``, so for ``degree >= 1`` it is not the residual
+        variance of the polynomial actually fitted. The standard error covers
+        the fitted mean only, not the gradient.
     fold : Array, optional
         Fold label of every training point, shape ``(n,)``. Training
         points sharing a fold with an evaluation row are dropped from
@@ -140,8 +166,8 @@ def local_poly(
     -------
     LocalPolyFit
         The fitted value, the optional gradient, the full coefficient
-        vector, the per point conditioning estimate, and the bandwidth
-        used to produce the fit.
+        vector, the per point conditioning estimate, the optional standard
+        error of the fitted mean, and the bandwidth used to produce the fit.
 
     Examples
     --------
@@ -193,25 +219,15 @@ def local_poly(
 
     if chunk_eval is None:
         eval_idx = jnp.arange(evaluate.n)
-        mean, coef, rcond, grad = _fit_block(
-            train, bw, y, evaluate, eval_idx, basis, kernels, fold, gradient, penalty, chunk_train, p_con
+        mean, coef, rcond, grad, se_value = _fit_block(
+            train, bw, y, evaluate, eval_idx, basis, kernels, fold, gradient, se, penalty, chunk_train, p_con
         )
     else:
-        mean, coef, rcond, grad = _fit_eval_chunks(
-            train, bw, y, evaluate, basis, kernels, fold, gradient, penalty, chunk_eval, chunk_train, p_con
+        mean, coef, rcond, grad, se_value = _fit_eval_chunks(
+            train, bw, y, evaluate, basis, kernels, fold, gradient, se, penalty, chunk_eval, chunk_train, p_con
         )
 
-    return LocalPolyFit(mean=mean, grad=grad, coef=coef, rcond=rcond, bandwidth=bw)
-
-
-def _trim(leaf: Array, size: int) -> Array:
-    """Collapse the block axis into the evaluation axis and drop the padded tail."""
-    return leaf.reshape(-1, *leaf.shape[2:])[:size]
-
-
-def _trim_optional(leaf: Array | None, size: int) -> Array | None:
-    """Apply ``_trim`` unless the leaf is absent because no gradient was requested."""
-    return None if leaf is None else _trim(leaf, size)
+    return LocalPolyFit(mean=mean, grad=grad, coef=coef, rcond=rcond, bandwidth=bw, se=se_value)
 
 
 def _moments(
@@ -224,7 +240,7 @@ def _moments(
     fold: Array | None,
     row_index: Array,
     chunk_train: int | None,
-) -> tuple[Array, Array]:
+) -> tuple[Array, Array, Array]:
     """Form the weighted design moments for a single evaluation point, chunking the training axis when asked."""
     if chunk_train is None:
         design = basis.design(train, at_row, bw)
@@ -232,7 +248,7 @@ def _moments(
         if fold is not None:
             weights = jnp.where(fold[row_index] != fold, weights, 0.0)
         weighted = design * weights[:, None]
-        return weighted.T @ design, weighted.T @ y
+        return weighted.T @ design, weighted.T @ y, jnp.sum(weights * y * y)
 
     train_blocks = jax.tree.map(lambda column: _pad_rows(column, chunk_train), train)
     y_blocks = _pad_rows(y, chunk_train)
@@ -240,11 +256,15 @@ def _moments(
     h_blocks = _pad_rows(bw.h, chunk_train) if bw.h_axis == "train" else None
 
     dim = basis.dim(train.spec, basis.degree)
-    initial = (jnp.zeros((dim, dim), dtype=train.con.dtype), jnp.zeros((dim,), dtype=train.con.dtype))
+    initial = (
+        jnp.zeros((dim, dim), dtype=train.con.dtype),
+        jnp.zeros((dim,), dtype=train.con.dtype),
+        jnp.zeros((), dtype=train.con.dtype),
+    )
 
     def step(
-        carry: tuple[Array, Array], block: tuple[MixedData, Array, Array, Array | None]
-    ) -> tuple[tuple[Array, Array], None]:
+        carry: tuple[Array, Array, Array], block: tuple[MixedData, Array, Array, Array | None]
+    ) -> tuple[tuple[Array, Array, Array], None]:
         train_block, y_block, idx_block, h_block = block
         bw_block = bw if h_block is None else bw.replace(h=h_block)
 
@@ -256,11 +276,14 @@ def _moments(
         design = basis.design(train_block, at_row, bw_block)
         weighted = design * weights[:, None]
 
-        xtwx, xtwy = carry
-        return (xtwx + weighted.T @ design, xtwy + weighted.T @ y_block), None
+        xtwx, xtwy, weight_y2 = carry
+        next_y2 = weight_y2 + jnp.sum(weights * y_block * y_block)
+        return (xtwx + weighted.T @ design, xtwy + weighted.T @ y_block, next_y2), None
 
-    (xtwx, xtwy), _ = jax.lax.scan(jax.checkpoint(step), initial, (train_blocks, y_blocks, idx_blocks, h_blocks))
-    return xtwx, xtwy
+    (xtwx, xtwy, weight_y2), _ = jax.lax.scan(
+        jax.checkpoint(step), initial, (train_blocks, y_blocks, idx_blocks, h_blocks)
+    )
+    return xtwx, xtwy, weight_y2
 
 
 def _fit_point(
@@ -276,15 +299,16 @@ def _fit_point(
     kernels: KernelSet,
     fold: Array | None,
     gradient: bool,
+    se: bool,
     penalty: FloatArray | float,
     chunk_train: int | None,
     p_con: int,
-) -> tuple[Array, Array, Array, Array | None]:
+) -> tuple[Array, Array, Array, Array | None, Array | None]:
     """Solve the weighted least squares moments for a single evaluation point."""
     at_row = MixedData(con=con_row[None, :], uno=uno_row[None, :], orde=orde_row[None, :], spec=train.spec)
     bw_row = bw if h_row is None else bw.replace(h=h_row, h_axis="shared")
 
-    xtwx, xtwy = _moments(train, bw_row, y, at_row, basis, kernels, fold, row_index, chunk_train)
+    xtwx, xtwy, weight_y2 = _moments(train, bw_row, y, at_row, basis, kernels, fold, row_index, chunk_train)
     fit = wls(xtwx, xtwy, penalty=penalty)
 
     grad = None
@@ -292,7 +316,21 @@ def _fit_point(
         h = broadcast_h(bw_row, p_con)[0, 0]
         grad = fit.coef[1 : 1 + p_con] / h
 
-    return fit.coef[0], fit.coef, fit.rcond, grad
+    se_value = None
+    if se:
+        weight_total = xtwx[0, 0]
+        mean_y = xtwy[0] / weight_total
+        mean_y2 = weight_y2 / weight_total
+        sigma2 = jnp.clip(mean_y2 - mean_y * mean_y, 0.0, None)
+
+        # The continuous kernels here carry no 1/h factor, so a self
+        # convolution at zero difference is the same for every h, and the
+        # weight sum already carries the bandwidth product through the
+        # unnormalized kernel values that built it.
+        roughness = jnp.prod(kernels.continuous.conv(con_row, con_row, jnp.ones_like(con_row)))
+        se_value = jnp.sqrt(sigma2 * roughness / weight_total)
+
+    return fit.coef[0], fit.coef, fit.rcond, grad, se_value
 
 
 def _fit_block(
@@ -305,16 +343,17 @@ def _fit_block(
     kernels: KernelSet,
     fold: Array | None,
     gradient: bool,
+    se: bool,
     penalty: FloatArray | float,
     chunk_train: int | None,
     p_con: int,
-) -> tuple[Array, Array, Array, Array | None]:
+) -> tuple[Array, Array, Array, Array | None, Array | None]:
     """Fit every point of one evaluation block by vmapping the per-point weighted solve."""
     h_rows = bw.h if bw.h_axis == "eval" else None
 
     def step(
         con_row: Array, uno_row: Array, orde_row: Array, row_index: Array, h_row: Array | None
-    ) -> tuple[Array, Array, Array, Array | None]:
+    ) -> tuple[Array, Array, Array, Array | None, Array | None]:
         return _fit_point(
             train,
             bw,
@@ -328,6 +367,7 @@ def _fit_block(
             kernels,
             fold,
             gradient,
+            se,
             penalty,
             chunk_train,
             p_con,
@@ -346,11 +386,12 @@ def _fit_eval_chunks(
     kernels: KernelSet,
     fold: Array | None,
     gradient: bool,
+    se: bool,
     penalty: FloatArray | float,
     chunk_eval: int,
     chunk_train: int | None,
     p_con: int,
-) -> tuple[Array, Array, Array, Array | None]:
+) -> tuple[Array, Array, Array, Array | None, Array | None]:
     """Chunk the evaluation axis, fitting each block before dropping the padded tail."""
     eval_blocks = jax.tree.map(lambda column: _pad_rows(column, chunk_eval), evaluate)
     idx_blocks = _pad_index(jnp.arange(evaluate.n), evaluate.n, chunk_eval)
@@ -358,15 +399,16 @@ def _fit_eval_chunks(
 
     def step(
         carry: None, block: tuple[MixedData, Array, Array | None]
-    ) -> tuple[None, tuple[Array, Array, Array, Array | None]]:
+    ) -> tuple[None, tuple[Array, Array, Array, Array | None, Array | None]]:
         eval_block, idx_block, h_block = block
         bw_block = bw if h_block is None else bw.replace(h=h_block)
         result = _fit_block(
-            train, bw_block, y, eval_block, idx_block, basis, kernels, fold, gradient, penalty, chunk_train, p_con
+            train, bw_block, y, eval_block, idx_block, basis, kernels, fold, gradient, se, penalty, chunk_train, p_con
         )
         return carry, result
 
     _, stacked = jax.lax.scan(jax.checkpoint(step), None, (eval_blocks, idx_blocks, h_blocks))
 
-    mean, coef, rcond, grad = stacked
-    return _trim(mean, evaluate.n), _trim(coef, evaluate.n), _trim(rcond, evaluate.n), _trim_optional(grad, evaluate.n)
+    trimmed = jax.tree.map(lambda leaf: leaf.reshape(-1, *leaf.shape[2:])[: evaluate.n], stacked)
+    mean, coef, rcond, grad, se_value = trimmed
+    return mean, coef, rcond, grad, se_value
