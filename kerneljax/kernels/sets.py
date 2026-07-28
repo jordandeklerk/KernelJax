@@ -1,4 +1,4 @@
-"""The kernel set, one kernel family per column kind."""
+"""The kernel set."""
 
 from __future__ import annotations
 

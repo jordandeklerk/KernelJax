@@ -8,7 +8,7 @@ from kerneljax.bandwidth import (
     normal_reference,
 )
 from kerneljax.basis import LocalPolyBasis
-from kerneljax.data import ColumnSpec, Kind, MixedData
+from kerneljax.data import ColumnSpec, Kind, MixedData, grid
 from kerneljax.estimators import DensityFit, LocalPolyFit, density, local_poly
 from kerneljax.kernels import (
     AitchisonAitken,
@@ -64,6 +64,7 @@ __all__ = [
     "cv_ls_regression",
     "cv_ml_density",
     "density",
+    "grid",
     "hat_diagonal",
     "ksum",
     "kweights",

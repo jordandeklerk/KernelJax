@@ -1,4 +1,4 @@
-"""Continuous kernel families that carry no :math:`1/h` factor."""
+"""Continuous kernel families."""
 
 from __future__ import annotations
 

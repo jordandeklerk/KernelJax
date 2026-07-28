@@ -1,4 +1,4 @@
-"""Weighted least squares moment system and its solution shared by local polynomial and series estimators."""
+"""Weighted least squares moment system."""
 
 from __future__ import annotations
 

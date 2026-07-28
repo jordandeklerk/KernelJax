@@ -1,4 +1,4 @@
-"""The generalized product kernel weight matrix, its derivative, and their sum."""
+"""The generalized product kernel."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Cross-validation criteria for bandwidth selection, written to be minimized."""
+"""Cross-validation criteria for bandwidth selection."""
 
 from __future__ import annotations
 

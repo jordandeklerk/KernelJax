@@ -573,3 +573,15 @@ def criteria_response(criteria_train):
 @pytest.fixture
 def criteria_bandwidth():
     return Bandwidth(h=jnp.array([0.5]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+
+
+@pytest.fixture
+def grid_sample():
+    rng = np.random.default_rng(3)
+    return MixedData.from_blocks(
+        con=jnp.asarray(rng.normal(size=(40, 2))),
+        uno=jnp.asarray(rng.integers(0, 3, size=(40, 1))),
+        orde=jnp.asarray(rng.integers(0, 4, size=(40, 1))),
+        uno_levels=(3,),
+        ord_levels=(4,),
+    )
