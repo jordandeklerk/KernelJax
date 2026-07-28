@@ -557,3 +557,19 @@ def poly_growing_sample():
         responses.append(jnp.asarray(rng.normal(size=size)))
 
     return trains, responses, at, bandwidth
+
+
+@pytest.fixture
+def criteria_train():
+    rng = np.random.default_rng(11)
+    return MixedData.continuous(jnp.asarray(rng.normal(size=(23, 1))))
+
+
+@pytest.fixture
+def criteria_response(criteria_train):
+    return jnp.sin(criteria_train.con[:, 0])
+
+
+@pytest.fixture
+def criteria_bandwidth():
+    return Bandwidth(h=jnp.array([0.5]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))

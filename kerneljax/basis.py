@@ -23,14 +23,14 @@ class Basis(Protocol):
 
     ``design`` is called once per evaluation point for a local method
     such as local polynomial regression, with ``at`` a single row of
-    :class:`~kerneljax.data.MixedData` compared against every row of
+    :class:`~kerneljax.MixedData` compared against every row of
     ``train``.
 
     A future series basis instead builds one design over every
     evaluation point at once, so it would call ``design`` a single time
     globally, with ``at`` holding the whole evaluation sample.
 
-    ``dim`` takes only a :class:`~kerneljax.data.ColumnSpec` and a
+    ``dim`` takes only a :class:`~kerneljax.ColumnSpec` and a
     degree, both static, so the column count of the design is known
     before any array is built.
     """
@@ -133,12 +133,11 @@ class LocalPolyBasis:
 
         In [1]: import jax.numpy as jnp
            ...: import kerneljax as kj
-           ...: from kerneljax.basis import LocalPolyBasis
            ...:
            ...: train = kj.MixedData.continuous(jnp.linspace(0.0, 1.0, 5).reshape(-1, 1))
            ...: at = kj.MixedData.continuous(jnp.array([[0.5]]))
            ...: bw = kj.Bandwidth(h=jnp.array([0.2]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
-           ...: print(LocalPolyBasis(degree=1).design(train, at, bw))
+           ...: print(kj.LocalPolyBasis(degree=1).design(train, at, bw))
 
     References
     ----------

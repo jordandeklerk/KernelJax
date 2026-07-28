@@ -39,7 +39,7 @@ def cv_ml_density(
     :math:`(n - 1) \prod h`.
 
     Minimizing this criterion over :math:`(h, \lambda)`, as
-    :func:`kerneljax.tuning.optimize.select_bandwidth` does, gives the likelihood cross
+    :func:`~kerneljax.select_bandwidth` does, gives the likelihood cross
     validated bandwidth.
 
     Parameters
@@ -51,7 +51,7 @@ def cv_ml_density(
     kernels : KernelSet, optional
         Kernel families, one per column kind. Defaults to ``KernelSet()``.
     chunk : int or tuple of int, optional
-        Chunk sizes passed through to :func:`kerneljax.ksum.ksum`.
+        Chunk sizes passed through to :func:`~kerneljax.ksum`.
 
     Returns
     -------
@@ -111,10 +111,10 @@ def cv_ls_density(
     categorical alike. The double sum runs over the full matrix including its diagonal.
 
     Here :math:`\hat f_{-i}` is the same leave-one-out density used by
-    :func:`cv_ml_density`.
+    :func:`~kerneljax.cv_ml_density`.
 
     Minimizing this criterion over :math:`(h, \lambda)`, as
-    :func:`kerneljax.tuning.optimize.select_bandwidth` does, gives the least squares cross
+    :func:`~kerneljax.select_bandwidth` does, gives the least squares cross
     validated bandwidth.
 
     Parameters
@@ -126,7 +126,7 @@ def cv_ls_density(
     kernels : KernelSet, optional
         Kernel families, one per column kind. Defaults to ``KernelSet()``.
     chunk : int or tuple of int, optional
-        Chunk sizes passed through to :func:`kerneljax.ksum.ksum`.
+        Chunk sizes passed through to :func:`~kerneljax.ksum`.
 
     Returns
     -------
@@ -187,7 +187,7 @@ def cv_ls_regression(
     with training point :math:`i` held out of its own weighted design.
 
     Minimizing this criterion over :math:`(h, \lambda)`, as
-    :func:`kerneljax.tuning.optimize.select_bandwidth` does, gives the least squares cross
+    :func:`~kerneljax.select_bandwidth` does, gives the least squares cross
     validated bandwidth for the regression.
 
     Parameters
@@ -226,15 +226,12 @@ def cv_ls_regression(
            ...: bw = kj.Bandwidth(h=jnp.array([0.3]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
            ...: print(kj.cv_ls_regression(train, bw, y=y))
 
-    The response reaches the criterion through ``criterion_kwargs`` when minimizing over
-    the bandwidth.
+    Minimizing the same criterion over the bandwidth selects it.
 
     .. ipython::
         :okwarning:
 
-        In [2]: result = kj.select_bandwidth(
-           ...:     train, kj.cv_ls_regression, criterion_kwargs={"y": y}, n_starts=1
-           ...: )
+        In [2]: result = kj.select_bandwidth(train, kj.cv_ls_regression, y=y, n_starts=1)
            ...: print(result.bandwidth.h)
 
     References
@@ -293,7 +290,7 @@ def aic_c_regression(
     wander.
 
     Minimizing this criterion over :math:`(h, \lambda)`, as
-    :func:`kerneljax.tuning.optimize.select_bandwidth` does, gives the corrected AIC
+    :func:`~kerneljax.select_bandwidth` does, gives the corrected AIC
     bandwidth for the regression.
 
     Parameters
@@ -332,15 +329,12 @@ def aic_c_regression(
            ...: bw = kj.Bandwidth(h=jnp.array([0.3]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
            ...: print(kj.aic_c_regression(train, bw, y=y))
 
-    The response reaches the criterion through ``criterion_kwargs`` when minimizing over
-    the bandwidth.
+    Minimizing the same criterion over the bandwidth selects it.
 
     .. ipython::
         :okwarning:
 
-        In [2]: result = kj.select_bandwidth(
-           ...:     train, kj.aic_c_regression, criterion_kwargs={"y": y}, n_starts=1
-           ...: )
+        In [2]: result = kj.select_bandwidth(train, kj.aic_c_regression, y=y, n_starts=1)
            ...: print(result.bandwidth.h)
 
     References

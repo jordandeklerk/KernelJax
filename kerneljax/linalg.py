@@ -99,11 +99,11 @@ def wls(xtwx: FloatArray, xtwy: FloatArray, *, penalty: FloatArray | float = 0.0
         :okwarning:
 
         In [1]: import jax.numpy as jnp
-           ...: from kerneljax.linalg import wls
+           ...: import kerneljax as kj
            ...:
            ...: xtwx = jnp.array([[2.0, 0.0], [0.0, 4.0]])
            ...: xtwy = jnp.array([[2.0], [8.0]])
-           ...: print(wls(xtwx, xtwy).coef)
+           ...: print(kj.wls(xtwx, xtwy).coef)
 
     References
     ----------
@@ -157,7 +157,7 @@ def hat_diagonal(cho: FloatArray, basis_row: FloatArray, weight_self: ScalarFloa
     ----------
     cho : FloatArray
         Lower Cholesky factor of :math:`X^\top W X`, shape ``(k, k)``,
-        as returned by :func:`wls`.
+        as returned by :func:`~kerneljax.wls`.
     basis_row : FloatArray
         The design row :math:`b` at the evaluation point, shape ``(k,)``.
     weight_self : ScalarFloat
@@ -177,13 +177,13 @@ def hat_diagonal(cho: FloatArray, basis_row: FloatArray, weight_self: ScalarFloa
         :okwarning:
 
         In [1]: import jax.numpy as jnp
-           ...: from kerneljax.linalg import hat_diagonal, wls
+           ...: import kerneljax as kj
            ...:
            ...: xtwx = jnp.array([[2.0, 0.0], [0.0, 4.0]])
            ...: xtwy = jnp.array([[2.0], [8.0]])
-           ...: fit = wls(xtwx, xtwy)
+           ...: fit = kj.wls(xtwx, xtwy)
            ...: basis_row = jnp.array([1.0, 1.0])
-           ...: print(hat_diagonal(fit.cho, basis_row, weight_self=1.0))
+           ...: print(kj.hat_diagonal(fit.cho, basis_row, weight_self=1.0))
 
     References
     ----------

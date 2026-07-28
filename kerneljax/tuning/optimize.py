@@ -9,6 +9,7 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
+from jaxtyping import Float
 
 from kerneljax.bandwidth import Bandwidth, BandwidthTransform, normal_reference
 from kerneljax.data import MixedData
@@ -21,7 +22,7 @@ __all__ = ["SelectionResult", "lbfgs", "select_bandwidth"]
 @partial(
     jax.tree_util.register_dataclass,
     data_fields=["bandwidth", "value", "n_iter", "converged"],
-    meta_fields=[],
+    meta_fields=["criterion"],
 )
 @dataclasses.dataclass(frozen=True)
 class SelectionResult:
@@ -35,6 +36,9 @@ class SelectionResult:
         Criterion value at ``bandwidth``.
     n_iter : Array
         Number of solver iterations used by the full solve.
+    criterion : callable, optional
+        The criterion that was minimized, carried so a later fit can read
+        back the settings it was selected under. Static.
     converged : Array
         Whether the solver stopped because its progress stalled, either
         the gradient or the objective value stopped moving, rather than
@@ -46,6 +50,7 @@ class SelectionResult:
     value: ScalarFloat
     n_iter: Array
     converged: Array
+    criterion: Any = None
 
 
 @partial(jax.jit, static_argnames=("criterion", "solver", "n_starts", "chunk"))
@@ -53,6 +58,7 @@ def select_bandwidth(
     train: MixedData,
     criterion: Callable[..., ScalarFloat],
     *,
+    y: Float[Array, " n"] | None = None,
     criterion_kwargs: Mapping[str, Any] | None = None,
     kernels: KernelSet | None = None,
     solver: Callable[..., tuple[Array, ScalarFloat, Array, Array]] | None = None,
@@ -62,8 +68,8 @@ def select_bandwidth(
     r"""Select a bandwidth by minimizing a cross-validation criterion.
 
     A data-driven bandwidth minimizes a criterion :math:`\mathrm{CV}` such as
-    :func:`kerneljax.tuning.objectives.cv_ml_density` or
-    :func:`kerneljax.tuning.objectives.cv_ls_density`, following [1]_ and [2]_.
+    :func:`~kerneljax.cv_ml_density` or
+    :func:`~kerneljax.cv_ls_density`, following [1]_ and [2]_.
 
     .. math::
 
@@ -78,7 +84,7 @@ def select_bandwidth(
         \lambda = \lambda_{\max}\, \sigma(z)
 
     Here :math:`\sigma` is the logistic function and :math:`\lambda_{\max}` is the kernel's
-    upper bound for that column, see :class:`kerneljax.bandwidth.BandwidthTransform`. A
+    upper bound for that column, see :class:`~kerneljax.BandwidthTransform`. A
     smoothing parameter returned at its upper bound smooths that column away entirely.
 
     Parameters
@@ -88,20 +94,23 @@ def select_bandwidth(
     criterion : callable
         Cross-validation criterion, called as
         ``criterion(train, bandwidth, **criterion_kwargs, kernels=kernels, chunk=chunk)``
-        and minimized. Every criterion in :mod:`kerneljax.tuning.objectives`
-        matches this signature. Static, so pass a module level function rather
-        than one built on the fly, since a fresh :func:`functools.partial` is
-        never equal to an earlier one and forces a recompile.
+        and minimized. Every criterion in :mod:`kerneljax.tuning.criteria`
+        and :mod:`kerneljax.tuning.objectives` matches this signature. Static,
+        and a :func:`functools.partial` built fresh on each call is never equal
+        to an earlier one, so prefer a criterion object or a module level
+        function.
+    y : Float[Array, " n"], optional
+        Response values, one per row of ``train``, forwarded to criteria that
+        take one. Traced, so varying it reuses the compiled selector.
     criterion_kwargs : mapping, optional
-        Extra arguments forwarded to ``criterion``, such as the response ``y``
-        the regression criteria need. Traced, so varying its values reuses the
-        compiled selector instead of recompiling.
+        Further arguments forwarded to ``criterion``, for criteria that need
+        more than a response. Traced on the same terms as ``y``.
     kernels : KernelSet, optional
         Kernel families, one per column kind. Defaults to ``KernelSet()``.
     solver : callable, optional
         Optimizer called as ``solver(objective, z0)`` in the unconstrained
         parameterization, returning ``(z, value, n_iter, converged)``.
-        Defaults to :func:`lbfgs`; any callable matching this signature is
+        Defaults to :func:`~kerneljax.lbfgs`; any callable matching this signature is
         accepted. Static.
     n_starts : int
         Number of perturbed starting points screened before the full
@@ -141,6 +150,8 @@ def select_bandwidth(
     kernels = KernelSet() if kernels is None else kernels
     solver = lbfgs if solver is None else solver
     extra = {} if criterion_kwargs is None else dict(criterion_kwargs)
+    if y is not None:
+        extra["y"] = y
     transform = BandwidthTransform(spec=train.spec, kernels=kernels)
     start = normal_reference(train, kernels)
     z0 = transform.to_unconstrained(start)
@@ -164,6 +175,7 @@ def select_bandwidth(
         value=value,
         n_iter=n_iter,
         converged=converged,
+        criterion=criterion,
     )
 
 

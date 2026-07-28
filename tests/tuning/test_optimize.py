@@ -6,7 +6,8 @@ import pytest
 
 from kerneljax.bandwidth import BandwidthTransform, normal_reference
 from kerneljax.kernels import KernelSet
-from kerneljax.tuning.objectives import cv_ls_density, cv_ml_density
+from kerneljax.tuning.criteria import DensityCriterion, RegressionCriterion
+from kerneljax.tuning.objectives import cv_ls_density, cv_ls_regression, cv_ml_density
 from kerneljax.tuning.optimize import SelectionResult, lbfgs, select_bandwidth
 
 
@@ -102,3 +103,46 @@ def test_selection_result_is_a_pytree(cv_mixed_data):
     assert isinstance(result, SelectionResult)
     leaves = jax.tree_util.tree_leaves(result)
     assert all(hasattr(leaf, "shape") for leaf in leaves)
+
+
+def test_named_y_matches_the_mapping(criteria_train, criteria_response):
+    named = select_bandwidth(criteria_train, cv_ls_regression, y=criteria_response, n_starts=1)
+    mapped = select_bandwidth(criteria_train, cv_ls_regression, criterion_kwargs={"y": criteria_response}, n_starts=1)
+    assert float(named.value) == float(mapped.value)
+    assert jnp.array_equal(named.bandwidth.h, mapped.bandwidth.h)
+
+
+def test_criterion_without_a_response_gets_none(criteria_train):
+    result = select_bandwidth(criteria_train, cv_ml_density, n_starts=1)
+    assert jnp.all(jnp.isfinite(result.bandwidth.h))
+
+
+def test_result_records_the_criterion(criteria_train, criteria_response):
+    criterion = RegressionCriterion(method="aic", degree=2)
+    result = select_bandwidth(criteria_train, criterion, y=criteria_response, n_starts=1)
+    assert result.criterion == criterion
+    assert result.criterion.degree == 2
+
+
+def test_recorded_degree_is_concrete_in_a_trace(criteria_train, criteria_response):
+    result = select_bandwidth(
+        criteria_train, RegressionCriterion(method="cv_ls", degree=2), y=criteria_response, n_starts=1
+    )
+
+    @jax.jit
+    def basis_width(selection):
+        return jnp.zeros(selection.criterion.degree + 1)
+
+    assert basis_width(result).shape == (3,)
+
+
+def test_positional_construction_still_works(bandwidth):
+    result = SelectionResult(bandwidth, jnp.asarray(1.0), jnp.asarray(3), jnp.asarray(True))
+    assert result.criterion is None
+
+
+def test_result_round_trips_through_jit(criteria_train, criteria_response):
+    result = select_bandwidth(criteria_train, DensityCriterion(method="cv_ml"), n_starts=1)
+    same = jax.jit(lambda r: r)(result)
+    assert same.criterion == result.criterion
+    assert jnp.array_equal(same.bandwidth.h, result.bandwidth.h)

@@ -152,7 +152,7 @@ def kweights_grad(
 ) -> Float[Array, "p_con n_eval n_train"]:
     r"""Compute the derivative weight tensor, one continuous factor differentiated at a time.
 
-    Every entry multiplies one kernel factor per column exactly as :func:`kweights` does
+    Every entry multiplies one kernel factor per column exactly as :func:`~kerneljax.kweights` does
     with ``op=Op.VALUE``, except that the :math:`l`-th continuous factor is replaced by its
     derivative with respect to the evaluation coordinate,
 
@@ -175,7 +175,7 @@ def kweights_grad(
     train : MixedData
         Training sample, supplying the third tensor axis.
     bw : Bandwidth
-        Bandwidths for every column, used exactly as in :func:`kweights`.
+        Bandwidths for every column, used exactly as in :func:`~kerneljax.kweights`.
     at : MixedData, optional
         Evaluation points, supplying the second tensor axis. Defaults
         to ``train``.
@@ -196,23 +196,6 @@ def kweights_grad(
     -------
     Float[Array, "p_con n_eval n_train"]
         The derivative weight tensor.
-
-    Examples
-    --------
-    Compute the derivative weight tensor for a continuous sample.
-
-    .. ipython::
-        :okwarning:
-
-        In [1]: import jax.numpy as jnp
-           ...: import kerneljax as kj
-           ...: from kerneljax.ksum import kweights_grad
-           ...:
-           ...: x = jnp.linspace(-2.0, 2.0, 5).reshape(-1, 1)
-           ...: train = kj.MixedData.continuous(x)
-           ...: bw = kj.Bandwidth(h=jnp.array([0.5]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
-           ...: grad = kweights_grad(train, bw)
-           ...: print(grad.shape)
 
     References
     ----------
@@ -268,7 +251,7 @@ def ksum(
 
         \mathrm{out}_{jk} = \sum_{i} W_{ji} \, v_{ik}
 
-    with :math:`W` the generalized product kernel matrix [1]_ that :func:`kweights` returns
+    with :math:`W` the generalized product kernel matrix [1]_ that :func:`~kerneljax.kweights` returns
     for the same ``train``, ``bw``, ``at``, ``kernels``, ``op`` and ``power``, after any
     pair sharing a fold is dropped.
 
@@ -281,7 +264,7 @@ def ksum(
     train : MixedData
         Training sample, supplying the summation index.
     bw : Bandwidth
-        Bandwidths for every column, passed through to :func:`kweights`.
+        Bandwidths for every column, passed through to :func:`~kerneljax.kweights`.
     v : Float[Array, "n_train m"], optional
         Values to contract against. Defaults to a column of ones, so
         ``ksum`` then returns the row sums of the weight matrix.
@@ -289,10 +272,10 @@ def ksum(
         Evaluation points, supplying the first output axis. Defaults to
         ``train``.
     kernels : KernelSet, optional
-        Kernel families, passed through to :func:`kweights`. Defaults to
+        Kernel families, passed through to :func:`~kerneljax.kweights`. Defaults to
         ``KernelSet()``. Static.
     op : str or Mapping[Kind, str] or tuple of str
-        Kernel operator, passed through to :func:`kweights`. Static.
+        Kernel operator, passed through to :func:`~kerneljax.kweights`. Static.
     fold : Array, optional
         Fold label of every point, shape ``(n,)``. A pair is dropped
         wherever the evaluation and training fold agree. ``jnp.arange(n)``
@@ -327,7 +310,7 @@ def ksum(
         In [1]: import jax.numpy as jnp
            ...: import kerneljax as kj
            ...:
-           ...: x = jnp.linspace(-2.0, 2.0, 20).reshape(-1, 1)
+           ...: x = jnp.linspace(-2.0, 2.0, 5).reshape(-1, 1)
            ...: train = kj.MixedData.continuous(x)
            ...: bw = kj.Bandwidth(h=jnp.array([0.5]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
            ...: total = kj.ksum(train, bw)

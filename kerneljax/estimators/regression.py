@@ -53,7 +53,7 @@ class LocalPolyFit:
         bandwidth units.
     rcond : Float[Array, " n_eval"]
         The reciprocal condition number of the weighted moment system
-        at every evaluation point, from :func:`~kerneljax.linalg.wls`.
+        at every evaluation point, from :func:`~kerneljax.wls`.
     bandwidth : Bandwidth
         The bandwidth used to produce the fit.
     se : Float[Array, " n_eval"] or None
@@ -160,7 +160,7 @@ def local_poly(
         of additional compute.
     penalty : FloatArray or float, optional
         The ridge penalty passed through to
-        :func:`~kerneljax.linalg.wls`. Defaults to no penalty.
+        :func:`~kerneljax.wls`. Defaults to no penalty.
 
     Returns
     -------
@@ -178,13 +178,12 @@ def local_poly(
 
         In [1]: import jax.numpy as jnp
            ...: import kerneljax as kj
-           ...: from kerneljax.estimators import local_poly
            ...:
            ...: x = jnp.linspace(-2.0, 2.0, 50).reshape(-1, 1)
            ...: y = 3.0 + 2.0 * x[:, 0]
            ...: train = kj.MixedData.continuous(x)
            ...: bw = kj.Bandwidth(h=jnp.array([0.3]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
-           ...: fit = local_poly(train, y, bw, degree=1)
+           ...: fit = kj.local_poly(train, y, bw, degree=1)
            ...: print(fit.mean[:5])
 
     References

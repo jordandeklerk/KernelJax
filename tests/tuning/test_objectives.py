@@ -330,19 +330,17 @@ def test_jit_grad_and_vmap_for_regression(cv_mixed_data, cv_mixed_bandwidth, reg
     assert jnp.all(jnp.isfinite(out))
 
 
-def test_criterion_kwargs_improves_selection(poly_mixed_train, poly_mixed_response):
+def test_named_response_improves_selection(poly_mixed_train, poly_mixed_response):
     start = normal_reference(poly_mixed_train, KernelSet())
     starting_value = cv_ls_regression(poly_mixed_train, start, y=poly_mixed_response)
 
-    result = select_bandwidth(
-        poly_mixed_train, cv_ls_regression, criterion_kwargs={"y": poly_mixed_response}, n_starts=1
-    )
+    result = select_bandwidth(poly_mixed_train, cv_ls_regression, y=poly_mixed_response, n_starts=1)
     assert float(result.value) <= float(starting_value)
 
 
 def test_varying_response_reuses_compilation(poly_mixed_train, poly_mixed_response):
-    select_bandwidth(poly_mixed_train, cv_ls_regression, criterion_kwargs={"y": poly_mixed_response}, n_starts=1)
+    select_bandwidth(poly_mixed_train, cv_ls_regression, y=poly_mixed_response, n_starts=1)
     compiled = select_bandwidth._cache_size()
 
-    select_bandwidth(poly_mixed_train, cv_ls_regression, criterion_kwargs={"y": poly_mixed_response + 1.0}, n_starts=1)
+    select_bandwidth(poly_mixed_train, cv_ls_regression, y=poly_mixed_response + 1.0, n_starts=1)
     assert select_bandwidth._cache_size() == compiled

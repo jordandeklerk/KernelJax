@@ -29,8 +29,8 @@ class Bandwidth:
     r"""Bandwidths in natural, constrained scale.
 
     Values are the bandwidths themselves, so :math:`h > 0` and each
-    :math:`\lambda` lies in its own bounded interval. Every leaf is
-    floating point, so the whole tree can be differentiated.
+    :math:`\lambda` lies in its own bounded interval. Every entry is
+    floating point, so a bandwidth can be differentiated through.
 
     Parameters
     ----------

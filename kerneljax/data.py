@@ -22,7 +22,7 @@ class Kind(enum.Enum):
     ``ColumnSpec`` and ``MixedData`` use this enum to tag each column of a
     mixed-type design matrix as continuous, unordered categorical, or ordered
     categorical. The tag determines which of the three dense blocks of a
-    :class:`MixedData` instance the column's data lives in, and which kernel
+    :class:`~kerneljax.MixedData` instance the column's data lives in, and which kernel
     arithmetic applies to it.
 
     Attributes
@@ -49,10 +49,8 @@ class ColumnSpec:
     r"""Static, hashable, array-free description of a mixed-type design matrix.
 
     A ``ColumnSpec`` records the kind and level count of every column using
-    only tuples of enums, ints and strings, with no arrays. That makes it
-    safe to use as the static metadata field of a :class:`MixedData` pytree,
-    since :func:`jax.jit` hashes static fields to build its cache key and
-    would reject anything containing an array.
+    only tuples of enums, ints and strings, with no arrays, so it carries the
+    static metadata of a :class:`~kerneljax.MixedData`.
 
     Parameters
     ----------
@@ -62,10 +60,8 @@ class ColumnSpec:
         The number of levels of every column, in original column order. Zero
         for continuous columns.
     names : tuple of str, optional
-        Optional column names, in original column order. Included in
-        equality and hashing on purpose, since excluding them would let two
-        differently-named ``MixedData`` instances share a jit cache entry
-        and silently return the wrong metadata.
+        Optional column names, in original column order. Names take part in
+        equality, so two specs differing only in their names are not equal.
     """
 
     kinds: tuple[Kind, ...]
@@ -159,7 +155,7 @@ class MixedData:
 
         Shapes are checked, category codes are cast to signed int32 and
         range-checked against their level counts, and the resulting
-        :class:`ColumnSpec` is assembled from the block widths, in block
+        :class:`~kerneljax.ColumnSpec` is assembled from the block widths, in block
         order (continuous, then unordered, then ordered).
 
         Parameters

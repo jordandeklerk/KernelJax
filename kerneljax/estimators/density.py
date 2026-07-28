@@ -75,7 +75,7 @@ def density(
         its sum, and the divisor becomes the number retained for that
         row. ``at`` must then be ``None`` or match ``train`` in length.
     chunk : int or tuple of int, optional
-        Chunk sizes passed through to :func:`kerneljax.ksum.ksum`.
+        Chunk sizes passed through to :func:`~kerneljax.ksum`.
 
     Returns
     -------

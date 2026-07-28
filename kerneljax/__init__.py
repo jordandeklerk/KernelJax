@@ -17,6 +17,8 @@ from kerneljax.kernels import (
 from kerneljax.ksum import ksum, kweights
 from kerneljax.linalg import WLS, hat_diagonal, wls
 from kerneljax.tuning import (
+    DensityCriterion,
+    RegressionCriterion,
     SelectionResult,
     aic_c_regression,
     cv_ls_density,
@@ -36,6 +38,7 @@ __all__ = [
     "ColumnSpec",
     "ConditionalBandwidth",
     "ContinuousKernel",
+    "DensityCriterion",
     "DensityFit",
     "Gaussian",
     "KernelSet",
@@ -45,6 +48,7 @@ __all__ = [
     "MixedData",
     "Op",
     "OrderedKernel",
+    "RegressionCriterion",
     "SelectionResult",
     "UnorderedKernel",
     "WangVanRyzin",
