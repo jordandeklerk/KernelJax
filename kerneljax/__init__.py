@@ -1,6 +1,12 @@
 """Low-level JAX interface for nonparametric kernel smoothing of mixed-type data."""
 
-from kerneljax.bandwidth import Bandwidth, BandwidthTransform, ConditionalBandwidth, normal_reference
+from kerneljax.bandwidth import (
+    Bandwidth,
+    BandwidthTransform,
+    ConditionalBandwidth,
+    SelectionResult,
+    normal_reference,
+)
 from kerneljax.basis import LocalPolyBasis
 from kerneljax.data import ColumnSpec, Kind, MixedData
 from kerneljax.estimators import DensityFit, LocalPolyFit, density, local_poly
@@ -19,7 +25,6 @@ from kerneljax.linalg import WLS, hat_diagonal, wls
 from kerneljax.tuning import (
     DensityCriterion,
     RegressionCriterion,
-    SelectionResult,
     aic_c_regression,
     cv_ls_density,
     cv_ls_regression,

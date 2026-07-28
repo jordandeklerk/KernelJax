@@ -1,5 +1,6 @@
 """Tests for local polynomial regression."""
 
+import dataclasses
 import itertools
 
 import jax
@@ -9,6 +10,8 @@ import pytest
 
 from kerneljax.estimators.regression import LocalPolyFit, local_poly
 from kerneljax.ksum import kweights
+from kerneljax.tuning.objectives import cv_ls_regression
+from kerneljax.tuning.optimize import select_bandwidth
 
 
 def test_degree_zero_matches_nadaraya_watson(poly_train, poly_at, poly_bandwidth, poly_response):
@@ -346,3 +349,62 @@ def test_se_scale_invariant_in_response(poly_train, poly_at, poly_bandwidth, pol
     scaled = local_poly(poly_train, 3.0 * poly_response, poly_bandwidth, at=poly_at, degree=1, se=True)
 
     assert np.allclose(np.asarray(scaled.se), 3.0 * np.asarray(base.se), rtol=1e-6)
+
+
+def test_positional_construction_still_works(bandwidth):
+    fit = LocalPolyFit(jnp.zeros(3), None, jnp.zeros((3, 1)), jnp.ones(3), bandwidth, None)
+    assert fit.selection is None
+    assert fit.degree == 1
+    assert fit.spec is None
+    assert fit.n_train == 0
+
+
+def test_fit_records_what_produced_it(poly_mixed_train, poly_mixed_response, poly_mixed_bandwidth):
+    fit = local_poly(poly_mixed_train, poly_mixed_response, poly_mixed_bandwidth, degree=2)
+    assert fit.degree == 2
+    assert fit.n_train == poly_mixed_train.n
+    assert fit.spec == poly_mixed_train.spec
+
+
+@pytest.mark.parametrize("degree", [0, 1, 2])
+def test_degree_changes_the_treedef(poly_mixed_train, poly_mixed_response, poly_mixed_bandwidth, degree):
+    fit = local_poly(poly_mixed_train, poly_mixed_response, poly_mixed_bandwidth, degree=degree)
+    other = local_poly(poly_mixed_train, poly_mixed_response, poly_mixed_bandwidth, degree=degree + 1)
+    assert jax.tree_util.tree_structure(fit) != jax.tree_util.tree_structure(other)
+
+
+def test_fit_round_trips_through_jit(poly_mixed_train, poly_mixed_response, poly_mixed_bandwidth):
+    fit = local_poly(poly_mixed_train, poly_mixed_response, poly_mixed_bandwidth, degree=1, se=True)
+    same = jax.jit(lambda f: f)(fit)
+    assert same.degree == fit.degree
+    assert same.n_train == fit.n_train
+    assert same.spec == fit.spec
+    assert jnp.array_equal(same.mean, fit.mean)
+
+
+def test_static_fields_hold_no_leaves(poly_mixed_train, poly_mixed_response, poly_mixed_bandwidth):
+    fit = local_poly(poly_mixed_train, poly_mixed_response, poly_mixed_bandwidth, degree=1)
+    leaves = jax.tree_util.tree_leaves(fit)
+    assert len(leaves) == 6
+    assert all(jnp.issubdtype(jnp.asarray(leaf).dtype, jnp.floating) for leaf in leaves)
+
+
+def test_stacked_fits_vmap(poly_mixed_train, poly_mixed_response, poly_mixed_bandwidth):
+    widths = jnp.array([[0.3], [0.5], [0.7]])
+
+    def fit_at(h):
+        return local_poly(poly_mixed_train, poly_mixed_response, poly_mixed_bandwidth.replace(h=h), degree=1)
+
+    stacked = jax.vmap(fit_at)(widths)
+    assert stacked.mean.shape == (3, poly_mixed_train.n)
+    assert stacked.degree == 1
+    assert stacked.n_train == poly_mixed_train.n
+
+
+def test_attached_selection_blocks_grad(poly_mixed_train, poly_mixed_response, poly_mixed_bandwidth):
+    fit = local_poly(poly_mixed_train, poly_mixed_response, poly_mixed_bandwidth, degree=1)
+    assert jnp.all(jnp.isfinite(jax.grad(lambda f: f.mean.sum())(fit).mean))
+
+    selection = select_bandwidth(poly_mixed_train, cv_ls_regression, y=poly_mixed_response, n_starts=1)
+    with pytest.raises(TypeError, match="real- or complex-valued"):
+        jax.grad(lambda f: f.mean.sum())(dataclasses.replace(fit, selection=selection))

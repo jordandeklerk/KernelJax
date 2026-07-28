@@ -10,8 +10,8 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Float
 
-from kerneljax.bandwidth import Bandwidth
-from kerneljax.data import MixedData
+from kerneljax.bandwidth import Bandwidth, SelectionResult
+from kerneljax.data import ColumnSpec, MixedData
 from kerneljax.kernels import KernelSet
 from kerneljax.ksum import ksum
 from kerneljax.typing import Array
@@ -19,7 +19,11 @@ from kerneljax.typing import Array
 __all__ = ["DensityFit", "density"]
 
 
-@partial(jax.tree_util.register_dataclass, data_fields=["value", "bandwidth"], meta_fields=[])
+@partial(
+    jax.tree_util.register_dataclass,
+    data_fields=["value", "bandwidth", "selection"],
+    meta_fields=["kernels", "spec", "n_train"],
+)
 @dataclasses.dataclass(frozen=True)
 class DensityFit:
     """Result of a mixed-type density estimate.
@@ -30,10 +34,23 @@ class DensityFit:
         The density estimate at each evaluation point.
     bandwidth : Bandwidth
         The bandwidth used to produce ``value``.
+    selection : SelectionResult, optional
+        The selection that produced ``bandwidth``, or ``None`` when the
+        bandwidth was supplied directly.
+    kernels : KernelSet
+        Kernel families the estimate was produced with. Static.
+    spec : ColumnSpec, optional
+        Column metadata of the training sample. Static.
+    n_train : int
+        Number of training points. Static.
     """
 
     value: Float[Array, " n_eval"]
     bandwidth: Bandwidth
+    selection: SelectionResult | None = None
+    kernels: KernelSet = dataclasses.field(default_factory=KernelSet)
+    spec: ColumnSpec | None = None
+    n_train: int = 0
 
 
 def density(
@@ -114,4 +131,10 @@ def density(
         kept = train.n - jnp.bincount(fold, length=fold.shape[0])[fold]
         denom = kept.astype(total.dtype)[:, None]
 
-    return DensityFit(value=(total / denom).reshape(-1), bandwidth=bw)
+    return DensityFit(
+        value=(total / denom).reshape(-1),
+        bandwidth=bw,
+        kernels=kernels,
+        spec=train.spec,
+        n_train=train.n,
+    )

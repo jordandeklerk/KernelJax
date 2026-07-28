@@ -165,3 +165,17 @@ def test_density_quartet_eager_jit_grad_vmap(public_api_data, public_api_bandwid
     out = jax.vmap(lambda h: total(public_api_bandwidth.replace(h=h)))(jnp.array([[0.5], [0.6]]))
     assert out.shape == (2,)
     assert jnp.all(jnp.isfinite(out))
+
+
+def test_positional_construction_still_works(bandwidth):
+    fit = DensityFit(jnp.zeros(3), bandwidth)
+    assert fit.selection is None
+    assert fit.spec is None
+    assert fit.n_train == 0
+
+
+def test_fit_records_what_produced_it(density_data, density_bandwidth):
+    fit = density(density_data, density_bandwidth)
+    assert fit.n_train == density_data.n
+    assert fit.spec == density_data.spec
+    assert jax.tree_util.tree_structure(fit) == jax.tree_util.tree_structure(jax.jit(lambda f: f)(fit))

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 from collections.abc import Callable, Mapping
 from functools import partial
 from typing import Any
@@ -11,46 +10,12 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Float
 
-from kerneljax.bandwidth import Bandwidth, BandwidthTransform, normal_reference
+from kerneljax.bandwidth import BandwidthTransform, SelectionResult, normal_reference
 from kerneljax.data import MixedData
 from kerneljax.kernels import KernelSet
 from kerneljax.typing import Array, ScalarFloat
 
-__all__ = ["SelectionResult", "lbfgs", "select_bandwidth"]
-
-
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=["bandwidth", "value", "n_iter", "converged"],
-    meta_fields=["criterion"],
-)
-@dataclasses.dataclass(frozen=True)
-class SelectionResult:
-    """Outcome of a bandwidth selection.
-
-    Parameters
-    ----------
-    bandwidth : Bandwidth
-        The selected bandwidth, in natural, constrained scale.
-    value : ScalarFloat
-        Criterion value at ``bandwidth``.
-    n_iter : Array
-        Number of solver iterations used by the full solve.
-    criterion : callable, optional
-        The criterion that was minimized, carried so a later fit can read
-        back the settings it was selected under. Static.
-    converged : Array
-        Whether the solver stopped because its progress stalled, either
-        the gradient or the objective value stopped moving, rather than
-        because it ran out of its iteration budget. ``True`` does not by
-        itself mean the gradient tolerance was the one that was met.
-    """
-
-    bandwidth: Bandwidth
-    value: ScalarFloat
-    n_iter: Array
-    converged: Array
-    criterion: Any = None
+__all__ = ["lbfgs", "select_bandwidth"]
 
 
 @partial(jax.jit, static_argnames=("criterion", "solver", "n_starts", "chunk"))

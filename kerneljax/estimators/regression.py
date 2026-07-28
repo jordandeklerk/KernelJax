@@ -9,9 +9,9 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Float
 
-from kerneljax.bandwidth import Bandwidth, broadcast_h
+from kerneljax.bandwidth import Bandwidth, SelectionResult, broadcast_h
 from kerneljax.basis import LocalPolyBasis
-from kerneljax.data import MixedData
+from kerneljax.data import ColumnSpec, MixedData
 from kerneljax.kernels import KernelSet
 from kerneljax.ksum import _pad_index, _pad_rows, kweights
 from kerneljax.linalg import wls
@@ -22,8 +22,8 @@ __all__ = ["LocalPolyFit", "local_poly"]
 
 @partial(
     jax.tree_util.register_dataclass,
-    data_fields=["mean", "grad", "coef", "rcond", "bandwidth", "se"],
-    meta_fields=[],
+    data_fields=["mean", "grad", "coef", "rcond", "bandwidth", "se", "selection"],
+    meta_fields=["degree", "kernels", "spec", "n_train"],
 )
 @dataclasses.dataclass(frozen=True)
 class LocalPolyFit:
@@ -59,6 +59,17 @@ class LocalPolyFit:
     se : Float[Array, " n_eval"] or None
         The standard error of the fitted mean at every evaluation
         point, or ``None`` when the fit did not request one.
+    selection : SelectionResult, optional
+        The selection that produced ``bandwidth``, or ``None`` when the
+        bandwidth was supplied directly.
+    degree : int
+        Total degree of the local polynomial basis. Static.
+    kernels : KernelSet
+        Kernel families the fit was produced with. Static.
+    spec : ColumnSpec, optional
+        Column metadata of the training sample. Static.
+    n_train : int
+        Number of training points. Static.
     """
 
     mean: Float[Array, " n_eval"]
@@ -67,6 +78,11 @@ class LocalPolyFit:
     rcond: Float[Array, " n_eval"]
     bandwidth: Bandwidth
     se: Float[Array, " n_eval"] | None
+    selection: SelectionResult | None = None
+    degree: int = 1
+    kernels: KernelSet = dataclasses.field(default_factory=KernelSet)
+    spec: ColumnSpec | None = None
+    n_train: int = 0
 
 
 def local_poly(
@@ -226,7 +242,18 @@ def local_poly(
             train, bw, y, evaluate, basis, kernels, fold, gradient, se, penalty, chunk_eval, chunk_train, p_con
         )
 
-    return LocalPolyFit(mean=mean, grad=grad, coef=coef, rcond=rcond, bandwidth=bw, se=se_value)
+    return LocalPolyFit(
+        mean=mean,
+        grad=grad,
+        coef=coef,
+        rcond=rcond,
+        bandwidth=bw,
+        se=se_value,
+        degree=degree,
+        kernels=kernels,
+        spec=train.spec,
+        n_train=train.n,
+    )
 
 
 def _moments(
