@@ -8,8 +8,12 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from kerneljax.bandwidth import Bandwidth, normal_reference
+from kerneljax.data import MixedData
 from kerneljax.estimators.regression import LocalPolyFit, local_poly
+from kerneljax.kernels import KernelSet
 from kerneljax.ksum import kweights
+from kerneljax.tuning.criteria import DensityCriterion, RegressionCriterion
 from kerneljax.tuning.objectives import cv_ls_regression
 from kerneljax.tuning.optimize import select_bandwidth
 
@@ -408,3 +412,82 @@ def test_attached_selection_blocks_grad(poly_mixed_train, poly_mixed_response, p
     selection = select_bandwidth(poly_mixed_train, cv_ls_regression, y=poly_mixed_response, n_starts=1)
     with pytest.raises(TypeError, match="real- or complex-valued"):
         jax.grad(lambda f: f.mean.sum())(dataclasses.replace(fit, selection=selection))
+
+
+@pytest.mark.parametrize("method", ["cv_ls", "aic"])
+def test_string_bw_matches_the_two_step(criteria_train, criteria_response, method):
+    criterion = RegressionCriterion(method=method, degree=1)
+    selection = select_bandwidth(criteria_train, criterion, y=criteria_response)
+    want = local_poly(criteria_train, criteria_response, selection.bandwidth, degree=1)
+
+    got = local_poly(criteria_train, criteria_response, method)
+    assert jnp.allclose(got.mean, want.mean)
+    assert got.selection is not None
+
+
+def test_normal_reference_matches_the_rule(criteria_train, criteria_response):
+    want = normal_reference(criteria_train, KernelSet())
+    got = local_poly(criteria_train, criteria_response, "normal_reference")
+    assert jnp.allclose(got.bandwidth.h, want.h)
+    assert got.selection is None
+
+
+def test_reusing_a_fit_matches_its_bandwidth(criteria_train, criteria_response):
+    first = local_poly(criteria_train, criteria_response, "cv_ls")
+    again = local_poly(criteria_train, criteria_response, first)
+    assert jnp.array_equal(again.bandwidth.h, first.bandwidth.h)
+    assert again.degree == first.degree
+
+
+def test_array_train_matches_mixed_data(criteria_response):
+    raw = jnp.linspace(-2.0, 2.0, criteria_response.shape[0])
+    bw = Bandwidth(h=jnp.array([0.4]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+    want = local_poly(MixedData.continuous(raw), criteria_response, bw)
+    got = local_poly(raw, criteria_response, bw)
+    assert jnp.allclose(got.mean, want.mean)
+
+
+@pytest.mark.parametrize("degree", [0, 1, 2])
+def test_agreeing_degree_is_accepted(criteria_train, criteria_response, degree):
+    first = local_poly(criteria_train, criteria_response, "cv_ls", degree=degree)
+    again = local_poly(criteria_train, criteria_response, first, degree=degree)
+    assert again.degree == degree
+
+
+def test_contradicting_degree_raises(criteria_train, criteria_response):
+    first = local_poly(criteria_train, criteria_response, "cv_ls", degree=0)
+    with pytest.raises(ValueError, match="contradicts"):
+        local_poly(criteria_train, criteria_response, first, degree=2)
+
+
+@pytest.mark.parametrize("bad", [0.4, None, ("cv_ls",), jnp.array([0.4]), np.array([0.4, 0.5])])
+def test_unsupported_bw_type_raises(criteria_train, criteria_response, bad):
+    with pytest.raises(TypeError, match="bw must be"):
+        local_poly(criteria_train, criteria_response, bad)
+
+
+def test_wrong_family_criterion_is_rejected(criteria_train, criteria_response):
+    with pytest.raises(TypeError, match="bw must be"):
+        local_poly(criteria_train, criteria_response, DensityCriterion(method="cv_ml"))
+
+
+def test_unknown_string_bw_raises(criteria_train, criteria_response):
+    with pytest.raises(ValueError, match="normal_reference"):
+        local_poly(criteria_train, criteria_response, "cv.ls")
+
+
+def test_array_at_needs_a_continuous_spec(cv_mixed_data, regression_mixed_response, cv_mixed_bandwidth):
+    with pytest.raises(TypeError, match="categorical"):
+        local_poly(cv_mixed_data, regression_mixed_response, cv_mixed_bandwidth, at=jnp.zeros((3, 1)))
+
+
+def test_reusing_a_non_shared_bandwidth_raises(criteria_train, criteria_response):
+    per_row = Bandwidth(
+        h=jnp.full((criteria_train.n, 1), 0.4),
+        lam_uno=jnp.zeros(0),
+        lam_ord=jnp.zeros(0),
+        h_axis="eval",
+    )
+    fit = local_poly(criteria_train, criteria_response, per_row)
+    with pytest.raises(ValueError, match="h_axis 'shared'"):
+        local_poly(criteria_train, criteria_response, fit, at=jnp.zeros((3, 1)))

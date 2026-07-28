@@ -4,17 +4,20 @@ from __future__ import annotations
 
 import dataclasses
 from functools import partial
+from typing import Literal, cast
 
 import jax
 import jax.numpy as jnp
 from jaxtyping import Float
 
-from kerneljax.bandwidth import Bandwidth, SelectionResult, broadcast_h
+from kerneljax.bandwidth import Bandwidth, SelectionResult, broadcast_h, normal_reference
 from kerneljax.basis import LocalPolyBasis
-from kerneljax.data import ColumnSpec, MixedData
+from kerneljax.data import ColumnSpec, MixedData, _as_points
 from kerneljax.kernels import KernelSet
 from kerneljax.ksum import _pad_index, _pad_rows, kweights
 from kerneljax.linalg import wls
+from kerneljax.tuning.criteria import RegressionCriterion
+from kerneljax.tuning.optimize import select_bandwidth
 from kerneljax.typing import Array, FloatArray
 
 __all__ = ["LocalPolyFit", "local_poly"]
@@ -86,16 +89,17 @@ class LocalPolyFit:
 
 
 def local_poly(
-    train: MixedData,
+    train: MixedData | Array,
     y: Float[Array, " n"],
-    bw: Bandwidth,
+    bw: Bandwidth | SelectionResult | LocalPolyFit | str,
     *,
-    at: MixedData | None = None,
+    at: MixedData | Array | None = None,
     kernels: KernelSet | None = None,
-    degree: int = 1,
+    degree: int | None = None,
     gradient: bool = False,
     se: bool = False,
     fold: Array | None = None,
+    n_starts: int = 3,
     chunk: int | tuple[int, int] | None = None,
     penalty: FloatArray | float = 0.0,
 ) -> LocalPolyFit:
@@ -133,20 +137,31 @@ def local_poly(
 
     Parameters
     ----------
-    train : MixedData
+    train : MixedData or Array
         Training sample, supplying the rows of the weighted design at
-        every evaluation point.
+        every evaluation point. A raw array is read as continuous columns.
     y : Float[Array, " n"]
         Response values, one per row of ``train``.
-    bw : Bandwidth
-        Bandwidths for every column.
-    at : MixedData, optional
-        Evaluation points. Defaults to ``train``.
+    bw : Bandwidth or SelectionResult or LocalPolyFit or str
+        Bandwidths for every column, or a way of arriving at them. A
+        :class:`~kerneljax.Bandwidth` is used as given. ``"cv_ls"`` and
+        ``"aic"`` select one by minimizing that criterion and
+        ``"normal_reference"`` applies the starting rule without a search.
+        A previous selection or fit reuses its bandwidth along with the
+        degree it was chosen under. To select with a criterion built by hand,
+        minimize it with :func:`~kerneljax.select_bandwidth` and pass the
+        result here.
+    at : MixedData or Array, optional
+        Evaluation points. Defaults to ``train``. A raw array is accepted
+        only when the training sample is purely continuous.
     kernels : KernelSet, optional
         Kernel families, one per column kind. Defaults to
         ``KernelSet()``.
     degree : int, optional
-        Total degree of the polynomial basis. Supports 0, 1 and 2.
+        Total degree of the polynomial basis. Supports 0, 1 and 2. Defaults
+        to the degree carried by ``bw`` when it carries one, and to 1
+        otherwise. Passing a degree that contradicts the one ``bw`` carries
+        raises ``ValueError``.
     gradient : bool, optional
         Whether to also return the gradient of the fitted value with
         respect to every continuous column. Requires ``degree`` of at
@@ -170,6 +185,9 @@ def local_poly(
         points sharing a fold with an evaluation row are dropped from
         its weighted moments, giving a leave-one-out or k-fold fit.
         ``at`` must then be ``None`` or match ``train`` in length.
+    n_starts : int, optional
+        Number of perturbed starting points screened when ``bw`` names a
+        criterion to minimize.
     chunk : int or tuple of int, optional
         Chunk sizes as ``(eval, train)``. A bare int chunks only the
         evaluation axis. Bounds the peak memory of the fit at the cost
@@ -181,9 +199,19 @@ def local_poly(
     Returns
     -------
     LocalPolyFit
-        The fitted value, the optional gradient, the full coefficient
-        vector, the per point conditioning estimate, the optional standard
-        error of the fitted mean, and the bandwidth used to produce the fit.
+        Object containing the local polynomial fit:
+
+        - **mean**: Fitted regression value at every evaluation point
+        - **grad**: Gradient of the fitted value with respect to every continuous column, or None
+        - **coef**: Full coefficient vector at every evaluation point, in bandwidth units
+        - **rcond**: Reciprocal condition number of the weighted moment system at every point
+        - **bandwidth**: Bandwidth used to produce the fit
+        - **se**: Standard error of the fitted mean at every evaluation point, or None
+        - **selection**: Selection that produced the bandwidth, or None when it was supplied directly
+        - **degree**: Total degree of the local polynomial basis
+        - **kernels**: Kernel families the fit was produced with
+        - **spec**: Column metadata of the training sample
+        - **n_train**: Number of training points
 
     Examples
     --------
@@ -209,16 +237,25 @@ def local_poly(
     .. [2] Li, Q., & Racine, J. S. (2007). Nonparametric Econometrics: Theory
            and Practice. Princeton University Press.
     """
+    kernels = KernelSet() if kernels is None else kernels
+    train = _as_points(train)
+    bandwidth, selection, degree = _resolve_bandwidth(train, y, bw, degree, kernels, n_starts, chunk)
+
     if gradient and degree == 0:
         raise ValueError("gradient requires degree >= 1, a constant fit carries no slope information")
-    if gradient and bw.h_axis == "train":
+    if gradient and bandwidth.h_axis == "train":
         raise ValueError(
             "gradient requires bw.h_axis to be 'shared' or 'eval', "
             "a training indexed bandwidth attaches no bandwidth to the evaluation point"
         )
 
-    evaluate = train if at is None else at
-    kernels = KernelSet() if kernels is None else kernels
+    evaluate = train if at is None else _as_points(at, train.spec)
+    if at is not None and isinstance(bw, SelectionResult | LocalPolyFit) and bandwidth.h_axis != "shared":
+        raise ValueError(
+            "reusing a bandwidth at new evaluation points requires h_axis 'shared', "
+            f"got {bandwidth.h_axis!r} which is tied to the rows it was built for"
+        )
+
     basis = LocalPolyBasis(degree=degree)
     p_con = train.spec.p_con
 
@@ -235,11 +272,11 @@ def local_poly(
     if chunk_eval is None:
         eval_idx = jnp.arange(evaluate.n)
         mean, coef, rcond, grad, se_value = _fit_block(
-            train, bw, y, evaluate, eval_idx, basis, kernels, fold, gradient, se, penalty, chunk_train, p_con
+            train, bandwidth, y, evaluate, eval_idx, basis, kernels, fold, gradient, se, penalty, chunk_train, p_con
         )
     else:
         mean, coef, rcond, grad, se_value = _fit_eval_chunks(
-            train, bw, y, evaluate, basis, kernels, fold, gradient, se, penalty, chunk_eval, chunk_train, p_con
+            train, bandwidth, y, evaluate, basis, kernels, fold, gradient, se, penalty, chunk_eval, chunk_train, p_con
         )
 
     return LocalPolyFit(
@@ -247,13 +284,61 @@ def local_poly(
         grad=grad,
         coef=coef,
         rcond=rcond,
-        bandwidth=bw,
+        bandwidth=bandwidth,
         se=se_value,
+        selection=selection,
         degree=degree,
         kernels=kernels,
         spec=train.spec,
         n_train=train.n,
     )
+
+
+def _resolve_degree(explicit: int | None, carried: int | None) -> int:
+    """Settle on one degree, refusing an explicit value that contradicts a carried one."""
+    if explicit is None:
+        return 1 if carried is None else carried
+
+    if carried is not None and explicit != carried:
+        raise ValueError(f"degree={explicit} contradicts the degree {carried} that bw was selected under")
+
+    return explicit
+
+
+def _resolve_bandwidth(
+    train: MixedData,
+    y: Float[Array, " n"],
+    bw: Bandwidth | SelectionResult | LocalPolyFit | str,
+    degree: int | None,
+    kernels: KernelSet,
+    n_starts: int,
+    chunk: int | tuple[int, int] | None,
+) -> tuple[Bandwidth, SelectionResult | None, int]:
+    """Turn any accepted ``bw`` into a bandwidth, the selection behind it, and a degree."""
+    if isinstance(bw, Bandwidth):
+        return bw, None, _resolve_degree(degree, None)
+
+    if isinstance(bw, LocalPolyFit):
+        return bw.bandwidth, bw.selection, _resolve_degree(degree, bw.degree)
+
+    if isinstance(bw, SelectionResult):
+        return bw.bandwidth, bw, _resolve_degree(degree, getattr(bw.criterion, "degree", None))
+
+    if not isinstance(bw, str):
+        raise TypeError(
+            f"bw must be a Bandwidth, a SelectionResult, a LocalPolyFit or a method name, got {type(bw).__name__}"
+        )
+
+    if bw == "normal_reference":
+        return normal_reference(train, kernels), None, _resolve_degree(degree, None)
+
+    if bw not in ("cv_ls", "aic"):
+        raise ValueError(f"bw must be 'cv_ls', 'aic' or 'normal_reference', got {bw!r}")
+
+    method = cast(Literal["cv_ls", "aic"], bw)
+    criterion = RegressionCriterion(method=method, degree=_resolve_degree(degree, None))
+    selection = select_bandwidth(train, criterion, y=y, kernels=kernels, n_starts=n_starts, chunk=chunk)
+    return selection.bandwidth, selection, criterion.degree
 
 
 def _moments(

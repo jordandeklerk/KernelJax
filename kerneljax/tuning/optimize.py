@@ -86,8 +86,13 @@ def select_bandwidth(
     Returns
     -------
     SelectionResult
-        The selected bandwidth together with the criterion value and
-        solver diagnostics from the full solve.
+        Object containing the selected bandwidth and the solve that found it:
+
+        - **bandwidth**: Selected bandwidth, in natural constrained scale
+        - **value**: Criterion value at the selected bandwidth
+        - **n_iter**: Number of solver iterations used by the full solve
+        - **converged**: Whether the solver stopped because its progress stalled
+        - **criterion**: Criterion that was minimized
 
     Examples
     --------

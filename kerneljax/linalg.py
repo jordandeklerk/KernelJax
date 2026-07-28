@@ -82,14 +82,15 @@ def wls(xtwx: FloatArray, xtwy: FloatArray, *, penalty: FloatArray | float = 0.0
     Returns
     -------
     WLS
-        The coefficients, the retained Cholesky factor, a flag for
-        whether the regularized Gram matrix was positive definite, and
-        an estimate of its reciprocal condition number.
+        Object containing the weighted least squares solution:
 
-        When the Gram matrix was not positive definite, ``ok`` is
-        False, ``coef`` is returned as zero rather than as whatever a
-        factorization of a singular matrix would otherwise produce, and
-        ``rcond`` is zero rather than NaN.
+        - **coef**: Fitted coefficients, returned as zero when ``ok`` is False
+        - **cho**: Retained Cholesky factor of the regularized Gram matrix
+        - **ok**: Whether the regularized Gram matrix was positive definite
+        - **rcond**: Estimate of the reciprocal condition number, zero when ``ok`` is False
+
+        A singular system returns zeros rather than whatever a factorization of it
+        would otherwise produce, so a failed solve is visible instead of silent.
 
     Examples
     --------

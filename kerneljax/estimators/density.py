@@ -4,16 +4,18 @@ from __future__ import annotations
 
 import dataclasses
 from functools import partial
-from typing import Literal
+from typing import Literal, cast
 
 import jax
 import jax.numpy as jnp
 from jaxtyping import Float
 
-from kerneljax.bandwidth import Bandwidth, SelectionResult
-from kerneljax.data import ColumnSpec, MixedData
+from kerneljax.bandwidth import Bandwidth, SelectionResult, normal_reference
+from kerneljax.data import ColumnSpec, MixedData, _as_points
 from kerneljax.kernels import KernelSet
 from kerneljax.ksum import ksum
+from kerneljax.tuning.criteria import DensityCriterion
+from kerneljax.tuning.optimize import select_bandwidth
 from kerneljax.typing import Array
 
 __all__ = ["DensityFit", "density"]
@@ -54,12 +56,13 @@ class DensityFit:
 
 
 def density(
-    train: MixedData,
-    bw: Bandwidth,
+    train: MixedData | Array,
+    bw: Bandwidth | SelectionResult | DensityFit | str,
     *,
-    at: MixedData | None = None,
+    at: MixedData | Array | None = None,
     kernels: KernelSet | None = None,
     fold: Array | None = None,
+    n_starts: int = 3,
     chunk: int | tuple[int, int] | None = None,
 ) -> DensityFit:
     r"""Estimate a mixed-type probability density.
@@ -78,12 +81,20 @@ def density(
 
     Parameters
     ----------
-    train : MixedData
-        Training sample, supplying the sum over :math:`i`.
-    bw : Bandwidth
-        Bandwidths for every column.
-    at : MixedData, optional
-        Evaluation points. Defaults to ``train``.
+    train : MixedData or Array
+        Training sample, supplying the sum over :math:`i`. A raw array is
+        read as continuous columns.
+    bw : Bandwidth or SelectionResult or DensityFit or str
+        Bandwidths for every column, or a way of arriving at them. A
+        :class:`~kerneljax.Bandwidth` is used as given. ``"cv_ml"`` and
+        ``"cv_ls"`` select one by minimizing that criterion and
+        ``"normal_reference"`` applies the starting rule without a search.
+        A previous selection or estimate reuses its bandwidth. To select
+        with a criterion built by hand, minimize it with
+        :func:`~kerneljax.select_bandwidth` and pass the result here.
+    at : MixedData or Array, optional
+        Evaluation points. Defaults to ``train``. A raw array is accepted
+        only when the training sample is purely continuous.
     kernels : KernelSet, optional
         Kernel families, one per column kind. Defaults to ``KernelSet()``.
     fold : Array, optional
@@ -91,13 +102,23 @@ def density(
         points sharing a fold with evaluation row ``j`` are dropped from
         its sum, and the divisor becomes the number retained for that
         row. ``at`` must then be ``None`` or match ``train`` in length.
+    n_starts : int, optional
+        Number of perturbed starting points screened when ``bw`` names a
+        criterion to minimize. Ignored otherwise. Static.
     chunk : int or tuple of int, optional
         Chunk sizes passed through to :func:`~kerneljax.ksum`.
 
     Returns
     -------
     DensityFit
-        The density estimate and the bandwidth used to produce it.
+        Object containing the density estimate:
+
+        - **value**: Density estimate at every evaluation point
+        - **bandwidth**: Bandwidth used to produce the estimate
+        - **selection**: Selection that produced the bandwidth, or None when it was supplied directly
+        - **kernels**: Kernel families the estimate was produced with
+        - **spec**: Column metadata of the training sample
+        - **n_train**: Number of training points
 
     Examples
     --------
@@ -122,8 +143,18 @@ def density(
            Multivariate Analysis, 86, 266-292.
     """
     kernels = KernelSet() if kernels is None else kernels
-    scale: Literal["per_train", "per_eval"] = "per_train" if bw.h_axis == "train" else "per_eval"
-    total = ksum(train, bw, at=at, kernels=kernels, fold=fold, weight_scale=scale, chunk=chunk)
+    train = _as_points(train)
+    bandwidth, selection = _resolve_bandwidth(train, bw, kernels, n_starts, chunk)
+
+    evaluate = None if at is None else _as_points(at, train.spec)
+    if at is not None and isinstance(bw, SelectionResult | DensityFit) and bandwidth.h_axis != "shared":
+        raise ValueError(
+            "reusing a bandwidth at new evaluation points requires h_axis 'shared', "
+            f"got {bandwidth.h_axis!r} which is tied to the rows it was built for"
+        )
+
+    scale: Literal["per_train", "per_eval"] = "per_train" if bandwidth.h_axis == "train" else "per_eval"
+    total = ksum(train, bandwidth, at=evaluate, kernels=kernels, fold=fold, weight_scale=scale, chunk=chunk)
 
     if fold is None:
         denom = jnp.asarray(train.n, dtype=total.dtype)
@@ -133,8 +164,42 @@ def density(
 
     return DensityFit(
         value=(total / denom).reshape(-1),
-        bandwidth=bw,
+        bandwidth=bandwidth,
+        selection=selection,
         kernels=kernels,
         spec=train.spec,
         n_train=train.n,
     )
+
+
+def _resolve_bandwidth(
+    train: MixedData,
+    bw: Bandwidth | SelectionResult | DensityFit | str,
+    kernels: KernelSet,
+    n_starts: int,
+    chunk: int | tuple[int, int] | None,
+) -> tuple[Bandwidth, SelectionResult | None]:
+    """Turn any accepted ``bw`` into a bandwidth and the selection behind it."""
+    if isinstance(bw, Bandwidth):
+        return bw, None
+
+    if isinstance(bw, DensityFit):
+        return bw.bandwidth, bw.selection
+
+    if isinstance(bw, SelectionResult):
+        return bw.bandwidth, bw
+
+    if not isinstance(bw, str):
+        raise TypeError(
+            f"bw must be a Bandwidth, a SelectionResult, a DensityFit or a method name, got {type(bw).__name__}"
+        )
+
+    if bw == "normal_reference":
+        return normal_reference(train, kernels), None
+
+    if bw not in ("cv_ml", "cv_ls"):
+        raise ValueError(f"bw must be 'cv_ml', 'cv_ls' or 'normal_reference', got {bw!r}")
+
+    criterion = DensityCriterion(method=cast(Literal["cv_ml", "cv_ls"], bw))
+    selection = select_bandwidth(train, criterion, kernels=kernels, n_starts=n_starts, chunk=chunk)
+    return selection.bandwidth, selection

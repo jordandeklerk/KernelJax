@@ -5,10 +5,14 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from kerneljax.bandwidth import Bandwidth
+from kerneljax.bandwidth import Bandwidth, normal_reference
 from kerneljax.data import MixedData
 from kerneljax.estimators.density import DensityFit, density
+from kerneljax.estimators.regression import local_poly
+from kerneljax.kernels import KernelSet
 from kerneljax.ksum import kweights
+from kerneljax.tuning.criteria import DensityCriterion
+from kerneljax.tuning.optimize import select_bandwidth
 
 
 def test_returns_a_record_not_a_bare_array(density_data, density_bandwidth):
@@ -179,3 +183,49 @@ def test_fit_records_what_produced_it(density_data, density_bandwidth):
     assert fit.n_train == density_data.n
     assert fit.spec == density_data.spec
     assert jax.tree_util.tree_structure(fit) == jax.tree_util.tree_structure(jax.jit(lambda f: f)(fit))
+
+
+@pytest.mark.parametrize("method", ["cv_ml", "cv_ls"])
+def test_string_bw_matches_the_two_step(criteria_train, method):
+    selection = select_bandwidth(criteria_train, DensityCriterion(method=method))
+    want = density(criteria_train, selection.bandwidth)
+
+    got = density(criteria_train, method)
+    assert jnp.allclose(got.value, want.value)
+    assert got.selection is not None
+
+
+def test_normal_reference_matches_the_rule(criteria_train):
+    want = normal_reference(criteria_train, KernelSet())
+    got = density(criteria_train, "normal_reference")
+    assert jnp.allclose(got.bandwidth.h, want.h)
+    assert got.selection is None
+
+
+def test_reusing_a_fit_matches_its_bandwidth(criteria_train):
+    first = density(criteria_train, "cv_ml")
+    again = density(criteria_train, first)
+    assert jnp.array_equal(again.bandwidth.h, first.bandwidth.h)
+
+
+def test_unknown_string_bw_raises(criteria_train):
+    with pytest.raises(ValueError, match="normal_reference"):
+        density(criteria_train, "cv.ml")
+
+
+def test_array_train_matches_mixed_data(criteria_train):
+    raw = criteria_train.con[:, 0]
+    bw = Bandwidth(h=jnp.array([0.4]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+    assert jnp.allclose(density(raw, bw).value, density(MixedData.continuous(raw), bw).value)
+
+
+@pytest.mark.parametrize("bad", [0.4, None, ("cv_ml",), jnp.array([0.4])])
+def test_unsupported_bw_type_raises(criteria_train, bad):
+    with pytest.raises(TypeError, match="bw must be"):
+        density(criteria_train, bad)
+
+
+def test_wrong_family_fit_is_rejected(criteria_train, criteria_response):
+    fit = local_poly(criteria_train, criteria_response, "cv_ls")
+    with pytest.raises(TypeError, match="bw must be"):
+        density(criteria_train, fit)

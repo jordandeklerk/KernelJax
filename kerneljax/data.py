@@ -254,3 +254,14 @@ class MixedData:
             ``MixedData`` is frozen.
         """
         return dataclasses.replace(self, **changes)
+
+
+def _as_points(data: MixedData | Array, spec: ColumnSpec | None = None) -> MixedData:
+    """Promote a raw array to a purely continuous sample, leaving a ``MixedData`` untouched."""
+    if isinstance(data, MixedData):
+        return data
+
+    if spec is not None and (spec.p_uno or spec.p_ord):
+        raise TypeError("evaluation points must be a MixedData when the training sample has categorical columns")
+
+    return MixedData.continuous(jnp.asarray(data))

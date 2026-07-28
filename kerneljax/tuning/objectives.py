@@ -11,7 +11,6 @@ from jaxtyping import Float
 from kerneljax.bandwidth import Bandwidth
 from kerneljax.basis import LocalPolyBasis
 from kerneljax.data import MixedData
-from kerneljax.estimators.regression import _moments, local_poly
 from kerneljax.kernels import KernelSet, Op
 from kerneljax.ksum import _pad_index, _pad_rows, ksum, kweights
 from kerneljax.linalg import hat_diagonal, wls
@@ -239,6 +238,8 @@ def cv_ls_regression(
     .. [1] Li, Q., & Racine, J. S. (2007). Nonparametric Econometrics: Theory
            and Practice. Princeton University Press.
     """
+    from kerneljax.estimators.regression import local_poly
+
     kernels = KernelSet() if kernels is None else kernels
     fold = jnp.arange(train.n)
 
@@ -346,6 +347,8 @@ def aic_c_regression(
     .. [2] Li, Q., & Racine, J. S. (2007). Nonparametric Econometrics: Theory
            and Practice. Princeton University Press.
     """
+    from kerneljax.estimators.regression import local_poly
+
     kernels = KernelSet() if kernels is None else kernels
     n = train.n
 
@@ -378,6 +381,8 @@ def _hat_trace(
     chunk: int | tuple[int, int] | None,
 ) -> ScalarFloat:
     """Sum the leverage of every training point under the full weighted least squares design."""
+    from kerneljax.estimators.regression import _moments
+
     basis = LocalPolyBasis(degree=degree)
     dim = basis.dim(train.spec, degree)
     onehot = jnp.zeros((dim,), dtype=train.con.dtype).at[0].set(1.0)
