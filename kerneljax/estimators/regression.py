@@ -159,9 +159,9 @@ def local_poly(
         ``KernelSet()``.
     degree : int, optional
         Total degree of the polynomial basis. Supports 0, 1 and 2. Defaults
-        to the degree carried by ``bw`` when it carries one, and to 1
-        otherwise. Passing a degree that contradicts the one ``bw`` carries
-        raises ``ValueError``.
+        to the degree carried by ``bw`` when it carries one, and to 0
+        otherwise, giving a local constant fit. Passing a degree that
+        contradicts the one ``bw`` carries raises ``ValueError``.
     gradient : bool, optional
         Whether to also return the gradient of the fitted value with
         respect to every continuous column. Requires ``degree`` of at
@@ -297,7 +297,7 @@ def local_poly(
 def _resolve_degree(explicit: int | None, carried: int | None) -> int:
     """Settle on one degree, refusing an explicit value that contradicts a carried one."""
     if explicit is None:
-        return 1 if carried is None else carried
+        return 0 if carried is None else carried
 
     if carried is not None and explicit != carried:
         raise ValueError(f"degree={explicit} contradicts the degree {carried} that bw was selected under")
@@ -433,7 +433,6 @@ def _fit_point(
         mean_y = xtwy[0] / weight_total
         mean_y2 = weight_y2 / weight_total
         sigma2 = jnp.clip(mean_y2 - mean_y * mean_y, 0.0, None)
-
         # The continuous kernels here carry no 1/h factor, so a self
         # convolution at zero difference is the same for every h, and the
         # weight sum already carries the bandwidth product through the

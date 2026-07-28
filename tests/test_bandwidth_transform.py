@@ -61,8 +61,8 @@ def test_normal_reference_positive_and_shaped(mixed_bandwidth_data):
     assert bw.h[0] > 0.0
     assert bw.lam_uno.shape == (1,)
     assert bw.lam_ord.shape == (1,)
-    assert 0.0 < bw.lam_uno[0] < 1.0
-    assert 0.0 < bw.lam_ord[0] < 1.0
+    assert bw.lam_uno[0] == 0.0
+    assert bw.lam_ord[0] == 0.0
     assert bw.h_axis == "shared"
 
 

@@ -170,7 +170,7 @@ def cv_ls_regression(
     *,
     y: Float[Array, " n"],
     kernels: KernelSet | None = None,
-    degree: int = 1,
+    degree: int = 0,
     chunk: int | tuple[int, int] | None = None,
 ) -> ScalarFloat:
     r"""Least squares cross-validation criterion for a local polynomial regression.
@@ -254,7 +254,7 @@ def aic_c_regression(
     *,
     y: Float[Array, " n"],
     kernels: KernelSet | None = None,
-    degree: int = 1,
+    degree: int = 0,
     chunk: int | tuple[int, int] | None = None,
 ) -> ScalarFloat:
     r"""Corrected Akaike information criterion for a local polynomial regression.

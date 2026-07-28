@@ -37,9 +37,9 @@ def test_matches_an_independent_numpy_expression(density_data, density_bandwidth
     gaussian = np.exp(-0.5 * diff * diff) / np.sqrt(2.0 * np.pi)
     aitchison = np.where(uno == uno.T, 1.0 - lam_uno, lam_uno / 2.0)
     dist = np.abs(orde - orde.T)
-    wang = np.where(dist == 0, 1.0 - lam_ord, 0.5 * (1.0 - lam_ord) * lam_ord**dist)
+    liracine = (1.0 - lam_ord) / (1.0 + lam_ord) * lam_ord**dist
 
-    want = (gaussian * aitchison * wang).sum(axis=1) / (n * h)
+    want = (gaussian * aitchison * liracine).sum(axis=1) / (n * h)
     assert np.max(np.abs(got - want) / np.abs(want)) < 1e-6
 
 

@@ -31,7 +31,7 @@ def test_matches_an_explicit_three_factor_product(kweights_train, kweights_bandw
     factor_con = np.exp(-0.5 * ((x[:, None] - x[None, :]) / h) ** 2) / np.sqrt(2.0 * np.pi)
     factor_uno = np.where(u[:, None] == u[None, :], 1.0 - lam_uno, lam_uno / 3.0)
     distance = np.abs(o[:, None] - o[None, :])
-    factor_ord = np.where(distance == 0, 1.0 - lam_ord, 0.5 * (1.0 - lam_ord) * lam_ord**distance)
+    factor_ord = (1.0 - lam_ord) / (1.0 + lam_ord) * lam_ord**distance
 
     expected = factor_con * factor_uno * factor_ord
     weights = kweights(kweights_train, kweights_bandwidth)

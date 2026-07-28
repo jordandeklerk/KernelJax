@@ -8,7 +8,7 @@ import jax
 
 from kerneljax.kernels.base import ContinuousKernel, OrderedKernel, UnorderedKernel
 from kerneljax.kernels.continuous import Gaussian
-from kerneljax.kernels.discrete import AitchisonAitken, WangVanRyzin
+from kerneljax.kernels.discrete import AitchisonAitken, LiRacine
 
 __all__ = ["KernelSet"]
 
@@ -30,4 +30,4 @@ class KernelSet:
 
     continuous: ContinuousKernel = dataclasses.field(default_factory=Gaussian)
     unordered: UnorderedKernel = dataclasses.field(default_factory=AitchisonAitken)
-    ordered: OrderedKernel = dataclasses.field(default_factory=WangVanRyzin)
+    ordered: OrderedKernel = dataclasses.field(default_factory=LiRacine)

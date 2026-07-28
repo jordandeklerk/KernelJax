@@ -5,14 +5,14 @@ import jax.numpy as jnp
 import pytest
 
 from kerneljax.estimators.density import density
-from kerneljax.kernels import AitchisonAitken, Gaussian, KernelSet, Op, WangVanRyzin
+from kerneljax.kernels import AitchisonAitken, Gaussian, KernelSet, LiRacine, Op, WangVanRyzin
 
 
 def test_defaults_are_expected_types():
     ks = KernelSet()
     assert isinstance(ks.continuous, Gaussian)
     assert isinstance(ks.unordered, AitchisonAitken)
-    assert isinstance(ks.ordered, WangVanRyzin)
+    assert isinstance(ks.ordered, LiRacine)
 
 
 def test_two_instances_compare_equal_and_hash_equal():
@@ -53,7 +53,7 @@ def test_static_arg_equal_sets_do_not_recompile():
 
 @pytest.mark.parametrize(
     "kernel_obj",
-    [Gaussian(), AitchisonAitken(), WangVanRyzin(), KernelSet()],
+    [Gaussian(), AitchisonAitken(), WangVanRyzin(), LiRacine(), KernelSet()],
 )
 def test_static_registration_leaves_no_pytree_leaves(kernel_obj):
     assert jax.tree.leaves(kernel_obj) == []

@@ -210,7 +210,18 @@ def lbfgs(
            method for large scale optimization." Mathematical Programming, 45,
            503-528.
     """
-    value_and_grad_fn = jax.value_and_grad(fun)
+    # Every tolerance below is compared against `tol` directly, which only means
+    # anything for an objective of order one. A criterion sitting around 1e-6, which
+    # is nothing more than a response measured in small units, would otherwise meet
+    # the stopping tests at its own starting point and never move. Dividing through
+    # by the magnitude at the start makes the search independent of those units.
+    start_value = fun(z0)
+    scale = jnp.where(start_value == 0.0, 1.0, jnp.abs(start_value))
+
+    def scaled(z: Array) -> ScalarFloat:
+        return fun(z) / scale
+
+    value_and_grad_fn = jax.value_and_grad(scaled)
     dim = z0.shape[0]
 
     state_type = tuple[Array, Array, Array, Array, Array, Array, Array]
@@ -226,7 +237,7 @@ def lbfgs(
         search = -direction
         search = jnp.where(search @ grad < 0, search, -grad)
 
-        z_new, _ = _backtracking_step(fun, z, search, value, grad)
+        z_new, _ = _backtracking_step(scaled, z, search, value, grad)
 
         value_new, grad_new = value_and_grad_fn(z_new)
         step_diff = z_new - z
@@ -255,7 +266,7 @@ def lbfgs(
         jnp.asarray(False),
     )
     z, value, _, _, _, n_iter, converged = jax.lax.while_loop(cond_fn, body_fn, init)
-    return z, value, n_iter, converged
+    return z, value * scale, n_iter, converged
 
 
 def _two_loop_direction(gradient: Array, step_history: Array, grad_history: Array) -> Array:

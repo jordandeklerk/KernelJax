@@ -416,9 +416,9 @@ def test_attached_selection_blocks_grad(poly_mixed_train, poly_mixed_response, p
 
 @pytest.mark.parametrize("method", ["cv_ls", "aic"])
 def test_string_bw_matches_the_two_step(criteria_train, criteria_response, method):
-    criterion = RegressionCriterion(method=method, degree=1)
+    criterion = RegressionCriterion(method=method)
     selection = select_bandwidth(criteria_train, criterion, y=criteria_response)
-    want = local_poly(criteria_train, criteria_response, selection.bandwidth, degree=1)
+    want = local_poly(criteria_train, criteria_response, selection.bandwidth)
 
     got = local_poly(criteria_train, criteria_response, method)
     assert jnp.allclose(got.mean, want.mean)

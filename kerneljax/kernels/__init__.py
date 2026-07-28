@@ -2,7 +2,7 @@
 
 from kerneljax.kernels.base import ContinuousKernel, Op, OrderedKernel, UnorderedKernel
 from kerneljax.kernels.continuous import Gaussian
-from kerneljax.kernels.discrete import AitchisonAitken, WangVanRyzin
+from kerneljax.kernels.discrete import AitchisonAitken, LiRacine, WangVanRyzin
 from kerneljax.kernels.sets import KernelSet
 
 __all__ = [
@@ -10,6 +10,7 @@ __all__ = [
     "ContinuousKernel",
     "Gaussian",
     "KernelSet",
+    "LiRacine",
     "Op",
     "OrderedKernel",
     "UnorderedKernel",

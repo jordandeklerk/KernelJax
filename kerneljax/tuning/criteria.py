@@ -57,7 +57,8 @@ class RegressionCriterion:
         Selection rule. ``"cv_ls"`` is the leave-one-out mean squared residual
         of [1]_, ``"aic"`` the corrected Akaike information criterion of [2]_.
     degree : int
-        Total degree of the local polynomial basis. Supports 0, 1 and 2. Static.
+        Total degree of the local polynomial basis. Supports 0, 1 and 2, giving
+        a local constant, local linear or local quadratic fit. Static.
 
     Examples
     --------
@@ -92,7 +93,7 @@ class RegressionCriterion:
     """
 
     method: Literal["cv_ls", "aic"] = "cv_ls"
-    degree: int = 1
+    degree: int = 0
 
     def __post_init__(self) -> None:
         """Reject a method the criterion does not implement."""

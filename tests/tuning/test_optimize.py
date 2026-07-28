@@ -157,6 +157,7 @@ def test_more_starts_does_not_blow_up(noiseless_train, noiseless_response, n_sta
 
 
 def test_a_stalled_start_does_not_win(noiseless_train, noiseless_response):
-    result = select_bandwidth(noiseless_train, cv_ls_regression, y=noiseless_response, n_starts=3)
+    criterion = RegressionCriterion(method="cv_ls", degree=1)
+    result = select_bandwidth(noiseless_train, criterion, y=noiseless_response, n_starts=3)
     assert bool(result.converged)
     assert float(result.value) < 1e-5

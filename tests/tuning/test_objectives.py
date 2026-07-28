@@ -130,7 +130,7 @@ def test_jit_grad_and_vmap(cv_mixed_data, cv_mixed_bandwidth, criterion):
 
 
 def test_cv_ml_value_is_stable(cv_mixed_data, cv_mixed_bandwidth):
-    assert float(cv_ml_density(cv_mixed_data, cv_mixed_bandwidth)) == pytest.approx(77.913033, rel=1e-6)
+    assert float(cv_ml_density(cv_mixed_data, cv_mixed_bandwidth)) == pytest.approx(77.560326, rel=1e-6)
 
 
 @pytest.mark.parametrize("criterion", [cv_ml_density, cv_ls_density])

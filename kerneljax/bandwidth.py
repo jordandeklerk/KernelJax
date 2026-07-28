@@ -310,14 +310,14 @@ def normal_reference(data: MixedData, kernels: KernelSet) -> Bandwidth:
         scale = jnp.min(jnp.where(candidates > 0, candidates, jnp.inf), axis=0)
         scale = jnp.where(jnp.isfinite(scale), scale, 1.0)
 
-        h = 1.06 * scale * n ** (-1.0 / (4.0 + spec.p_con))
+        h = 1.059224 * scale * n ** (-1.0 / (4.0 + spec.p_con))
     else:
         h = jnp.zeros(0)
 
     return Bandwidth(
         h=h,
-        lam_uno=jnp.full((spec.p_uno,), 0.1),
-        lam_ord=jnp.full((spec.p_ord,), 0.1),
+        lam_uno=jnp.zeros(spec.p_uno),
+        lam_ord=jnp.zeros(spec.p_ord),
         h_axis="shared",
     )
 
