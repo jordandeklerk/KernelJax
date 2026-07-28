@@ -146,3 +146,17 @@ def test_result_round_trips_through_jit(criteria_train, criteria_response):
     same = jax.jit(lambda r: r)(result)
     assert same.criterion == result.criterion
     assert jnp.array_equal(same.bandwidth.h, result.bandwidth.h)
+
+
+@pytest.mark.parametrize("n_starts", [3, 5, 9])
+def test_more_starts_does_not_blow_up(noiseless_train, noiseless_response, n_starts):
+    one = select_bandwidth(noiseless_train, cv_ls_regression, y=noiseless_response, n_starts=1)
+    many = select_bandwidth(noiseless_train, cv_ls_regression, y=noiseless_response, n_starts=n_starts)
+    assert float(many.value) <= float(one.value) * 2.0
+    assert bool(many.converged)
+
+
+def test_a_stalled_start_does_not_win(noiseless_train, noiseless_response):
+    result = select_bandwidth(noiseless_train, cv_ls_regression, y=noiseless_response, n_starts=3)
+    assert bool(result.converged)
+    assert float(result.value) < 1e-5

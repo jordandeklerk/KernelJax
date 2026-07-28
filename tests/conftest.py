@@ -585,3 +585,13 @@ def grid_sample():
         uno_levels=(3,),
         ord_levels=(4,),
     )
+
+
+@pytest.fixture
+def noiseless_train():
+    return MixedData.continuous(jnp.linspace(-2.0, 2.0, 60).reshape(-1, 1))
+
+
+@pytest.fixture
+def noiseless_response(noiseless_train):
+    return jnp.sin(noiseless_train.con[:, 0])
