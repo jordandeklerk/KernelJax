@@ -289,6 +289,72 @@ def public_api_bandwidth():
 
 
 @pytest.fixture
+def regression_mixed_response(cv_mixed_data):
+    rng = np.random.default_rng(51)
+    return jnp.asarray(rng.normal(size=cv_mixed_data.n))
+
+
+@pytest.fixture
+def regression_continuous_response(cv_continuous_data):
+    rng = np.random.default_rng(52)
+    return jnp.asarray(rng.normal(size=cv_continuous_data.n))
+
+
+@pytest.fixture
+def regression_discrete_response(cv_discrete_data):
+    rng = np.random.default_rng(53)
+    return jnp.asarray(rng.normal(size=cv_discrete_data.n))
+
+
+@pytest.fixture
+def regression_reference_train():
+    x = jnp.array(
+        [
+            -0.766796,
+            -0.816458,
+            -0.141535,
+            -0.277605,
+            0.436307,
+            -1.186873,
+            1.191987,
+            -0.01819,
+            -0.248085,
+            -0.362937,
+            1.277571,
+            -0.468897,
+            0.071054,
+            -0.266038,
+            1.845257,
+        ]
+    )
+    u = jnp.array([0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2])
+    return MixedData.from_blocks(con=x[:, None], uno=u[:, None], uno_levels=(3,))
+
+
+@pytest.fixture
+def regression_reference_y():
+    return jnp.array(
+        [
+            2.084996,
+            3.041954,
+            4.79571,
+            2.614418,
+            4.730606,
+            3.783158,
+            5.356314,
+            3.972847,
+            4.652491,
+            2.508284,
+            6.569232,
+            4.3846,
+            3.1086,
+            3.629253,
+            9.129875,
+        ]
+    )
+
+
+@pytest.fixture
 def wls_design():
     rng = np.random.default_rng(7)
     design = jnp.asarray(rng.normal(size=(30, 3)))

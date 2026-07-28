@@ -93,11 +93,11 @@ def kweights(
     ----------
     .. [1] Li, Q., & Racine, J. S. (2003). "Nonparametric estimation of
            distributions with categorical and continuous data." Journal of
-           Multivariate Analysis, 86(2), 266-292.
+           Multivariate Analysis, 86, 266-292.
     .. [2] Aitchison, J., & Aitken, C. G. G. (1976). "Multivariate binary
-           discrimination by the kernel method." Biometrika, 63(3), 413-420.
-    .. [3] Wang, M. C., & van Ryzin, J. (1981). "A class of smooth
-           estimators for discrete distributions." Biometrika, 68(1), 301-309.
+           discrimination by the kernel method." Biometrika, 63, 413-420.
+    .. [3] Wang, M. C., & van Ryzin, J. (1981). "A class of smooth estimators
+           for discrete distributions." Biometrika, 68, 301-309.
     """
     evaluate = train if at is None else at
     kernels = KernelSet() if kernels is None else kernels
@@ -216,8 +216,8 @@ def kweights_grad(
 
     References
     ----------
-    .. [1] Li, Q., & Racine, J. S. (2007). Nonparametric Econometrics:
-           Theory and Practice. Princeton University Press.
+    .. [1] Li, Q., & Racine, J. S. (2007). Nonparametric Econometrics: Theory
+           and Practice. Princeton University Press.
     """
     evaluate = train if at is None else at
     kernels = KernelSet() if kernels is None else kernels
@@ -337,7 +337,7 @@ def ksum(
     ----------
     .. [1] Li, Q., & Racine, J. S. (2003). "Nonparametric estimation of
            distributions with categorical and continuous data." Journal of
-           Multivariate Analysis, 86(2), 266-292.
+           Multivariate Analysis, 86, 266-292.
     """
     evaluate = train if at is None else at
     kernels = KernelSet() if kernels is None else kernels

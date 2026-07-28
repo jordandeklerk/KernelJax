@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from functools import partial
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -52,6 +53,7 @@ def select_bandwidth(
     train: MixedData,
     criterion: Callable[..., ScalarFloat],
     *,
+    criterion_kwargs: Mapping[str, Any] | None = None,
     kernels: KernelSet | None = None,
     solver: Callable[..., tuple[Array, ScalarFloat, Array, Array]] | None = None,
     n_starts: int = 3,
@@ -85,9 +87,15 @@ def select_bandwidth(
         Training sample defining the column spec optimized over.
     criterion : callable
         Cross-validation criterion, called as
-        ``criterion(train, bandwidth, kernels=kernels, chunk=chunk)`` and
-        minimized. Matches :func:`kerneljax.tuning.objectives.cv_ml_density`
-        and :func:`kerneljax.tuning.objectives.cv_ls_density`. Static.
+        ``criterion(train, bandwidth, **criterion_kwargs, kernels=kernels, chunk=chunk)``
+        and minimized. Every criterion in :mod:`kerneljax.tuning.objectives`
+        matches this signature. Static, so pass a module level function rather
+        than one built on the fly, since a fresh :func:`functools.partial` is
+        never equal to an earlier one and forces a recompile.
+    criterion_kwargs : mapping, optional
+        Extra arguments forwarded to ``criterion``, such as the response ``y``
+        the regression criteria need. Traced, so varying its values reuses the
+        compiled selector instead of recompiling.
     kernels : KernelSet, optional
         Kernel families, one per column kind. Defaults to ``KernelSet()``.
     solver : callable, optional
@@ -126,18 +134,20 @@ def select_bandwidth(
     ----------
     .. [1] Hall, P., Racine, J., & Li, Q. (2004). "Cross-validation and the
            estimation of conditional probability densities." Journal of the
-           American Statistical Association, 99(468), 1015-1026.
+           American Statistical Association, 99, 1015-1026.
     .. [2] Li, Q., & Racine, J. S. (2007). Nonparametric Econometrics: Theory
            and Practice. Princeton University Press.
     """
     kernels = KernelSet() if kernels is None else kernels
     solver = lbfgs if solver is None else solver
+    extra = {} if criterion_kwargs is None else dict(criterion_kwargs)
     transform = BandwidthTransform(spec=train.spec, kernels=kernels)
     start = normal_reference(train, kernels)
     z0 = transform.to_unconstrained(start)
 
     def objective(z: Array) -> ScalarFloat:
-        return criterion(train, transform.from_unconstrained(z), kernels=kernels, chunk=chunk)
+        bandwidth = transform.from_unconstrained(z)
+        return criterion(train, bandwidth, **extra, kernels=kernels, chunk=chunk)
 
     perturbations = jnp.linspace(-1.5, 1.5, n_starts - 1) if n_starts > 1 else jnp.zeros(0)
     offsets = jnp.concatenate([jnp.zeros(1), perturbations])[:, None] * jnp.ones_like(z0)[None, :]
@@ -215,10 +225,10 @@ def lbfgs(
     References
     ----------
     .. [1] Nocedal, J. (1980). "Updating quasi-Newton matrices with limited
-           storage." Mathematics of Computation, 35(151), 773-782.
+           storage." Mathematics of Computation, 35, 773-782.
     .. [2] Liu, D. C., & Nocedal, J. (1989). "On the limited memory BFGS
-           method for large scale optimization." Mathematical Programming,
-           45(1), 503-528.
+           method for large scale optimization." Mathematical Programming, 45,
+           503-528.
     """
     value_and_grad_fn = jax.value_and_grad(fun)
     dim = z0.shape[0]

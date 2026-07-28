@@ -142,8 +142,8 @@ class LocalPolyBasis:
 
     References
     ----------
-    .. [1] Fan, J., & Gijbels, I. (1996). Local Polynomial Modelling and
-           Its Applications. Chapman and Hall.
+    .. [1] Fan, J., & Gijbels, I. (1996). Local Polynomial Modelling and Its
+           Applications. Chapman and Hall.
     """
 
     degree: int

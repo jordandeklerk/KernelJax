@@ -107,8 +107,8 @@ def wls(xtwx: FloatArray, xtwy: FloatArray, *, penalty: FloatArray | float = 0.0
 
     References
     ----------
-    .. [1] Fan, J., & Gijbels, I. (1996). Local Polynomial Modelling and
-           Its Applications. Chapman and Hall.
+    .. [1] Fan, J., & Gijbels, I. (1996). Local Polynomial Modelling and Its
+           Applications. Chapman and Hall.
     """
     dim = xtwx.shape[0]
     diagonal_penalty = jnp.ndim(penalty) == 0
@@ -187,8 +187,8 @@ def hat_diagonal(cho: FloatArray, basis_row: FloatArray, weight_self: ScalarFloa
 
     References
     ----------
-    .. [1] Fan, J., & Gijbels, I. (1996). Local Polynomial Modelling and
-           Its Applications. Chapman and Hall.
+    .. [1] Fan, J., & Gijbels, I. (1996). Local Polynomial Modelling and Its
+           Applications. Chapman and Hall.
     """
     solved = jax.scipy.linalg.solve_triangular(cho, basis_row, lower=True)
     return weight_self * jnp.sum(solved**2)

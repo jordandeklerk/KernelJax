@@ -189,10 +189,10 @@ def local_poly(
 
     References
     ----------
-    .. [1] Fan, J., & Gijbels, I. (1996). Local Polynomial Modelling and
-           Its Applications. Chapman and Hall.
-    .. [2] Li, Q., & Racine, J. S. (2007). Nonparametric Econometrics.
-           Princeton University Press.
+    .. [1] Fan, J., & Gijbels, I. (1996). Local Polynomial Modelling and Its
+           Applications. Chapman and Hall.
+    .. [2] Li, Q., & Racine, J. S. (2007). Nonparametric Econometrics: Theory
+           and Practice. Princeton University Press.
     """
     if gradient and degree == 0:
         raise ValueError("gradient requires degree >= 1, a constant fit carries no slope information")

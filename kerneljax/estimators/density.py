@@ -102,7 +102,7 @@ def density(
     ----------
     .. [1] Li, Q., & Racine, J. S. (2003). "Nonparametric estimation of
            distributions with categorical and continuous data." Journal of
-           Multivariate Analysis, 86(2), 266-292.
+           Multivariate Analysis, 86, 266-292.
     """
     kernels = KernelSet() if kernels is None else kernels
     scale: Literal["per_train", "per_eval"] = "per_train" if bw.h_axis == "train" else "per_eval"
