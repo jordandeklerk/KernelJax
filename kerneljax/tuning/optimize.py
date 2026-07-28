@@ -78,8 +78,9 @@ def select_bandwidth(
         Defaults to :func:`~kerneljax.lbfgs`; any callable matching this signature is
         accepted. Static.
     n_starts : int
-        Number of perturbed starting points screened before the full
-        solve. Static.
+        Number of starting points the solver runs from, the first being the
+        reference rule and the rest perturbations of it. The best solve wins.
+        Static.
     chunk : int or tuple of int, optional
         Chunk sizes passed through to ``criterion``. Static.
 
@@ -133,18 +134,15 @@ def select_bandwidth(
     perturbations = jnp.linspace(-1.5, 1.5, n_starts - 1) if n_starts > 1 else jnp.zeros(0)
     offsets = jnp.concatenate([jnp.zeros(1), perturbations])[:, None] * jnp.ones_like(z0)[None, :]
     candidates = z0[None, :] + offsets
-    screened = jax.vmap(objective)(candidates)
 
-    finite = jnp.isfinite(screened)
-    ranked = jnp.argmin(jnp.where(finite, screened, jnp.inf))
-    best = jnp.where(jnp.any(finite), candidates[ranked], z0)
+    solved, values, iterations, flags = jax.vmap(lambda start: solver(objective, start))(candidates)
+    ranked = jnp.argmin(jnp.where(jnp.isfinite(values), values, jnp.inf))
 
-    z, value, n_iter, converged = solver(objective, best)
     return SelectionResult(
-        bandwidth=transform.from_unconstrained(z),
-        value=value,
-        n_iter=n_iter,
-        converged=converged,
+        bandwidth=transform.from_unconstrained(solved[ranked]),
+        value=values[ranked],
+        n_iter=iterations[ranked],
+        converged=flags[ranked],
         criterion=criterion,
     )
 
