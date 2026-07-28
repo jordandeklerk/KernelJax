@@ -82,6 +82,22 @@ def test_conditional_bandwidth_is_a_pytree():
     assert isinstance(g, ConditionalBandwidth)
 
 
+@pytest.mark.parametrize("h_axis", ["eval", "train"])
+def test_non_shared_bandwidth_is_rejected(mixed_bandwidth_transform, h_axis):
+    bw = Bandwidth(
+        h=jnp.full((12, 1), 0.5),
+        lam_uno=jnp.array([0.3]),
+        lam_ord=jnp.array([0.4]),
+        h_axis=h_axis,
+    )
+    with pytest.raises(ValueError, match="h_axis"):
+        mixed_bandwidth_transform.to_unconstrained(bw)
+
+
+def test_normal_reference_start_is_shared(mixed_bandwidth_data):
+    assert normal_reference(mixed_bandwidth_data, KernelSet()).h_axis == "shared"
+
+
 def test_purely_continuous_spec_round_trips():
     data = MixedData.continuous(jnp.linspace(0.0, 1.0, 10).reshape(10, 1))
     tf = BandwidthTransform(spec=data.spec, kernels=KernelSet())

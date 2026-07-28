@@ -108,7 +108,8 @@ class BandwidthTransform:
         Entries run continuous first, then unordered, then ordered,
         matching the block order of ``spec``. Values are clamped into the
         open interval before inverting, so the result stays finite at the
-        box boundary.
+        box boundary. Only a bandwidth shared across rows can be mapped,
+        since a per row bandwidth holds no single value per column.
 
         Parameters
         ----------
@@ -120,6 +121,12 @@ class BandwidthTransform:
         Float[Array, " k"]
             The unconstrained vector, length ``p_con + p_uno + p_ord``.
         """
+        if bw.h_axis != "shared":
+            raise ValueError(
+                f"to_unconstrained needs h_axis 'shared', got {bw.h_axis!r}. Flattening a per row "
+                "bandwidth would feed continuous entries into the categorical blocks."
+            )
+
         parts = [_softplus_inv(jnp.reshape(bw.h, (-1,)))]
 
         if self._uno_bounds:
