@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from kerneljax.kernels.discrete import AitchisonAitken, WangVanRyzin
+from kerneljax.kernels.discrete import AitchisonAitken, LiRacine, WangVanRyzin
 
 
 @pytest.mark.parametrize("levels", [2, 3, 4, 6, 10])
@@ -135,3 +135,48 @@ def test_kernel_is_frozen_and_hashable_by_value(kernel_cls):
     assert hash(a) == hash(b)
     with pytest.raises(dataclasses.FrozenInstanceError):
         a.extra = 1
+
+
+@pytest.mark.parametrize("kernel_cls", [LiRacine, WangVanRyzin])
+@pytest.mark.parametrize("lam", [0.1, 0.5, 0.9])
+def test_ordered_cdf_is_monotone(kernel_cls, lam):
+    kernel = kernel_cls()
+    levels = 5
+    got = kernel.cdf(jnp.arange(levels), jnp.asarray(2), jnp.asarray(lam), levels)
+    assert jnp.all(jnp.diff(got) >= -1e-7)
+
+
+@pytest.mark.parametrize("kernel_cls", [LiRacine, WangVanRyzin])
+def test_ordered_cdf_sums_the_lattice(kernel_cls):
+    kernel = kernel_cls()
+    levels, y, lam = 5, 2, jnp.asarray(0.4)
+    lattice = jnp.arange(-(levels - 1), levels)
+
+    for x in range(levels):
+        want = sum(
+            float(kernel.value(jnp.asarray(int(node)), jnp.asarray(y), lam, levels))
+            for node in lattice
+            if int(node) <= x
+        )
+        got = float(kernel.cdf(jnp.asarray(x), jnp.asarray(y), lam, levels))
+        assert got == pytest.approx(want, rel=1e-6)
+
+
+def test_unordered_cdf_sums_observed_levels():
+    kernel = AitchisonAitken()
+    levels, y, lam = 4, 1, jnp.asarray(0.3)
+    for x in range(levels):
+        want = sum(
+            float(kernel.value(jnp.asarray(level), jnp.asarray(y), lam, levels))
+            for level in range(levels)
+            if level <= x
+        )
+        got = float(kernel.cdf(jnp.asarray(x), jnp.asarray(y), lam, levels))
+        assert got == pytest.approx(want, rel=1e-6)
+
+
+def test_unordered_cdf_reaches_one_at_the_top():
+    kernel = AitchisonAitken()
+    levels = 4
+    total = kernel.cdf(jnp.asarray(levels - 1), jnp.asarray(1), jnp.asarray(0.3), levels)
+    assert float(total) == pytest.approx(1.0, rel=1e-6)

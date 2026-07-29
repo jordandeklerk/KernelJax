@@ -118,3 +118,29 @@ def test_default_instances_compare_and_hash_equal():
 def test_order_other_than_two_is_rejected(order):
     with pytest.raises(ValueError, match="order"):
         Gaussian(order=order)
+
+
+@pytest.mark.parametrize("h", [0.3, 1.0, 2.5])
+def test_cdf_matches_the_normal_integral(h):
+    x = jnp.linspace(-4.0, 4.0, 17)
+    got = Gaussian().cdf(x, jnp.asarray(0.0), jnp.asarray(h))
+    want = jax.scipy.stats.norm.cdf(np.asarray(x) / h)
+    assert jnp.allclose(got, want, rtol=1e-6)
+
+
+def test_cdf_is_monotone_and_spans_the_unit():
+    x = jnp.linspace(-40.0, 40.0, 201)
+    got = Gaussian().cdf(x, jnp.asarray(0.0), jnp.asarray(1.0))
+    assert jnp.all(jnp.diff(got) >= 0.0)
+    assert float(got[0]) == pytest.approx(0.0, abs=1e-12)
+    assert float(got[-1]) == pytest.approx(1.0, abs=1e-12)
+
+
+def test_cdf_integrates_the_value_kernel():
+    kernel = Gaussian()
+    grid = jnp.linspace(-12.0, 1.5, 4001)
+    step = float(grid[1] - grid[0])
+    midpoints = 0.5 * (grid[1:] + grid[:-1])
+    want = float(jnp.sum(kernel.value(midpoints, jnp.asarray(0.0), jnp.asarray(1.0))) * step)
+    got = float(kernel.cdf(jnp.asarray(1.5), jnp.asarray(0.0), jnp.asarray(1.0)))
+    assert got == pytest.approx(want, rel=1e-4)

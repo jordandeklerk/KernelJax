@@ -90,6 +90,32 @@ class Gaussian(ContinuousKernel):
         u = (x - y) / h
         return -u / h * jnp.exp(-0.5 * u * u) / jnp.sqrt(2.0 * jnp.pi)
 
+    def cdf(self, x: FloatArray, y: FloatArray, h: FloatArray) -> FloatArray:
+        r"""Integrate the kernel from below up to ``x``.
+
+        With :math:`u = (x - y) / h`, this returns the standard normal
+        distribution function
+
+        .. math::
+
+            \int_{-\infty}^{u} K(t)\,dt = \Phi(u).
+
+        Parameters
+        ----------
+        x : FloatArray
+            Evaluation points.
+        y : FloatArray
+            Data points, broadcastable against ``x``.
+        h : FloatArray
+            Bandwidth, broadcastable against ``x`` and ``y``.
+
+        Returns
+        -------
+        FloatArray
+            The integrated kernel, lying in the unit interval.
+        """
+        return jax.scipy.special.ndtr((x - y) / h)
+
     def conv(self, x: FloatArray, y: FloatArray, h: FloatArray) -> FloatArray:
         r"""Evaluate the self-convolution of the kernel, unnormalized.
 
