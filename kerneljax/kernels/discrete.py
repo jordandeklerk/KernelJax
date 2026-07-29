@@ -129,6 +129,45 @@ class WangVanRyzin(OrderedKernel):
         d = jnp.abs(x - y)
         return jnp.where(d == 0, 1.0 - lam, 0.5 * (1.0 - lam) * safe_pow(lam, d))
 
+    def cdf(self, x: IntArray, y: IntArray, lam: FloatArray, levels: int) -> FloatArray:
+        r"""Sum the kernel over the integer lattice at or below ``x``.
+
+        With :math:`a = (1 - \lambda) / 2`, accumulating over every integer at
+        or below :math:`x` gives
+
+        .. math::
+
+            \sum_{s \le x} \ell(s, y) =
+            \begin{cases}
+                \lambda^{\,y - x} / 2, & x < y \\
+                1 - \lambda^{\,x - y + 1} / 2, & x \ge y
+            \end{cases}
+
+        The sum runs over all integers, not just the observed levels, so the
+        weight reaches one above the support rather than stopping short of it.
+
+        Parameters
+        ----------
+        x : IntArray
+            Evaluation levels.
+        y : IntArray
+            Data levels, broadcastable against ``x``.
+        lam : FloatArray
+            Smoothing parameter, in ``[0, 1)``.
+        levels : int
+            Unused, accepted for interface uniformity with the other kernels.
+
+        Returns
+        -------
+        FloatArray
+            The cumulative kernel weight at or below ``x``.
+        """
+        del levels
+        distance = jnp.abs(x - y)
+        below = safe_pow(lam, distance) / 2.0
+        above = 1.0 - safe_pow(lam, distance + 1) / 2.0
+        return jnp.where(x < y, below, above)
+
     def conv(self, x: IntArray, y: IntArray, lam: FloatArray, levels: int) -> FloatArray:
         r"""Convolve the kernel with itself over the entire integer lattice.
 
@@ -220,6 +259,44 @@ class LiRacine(OrderedKernel):
         """
         del levels
         return (1.0 - lam) / (1.0 + lam) * safe_pow(lam, jnp.abs(x - y))
+
+    def cdf(self, x: IntArray, y: IntArray, lam: FloatArray, levels: int) -> FloatArray:
+        r"""Sum the kernel over the integer lattice at or below ``x``.
+
+        Accumulating over every integer at or below :math:`x` gives
+
+        .. math::
+
+            \sum_{s \le x} L(s, y) =
+            \begin{cases}
+                \dfrac{\lambda^{\,y - x}}{1 + \lambda}, & x < y \\[2mm]
+                \dfrac{1 + \lambda - \lambda^{\,x - y + 1}}{1 + \lambda}, & x \ge y
+            \end{cases}
+
+        The sum runs over all integers, not just the observed levels, so the
+        weight reaches one above the support rather than stopping short of it.
+
+        Parameters
+        ----------
+        x : IntArray
+            Evaluation levels.
+        y : IntArray
+            Data levels, broadcastable against ``x``.
+        lam : FloatArray
+            Smoothing parameter, in ``[0, 1)``.
+        levels : int
+            Unused, accepted for interface uniformity with the other kernels.
+
+        Returns
+        -------
+        FloatArray
+            The cumulative kernel weight at or below ``x``.
+        """
+        del levels
+        distance = jnp.abs(x - y)
+        below = safe_pow(lam, distance) / (1.0 + lam)
+        above = (1.0 + lam - safe_pow(lam, distance + 1)) / (1.0 + lam)
+        return jnp.where(x < y, below, above)
 
     def conv(self, x: IntArray, y: IntArray, lam: FloatArray, levels: int) -> FloatArray:
         r"""Convolve the kernel with itself over the entire integer lattice.
