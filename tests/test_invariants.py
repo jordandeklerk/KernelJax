@@ -79,7 +79,7 @@ def _echo_solver(objective, best_candidate, **solver_kwargs):
 
 
 @pytest.mark.parametrize("estimator", [_density_value, cv_ml_density, cv_ls_density])
-def test_uniform_bandwidth_agrees_across_h_axis_representations(cv_mixed_data, cv_mixed_bandwidth, estimator):
+def test_uniform_bandwidth_agrees_across_h_axis(cv_mixed_data, cv_mixed_bandwidth, estimator):
     shared_result = estimator(cv_mixed_data, cv_mixed_bandwidth)
     train_result = estimator(cv_mixed_data, _train_indexed(cv_mixed_bandwidth, cv_mixed_data.n))
     eval_result = estimator(cv_mixed_data, _eval_indexed(cv_mixed_bandwidth, cv_mixed_data.n))
@@ -89,7 +89,7 @@ def test_uniform_bandwidth_agrees_across_h_axis_representations(cv_mixed_data, c
 
 
 @pytest.mark.parametrize("h_axis_label", ["shared", "train", "eval"])
-def test_ksum_default_v_equals_kweights_row_sums_across_h_axis(ksum_data, ksum_bandwidth, h_axis_label):
+def test_ksum_default_v_equals_kweights_row_sums(ksum_data, ksum_bandwidth, h_axis_label):
     bandwidth = _indexed(ksum_bandwidth, ksum_data.n, h_axis_label)
 
     summed = ksum(ksum_data, bandwidth)[:, 0]
@@ -99,7 +99,7 @@ def test_ksum_default_v_equals_kweights_row_sums_across_h_axis(ksum_data, ksum_b
 
 @pytest.mark.parametrize("use_fold", [False, True])
 @pytest.mark.parametrize("chunk_size", [4, 5, 6, 9, (5, 4)])
-def test_ksum_chunking_matches_unchunked_across_sizes_and_fold(cv_mixed_data, cv_mixed_bandwidth, chunk_size, use_fold):
+def test_ksum_chunking_matches_unchunked(cv_mixed_data, cv_mixed_bandwidth, chunk_size, use_fold):
     fold = jnp.arange(cv_mixed_data.n) if use_fold else None
     reference = ksum(cv_mixed_data, cv_mixed_bandwidth, fold=fold)
     chunked = ksum(cv_mixed_data, cv_mixed_bandwidth, fold=fold, chunk=chunk_size)
@@ -108,9 +108,7 @@ def test_ksum_chunking_matches_unchunked_across_sizes_and_fold(cv_mixed_data, cv
 
 @pytest.mark.parametrize("use_fold", [False, True])
 @pytest.mark.parametrize("chunk_size", [4, 5, 6, 9, (5, 4)])
-def test_density_chunking_matches_unchunked_across_sizes_and_fold(
-    cv_mixed_data, cv_mixed_bandwidth, chunk_size, use_fold
-):
+def test_density_chunking_matches_unchunked(cv_mixed_data, cv_mixed_bandwidth, chunk_size, use_fold):
     fold = jnp.arange(cv_mixed_data.n) if use_fold else None
     reference = density(cv_mixed_data, cv_mixed_bandwidth, fold=fold).value
     chunked = density(cv_mixed_data, cv_mixed_bandwidth, fold=fold, chunk=chunk_size).value
@@ -119,14 +117,14 @@ def test_density_chunking_matches_unchunked_across_sizes_and_fold(
 
 @pytest.mark.parametrize("criterion", [cv_ml_density, cv_ls_density])
 @pytest.mark.parametrize("chunk_size", [4, 5, 6, 9, (5, 4)])
-def test_criterion_chunking_matches_unchunked_across_sizes(cv_mixed_data, cv_mixed_bandwidth, criterion, chunk_size):
+def test_criterion_chunking_matches_unchunked(cv_mixed_data, cv_mixed_bandwidth, criterion, chunk_size):
     reference = criterion(cv_mixed_data, cv_mixed_bandwidth)
     chunked = criterion(cv_mixed_data, cv_mixed_bandwidth, chunk=chunk_size)
     assert float(chunked) == pytest.approx(float(reference), rel=1e-6)
 
 
 @pytest.mark.parametrize("operator", [Op.VALUE, Op.CONV])
-def test_op_spelling_forms_agree_when_they_denote_the_same_operators(kweights_train, kweights_bandwidth, operator):
+def test_op_spelling_forms_agree(kweights_train, kweights_bandwidth, operator):
     mapping = {Kind.CONTINUOUS: operator, Kind.UNORDERED: operator, Kind.ORDERED: operator}
     per_column = (operator, operator, operator)
 
@@ -139,7 +137,7 @@ def test_op_spelling_forms_agree_when_they_denote_the_same_operators(kweights_tr
 
 
 @pytest.mark.parametrize("h_axis_label", ["shared", "train", "eval"])
-def test_cv_ml_density_matches_a_hand_built_leave_one_out_density(cv_mixed_data, cv_mixed_bandwidth, h_axis_label):
+def test_cv_ml_matches_leave_one_out_density(cv_mixed_data, cv_mixed_bandwidth, h_axis_label):
     bandwidth = _indexed(cv_mixed_bandwidth, cv_mixed_data.n, h_axis_label)
     fold = jnp.arange(cv_mixed_data.n)
 
@@ -150,7 +148,7 @@ def test_cv_ml_density_matches_a_hand_built_leave_one_out_density(cv_mixed_data,
     assert float(criterion_value) == pytest.approx(float(hand_built), rel=1e-6)
 
 
-def test_large_bandwidth_flattens_a_mixed_density_toward_a_constant():
+def test_large_h_flattens_mixed_density():
     generator = np.random.default_rng(21)
     train = MixedData.from_blocks(
         con=jnp.asarray(generator.normal(size=(40, 1))),
@@ -174,7 +172,7 @@ def test_large_bandwidth_flattens_a_mixed_density_toward_a_constant():
 
 
 @pytest.mark.parametrize("bandwidth_value", [0.2, 0.4, 0.8, 1.5])
-def test_continuous_only_density_integrates_to_approximately_one_across_bandwidths(bandwidth_value):
+def test_density_integrates_to_one(bandwidth_value):
     generator = np.random.default_rng(0)
     sample = generator.normal(size=(200, 1))
     train = MixedData.continuous(jnp.asarray(sample))
@@ -186,7 +184,7 @@ def test_continuous_only_density_integrates_to_approximately_one_across_bandwidt
     assert np.trapezoid(value, grid[:, 0]) == pytest.approx(1.0, abs=1e-2)
 
 
-def test_duplicating_the_dataset_leaves_the_density_estimate_unchanged(cv_mixed_data, cv_mixed_bandwidth):
+def test_duplicating_rows_leaves_density_unchanged(cv_mixed_data, cv_mixed_bandwidth):
     duplicated = _duplicated(cv_mixed_data)
     reference = density(cv_mixed_data, cv_mixed_bandwidth, at=cv_mixed_data).value
     doubled = density(duplicated, cv_mixed_bandwidth, at=cv_mixed_data).value
@@ -194,7 +192,7 @@ def test_duplicating_the_dataset_leaves_the_density_estimate_unchanged(cv_mixed_
 
 
 @pytest.mark.parametrize("use_fold", [False, True])
-def test_chunked_density_memory_scales_with_the_chunk_not_with_the_square_of_the_sample_size(use_fold):
+def test_chunked_memory_scales_with_chunk(use_fold):
     sample_size = 3000
     train = MixedData.continuous(jnp.zeros((sample_size, 1)))
     bandwidth = Bandwidth(h=jnp.array([0.5]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
@@ -223,7 +221,7 @@ def test_chunked_density_memory_scales_with_the_chunk_not_with_the_square_of_the
         _trace_cv_ls_density_at_a_large_sample_size,
     ],
 )
-def test_traces_at_a_large_sample_size_with_no_memory_cost(trace_builder):
+def test_large_n_traces_without_memory_cost(trace_builder):
     traced = jax.eval_shape(trace_builder)
     assert traced.shape == ()
 
@@ -234,7 +232,7 @@ def test_exact_duplicate_rows_give_finite_criteria(cv_mixed_data, cv_mixed_bandw
     assert jnp.isfinite(criterion(duplicated, cv_mixed_bandwidth))
 
 
-def test_exact_duplicate_rows_give_a_finite_selected_bandwidth(cv_mixed_data):
+def test_exact_duplicate_rows_finite_bandwidth(cv_mixed_data):
     duplicated = _bootstrap_like_duplicate(cv_mixed_data)
     result = select_bandwidth(duplicated, cv_ml_density, n_starts=2)
     assert jnp.isfinite(result.value)
@@ -242,13 +240,13 @@ def test_exact_duplicate_rows_give_a_finite_selected_bandwidth(cv_mixed_data):
 
 
 @pytest.mark.parametrize("criterion", [cv_ml_density, cv_ls_density])
-def test_constant_continuous_column_gives_finite_criteria(criterion):
+def test_constant_continuous_gives_finite_criteria(criterion):
     train = MixedData.continuous(jnp.ones((12, 1)))
     bandwidth = Bandwidth(h=jnp.array([0.5]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
     assert jnp.isfinite(criterion(train, bandwidth))
 
 
-def test_constant_continuous_column_gives_a_constant_finite_density():
+def test_constant_continuous_gives_constant_density():
     train = MixedData.continuous(jnp.ones((12, 1)))
     bandwidth = Bandwidth(h=jnp.array([0.5]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
     value = density(train, bandwidth).value
@@ -258,7 +256,7 @@ def test_constant_continuous_column_gives_a_constant_finite_density():
 
 @pytest.mark.parametrize("n_starts", [1, 2, 3, 4])
 @pytest.mark.parametrize("criterion", [cv_ml_density, cv_ls_density])
-def test_selection_is_never_worse_than_the_unperturbed_start(cv_mixed_data, criterion, n_starts):
+def test_selection_no_worse_than_start(cv_mixed_data, criterion, n_starts):
     start = normal_reference(cv_mixed_data, KernelSet())
     start_value = criterion(cv_mixed_data, start)
 
@@ -268,7 +266,7 @@ def test_selection_is_never_worse_than_the_unperturbed_start(cv_mixed_data, crit
 
 @pytest.mark.parametrize("n_starts", [1, 2, 3, 4])
 @pytest.mark.parametrize("criterion", [cv_ml_density, cv_ls_density])
-def test_screening_never_selects_a_candidate_worse_than_the_unperturbed_start(cv_mixed_data, criterion, n_starts):
+def test_screening_no_worse_than_start(cv_mixed_data, criterion, n_starts):
     start = normal_reference(cv_mixed_data, KernelSet())
     start_value = criterion(cv_mixed_data, start)
 

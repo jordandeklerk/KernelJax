@@ -51,14 +51,14 @@ def test_weight_scale_shared_divides_once(ksum_data, ksum_bandwidth):
     assert jnp.allclose(got, ksum(ksum_data, ksum_bandwidth) / 0.7, rtol=1e-6)
 
 
-def test_weight_scale_per_train_divides_inside_the_sum(ksum_train_indexed_data, ksum_train_indexed_bandwidth):
+def test_per_train_scale_divides_inside_sum(ksum_train_indexed_data, ksum_train_indexed_bandwidth):
     got = ksum(ksum_train_indexed_data, ksum_train_indexed_bandwidth, weight_scale="per_train")
     weights = np.asarray(kweights(ksum_train_indexed_data, ksum_train_indexed_bandwidth))
     want = (weights / np.asarray(ksum_train_indexed_bandwidth.h)[None, :, 0]).sum(axis=1)
     assert jnp.allclose(got[:, 0], want, rtol=1e-6)
 
 
-def test_weight_scale_per_eval_with_eval_indexed_bandwidth(ksum_data, ksum_eval_indexed_bandwidth):
+def test_per_eval_scale_with_indexed_bandwidth(ksum_data, ksum_eval_indexed_bandwidth):
     got = ksum(ksum_data, ksum_eval_indexed_bandwidth, weight_scale="per_eval")
     base = ksum(ksum_data, ksum_eval_indexed_bandwidth)
     assert jnp.allclose(got, base / ksum_eval_indexed_bandwidth.h, rtol=1e-6)
@@ -93,7 +93,7 @@ def test_chunking_handles_a_non_divisible_split(ksum_data, ksum_bandwidth):
     assert jnp.allclose(got, ref, rtol=1e-6, atol=1e-8)
 
 
-def test_chunking_matches_unchunked_against_explicit_v(ksum_data, ksum_bandwidth):
+def test_chunking_matches_unchunked_with_explicit_v(ksum_data, ksum_bandwidth):
     v = jnp.asarray(np.arange(6.0)).reshape(6, 1)
     ref = ksum(ksum_data, ksum_bandwidth, v=v)
     got = ksum(ksum_data, ksum_bandwidth, v=v, chunk=3)
@@ -111,7 +111,7 @@ def test_chunking_handles_a_rectangular_eval_grid(ksum_data, ksum_bandwidth):
     assert jnp.allclose(got, ref, rtol=1e-6, atol=1e-8)
 
 
-def test_chunking_matches_unchunked_with_eval_indexed_bandwidth(ksum_data, ksum_eval_indexed_bandwidth):
+def test_chunking_matches_eval_indexed_bandwidth(ksum_data, ksum_eval_indexed_bandwidth):
     ref = ksum(ksum_data, ksum_eval_indexed_bandwidth)
     got = ksum(ksum_data, ksum_eval_indexed_bandwidth, chunk=4)
     assert jnp.allclose(got, ref, rtol=1e-6, atol=1e-8)

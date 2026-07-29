@@ -25,7 +25,7 @@ def test_op_constants_are_method_names():
         ("bare_ordered_kernel_cls", "conv", (jnp.array(0), jnp.array(1), jnp.array(0.5), 3)),
     ],
 )
-def test_unimplemented_operators_raise_not_implemented(request, kernel_cls_fixture, op, call_args):
+def test_unimplemented_ops_raise_not_implemented(request, kernel_cls_fixture, op, call_args):
     kernel = request.getfixturevalue(kernel_cls_fixture)()
     fn = getattr(kernel, op)
     with pytest.raises(NotImplementedError, match=type(kernel).__name__):
@@ -39,7 +39,7 @@ def test_operator_resolves_by_getattr(with_extra_kernel_cls):
     assert fn(jnp.array(1.0), jnp.array(1.0), jnp.array(1.0)) == 7.0
 
 
-def test_ordered_kernel_value_uses_position_and_levels(toy_ordered_kernel_cls):
+def test_ordered_value_uses_position_and_levels(toy_ordered_kernel_cls):
     k = toy_ordered_kernel_cls()
     same = k.value(jnp.array(2), jnp.array(2), jnp.array(0.5), 4)
     apart = k.value(jnp.array(0), jnp.array(3), jnp.array(0.5), 4)

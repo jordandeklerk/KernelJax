@@ -13,7 +13,7 @@ from jaxtyping import Float, Int
 
 from kerneljax.typing import Array
 
-__all__ = ["ColumnSpec", "Kind", "MixedData"]
+__all__ = ["ColumnSpec", "Kind", "MixedData", "grid"]
 
 
 class Kind(enum.Enum):
@@ -22,7 +22,7 @@ class Kind(enum.Enum):
     ``ColumnSpec`` and ``MixedData`` use this enum to tag each column of a
     mixed-type design matrix as continuous, unordered categorical, or ordered
     categorical. The tag determines which of the three dense blocks of a
-    :class:`MixedData` instance the column's data lives in, and which kernel
+    :class:`~kerneljax.MixedData` instance the column's data lives in, and which kernel
     arithmetic applies to it.
 
     Attributes
@@ -49,10 +49,8 @@ class ColumnSpec:
     r"""Static, hashable, array-free description of a mixed-type design matrix.
 
     A ``ColumnSpec`` records the kind and level count of every column using
-    only tuples of enums, ints and strings, with no arrays. That makes it
-    safe to use as the static metadata field of a :class:`MixedData` pytree,
-    since :func:`jax.jit` hashes static fields to build its cache key and
-    would reject anything containing an array.
+    only tuples of enums, ints and strings, with no arrays, so it carries the
+    static metadata of a :class:`~kerneljax.MixedData`.
 
     Parameters
     ----------
@@ -62,10 +60,8 @@ class ColumnSpec:
         The number of levels of every column, in original column order. Zero
         for continuous columns.
     names : tuple of str, optional
-        Optional column names, in original column order. Included in
-        equality and hashing on purpose, since excluding them would let two
-        differently-named ``MixedData`` instances share a jit cache entry
-        and silently return the wrong metadata.
+        Optional column names, in original column order. Names take part in
+        equality, so two specs differing only in their names are not equal.
     """
 
     kinds: tuple[Kind, ...]
@@ -159,7 +155,7 @@ class MixedData:
 
         Shapes are checked, category codes are cast to signed int32 and
         range-checked against their level counts, and the resulting
-        :class:`ColumnSpec` is assembled from the block widths, in block
+        :class:`~kerneljax.ColumnSpec` is assembled from the block widths, in block
         order (continuous, then unordered, then ordered).
 
         Parameters
@@ -258,3 +254,140 @@ class MixedData:
             ``MixedData`` is frozen.
         """
         return dataclasses.replace(self, **changes)
+
+
+def grid(
+    data: MixedData | Array,
+    *,
+    vary: int | str = 0,
+    n: int = 50,
+    quantile: float = 0.5,
+    trim: float = 0.0,
+) -> MixedData:
+    r"""Build evaluation points that sweep one column and hold the rest fixed.
+
+    The swept column runs across its observed range for a continuous column, or
+    across every level for a categorical one. Each remaining column is pinned at
+    a representative value, its quantile when continuous, its most common level
+    when unordered, and the first level reaching ``quantile`` of the sample when
+    ordered.
+
+    Parameters
+    ----------
+    data : MixedData or Array
+        Sample the grid is built from. A raw array is read as continuous columns.
+    vary : int or str
+        Column to sweep, either its position in original column order or its
+        name. Static.
+    n : int
+        Number of points across a continuous column. Ignored for a categorical
+        column, which uses one point per level. Static.
+    quantile : float
+        Quantile that pins every column other than the swept one. Static.
+    trim : float
+        Shrinks the swept range toward the middle of the sample, so ``0.1``
+        runs from the tenth to the ninetieth percentile. A negative value
+        instead reflects the inner quantiles about the extremes to reach past
+        the observed range, where the estimate is extrapolating. Static.
+
+    Returns
+    -------
+    MixedData
+        Evaluation points sharing the column metadata of ``data``, with ``n``
+        rows for a continuous sweep and one row per level otherwise.
+
+    Examples
+    --------
+    Sweep the first column of a two column sample.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import jax.numpy as jnp
+           ...: import kerneljax as kj
+           ...:
+           ...: x = jnp.stack([jnp.linspace(-2.0, 2.0, 20), jnp.linspace(0.0, 1.0, 20)], axis=1)
+           ...: points = kj.grid(kj.MixedData.continuous(x), n=5)
+           ...: print(points.con)
+
+    See Also
+    --------
+    local_poly : Fit a local polynomial regression.
+    density : Estimate a mixed-type probability density.
+    """
+    data = _as_points(data)
+    spec = data.spec
+    swept = _swept_column(spec, vary)
+    rows = n if spec.kinds[swept] is Kind.CONTINUOUS else spec.n_levels[swept]
+
+    positions = {kind: [i for i, k in enumerate(spec.kinds) if k is kind] for kind in Kind}
+
+    con = [
+        jnp.linspace(*_sweep_range(data.con[:, pos], trim), rows)
+        if original == swept
+        else jnp.full((rows,), jnp.quantile(data.con[:, pos], quantile))
+        for pos, original in enumerate(positions[Kind.CONTINUOUS])
+    ]
+
+    uno = []
+    for pos, original in enumerate(positions[Kind.UNORDERED]):
+        levels = spec.uno_levels[pos]
+        column = data.uno[:, pos]
+        if original == swept:
+            uno.append(jnp.arange(levels, dtype=column.dtype))
+        else:
+            uno.append(jnp.full((rows,), jnp.argmax(jnp.bincount(column, length=levels)), dtype=column.dtype))
+
+    orde = []
+    for pos, original in enumerate(positions[Kind.ORDERED]):
+        levels = spec.ord_levels[pos]
+        column = data.orde[:, pos]
+        if original == swept:
+            orde.append(jnp.arange(levels, dtype=column.dtype))
+        else:
+            reached = jnp.searchsorted(jnp.cumsum(jnp.bincount(column, length=levels)), quantile * column.shape[0])
+            orde.append(jnp.full((rows,), reached, dtype=column.dtype))
+
+    return MixedData(
+        con=jnp.stack(con, axis=1) if con else jnp.zeros((rows, 0), dtype=data.con.dtype),
+        uno=jnp.stack(uno, axis=1) if uno else jnp.zeros((rows, 0), dtype=data.uno.dtype),
+        orde=jnp.stack(orde, axis=1) if orde else jnp.zeros((rows, 0), dtype=data.orde.dtype),
+        spec=spec,
+    )
+
+
+def _as_points(data: MixedData | Array, spec: ColumnSpec | None = None) -> MixedData:
+    """Promote a raw array to a purely continuous sample, leaving a ``MixedData`` untouched."""
+    if isinstance(data, MixedData):
+        return data
+
+    if spec is not None and (spec.p_uno or spec.p_ord):
+        raise TypeError("evaluation points must be a MixedData when the training sample has categorical columns")
+
+    return MixedData.continuous(jnp.asarray(data))
+
+
+def _swept_column(spec: ColumnSpec, vary: int | str) -> int:
+    """Resolve a column position or name to a position in original column order."""
+    if isinstance(vary, str):
+        if spec.names is None or vary not in spec.names:
+            raise ValueError(f"no column named {vary!r}, the sample has names {spec.names}")
+        return spec.names.index(vary)
+
+    if not -spec.p <= vary < spec.p:
+        raise ValueError(f"vary={vary} is out of range for {spec.p} columns")
+
+    return vary % spec.p
+
+
+def _sweep_range(column: Array, trim: float) -> tuple[Array, Array]:
+    """Bounds of a swept continuous column, pulled inward or pushed past the sample."""
+    if trim < 0.0:
+        edge = abs(trim)
+        lowest, inner_low, inner_high, highest = jnp.quantile(
+            column, jnp.asarray([0.0, edge, 1.0 - edge, 1.0], dtype=column.dtype)
+        )
+        return 2.0 * lowest - inner_low, 2.0 * highest - inner_high
+
+    lower, upper = jnp.quantile(column, jnp.asarray([trim, 1.0 - trim], dtype=column.dtype))
+    return lower, upper

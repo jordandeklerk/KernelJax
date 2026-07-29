@@ -6,7 +6,8 @@ import pytest
 
 from kerneljax.bandwidth import BandwidthTransform, normal_reference
 from kerneljax.kernels import KernelSet
-from kerneljax.tuning.objectives import cv_ls_density, cv_ml_density
+from kerneljax.tuning.criteria import DensityCriterion, RegressionCriterion
+from kerneljax.tuning.objectives import cv_ls_density, cv_ls_regression, cv_ml_density
 from kerneljax.tuning.optimize import SelectionResult, lbfgs, select_bandwidth
 
 
@@ -62,7 +63,7 @@ def test_selected_bandwidth_is_inside_the_box(cv_mixed_data, criterion):
 
 @pytest.mark.parametrize("n_starts", [1, 2, 3])
 @pytest.mark.parametrize("criterion", [cv_ml_density, cv_ls_density])
-def test_selected_value_is_no_worse_than_the_starting_value(cv_mixed_data, criterion, n_starts):
+def test_selected_value_no_worse_than_start(cv_mixed_data, criterion, n_starts):
     start = normal_reference(cv_mixed_data, KernelSet())
     start_value = criterion(cv_mixed_data, start)
 
@@ -70,7 +71,7 @@ def test_selected_value_is_no_worse_than_the_starting_value(cv_mixed_data, crite
     assert float(result.value) <= float(start_value) + 1e-6
 
 
-def test_selection_is_vmappable_over_bootstrap_replicates(cv_mixed_data):
+def test_selection_vmaps_over_bootstrap_replicates(cv_mixed_data):
     key = jax.random.key(0)
     idx = jax.random.randint(key, (8, cv_mixed_data.n), 0, cv_mixed_data.n)
 
@@ -86,7 +87,7 @@ def test_selection_is_vmappable_over_bootstrap_replicates(cv_mixed_data):
     assert jnp.all(out > 0)
 
 
-def test_a_user_supplied_solver_is_accepted_and_called(cv_mixed_data):
+def test_custom_solver_is_accepted_and_called(cv_mixed_data):
     calls = {"count": 0}
 
     def custom_solver(fun, z0, **kwargs):
@@ -102,3 +103,61 @@ def test_selection_result_is_a_pytree(cv_mixed_data):
     assert isinstance(result, SelectionResult)
     leaves = jax.tree_util.tree_leaves(result)
     assert all(hasattr(leaf, "shape") for leaf in leaves)
+
+
+def test_named_y_matches_the_mapping(criteria_train, criteria_response):
+    named = select_bandwidth(criteria_train, cv_ls_regression, y=criteria_response, n_starts=1)
+    mapped = select_bandwidth(criteria_train, cv_ls_regression, criterion_kwargs={"y": criteria_response}, n_starts=1)
+    assert float(named.value) == float(mapped.value)
+    assert jnp.array_equal(named.bandwidth.h, mapped.bandwidth.h)
+
+
+def test_criterion_without_a_response_gets_none(criteria_train):
+    result = select_bandwidth(criteria_train, cv_ml_density, n_starts=1)
+    assert jnp.all(jnp.isfinite(result.bandwidth.h))
+
+
+def test_result_records_the_criterion(criteria_train, criteria_response):
+    criterion = RegressionCriterion(method="aic", degree=2)
+    result = select_bandwidth(criteria_train, criterion, y=criteria_response, n_starts=1)
+    assert result.criterion == criterion
+    assert result.criterion.degree == 2
+
+
+def test_recorded_degree_is_concrete_in_a_trace(criteria_train, criteria_response):
+    result = select_bandwidth(
+        criteria_train, RegressionCriterion(method="cv_ls", degree=2), y=criteria_response, n_starts=1
+    )
+
+    @jax.jit
+    def basis_width(selection):
+        return jnp.zeros(selection.criterion.degree + 1)
+
+    assert basis_width(result).shape == (3,)
+
+
+def test_positional_construction_still_works(bandwidth):
+    result = SelectionResult(bandwidth, jnp.asarray(1.0), jnp.asarray(3), jnp.asarray(True))
+    assert result.criterion is None
+
+
+def test_result_round_trips_through_jit(criteria_train, criteria_response):
+    result = select_bandwidth(criteria_train, DensityCriterion(method="cv_ml"), n_starts=1)
+    same = jax.jit(lambda r: r)(result)
+    assert same.criterion == result.criterion
+    assert jnp.array_equal(same.bandwidth.h, result.bandwidth.h)
+
+
+@pytest.mark.parametrize("n_starts", [3, 5, 9])
+def test_more_starts_does_not_blow_up(noiseless_train, noiseless_response, n_starts):
+    one = select_bandwidth(noiseless_train, cv_ls_regression, y=noiseless_response, n_starts=1)
+    many = select_bandwidth(noiseless_train, cv_ls_regression, y=noiseless_response, n_starts=n_starts)
+    assert float(many.value) <= float(one.value) * 2.0
+    assert bool(many.converged)
+
+
+def test_a_stalled_start_does_not_win(noiseless_train, noiseless_response):
+    criterion = RegressionCriterion(method="cv_ls", degree=1)
+    result = select_bandwidth(noiseless_train, criterion, y=noiseless_response, n_starts=3)
+    assert bool(result.converged)
+    assert float(result.value) < 1e-5

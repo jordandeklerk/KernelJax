@@ -1,5 +1,6 @@
 """Estimators built on the kernel sum primitive."""
 
 from kerneljax.estimators.density import DensityFit, density
+from kerneljax.estimators.regression import LocalPolyFit, local_poly
 
-__all__ = ["DensityFit", "density"]
+__all__ = ["DensityFit", "LocalPolyFit", "density", "local_poly"]

@@ -2,49 +2,20 @@
 
 from __future__ import annotations
 
-import dataclasses
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from functools import partial
+from typing import Any
 
 import jax
 import jax.numpy as jnp
+from jaxtyping import Float
 
-from kerneljax.bandwidth import Bandwidth, BandwidthTransform, normal_reference
+from kerneljax.bandwidth import BandwidthTransform, SelectionResult, normal_reference
 from kerneljax.data import MixedData
 from kerneljax.kernels import KernelSet
 from kerneljax.typing import Array, ScalarFloat
 
-__all__ = ["SelectionResult", "lbfgs", "select_bandwidth"]
-
-
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=["bandwidth", "value", "n_iter", "converged"],
-    meta_fields=[],
-)
-@dataclasses.dataclass(frozen=True)
-class SelectionResult:
-    """Outcome of a bandwidth selection.
-
-    Parameters
-    ----------
-    bandwidth : Bandwidth
-        The selected bandwidth, in natural, constrained scale.
-    value : ScalarFloat
-        Criterion value at ``bandwidth``.
-    n_iter : Array
-        Number of solver iterations used by the full solve.
-    converged : Array
-        Whether the solver stopped because its progress stalled, either
-        the gradient or the objective value stopped moving, rather than
-        because it ran out of its iteration budget. ``True`` does not by
-        itself mean the gradient tolerance was the one that was met.
-    """
-
-    bandwidth: Bandwidth
-    value: ScalarFloat
-    n_iter: Array
-    converged: Array
+__all__ = ["lbfgs", "select_bandwidth"]
 
 
 @partial(jax.jit, static_argnames=("criterion", "solver", "n_starts", "chunk"))
@@ -52,6 +23,8 @@ def select_bandwidth(
     train: MixedData,
     criterion: Callable[..., ScalarFloat],
     *,
+    y: Float[Array, " n"] | None = None,
+    criterion_kwargs: Mapping[str, Any] | None = None,
     kernels: KernelSet | None = None,
     solver: Callable[..., tuple[Array, ScalarFloat, Array, Array]] | None = None,
     n_starts: int = 3,
@@ -59,30 +32,25 @@ def select_bandwidth(
 ) -> SelectionResult:
     r"""Select a bandwidth by minimizing a cross-validation criterion.
 
-    A data-driven bandwidth minimizes a criterion :math:`\mathrm{CV}` such
-    as :func:`kerneljax.tuning.objectives.cv_ml_density` or
-    :func:`kerneljax.tuning.objectives.cv_ls_density`, following [1]_ and
-    [2]_.
+    A data-driven bandwidth minimizes a criterion :math:`\mathrm{CV}` such as
+    :func:`~kerneljax.cv_ml_density` or
+    :func:`~kerneljax.cv_ls_density`, following [1]_ and [2]_.
 
     .. math::
 
         (\hat h, \hat\lambda)
         = \arg\min_{h > 0,\ 0 \le \lambda \le \lambda_{\max}} \mathrm{CV}(h, \lambda)
 
-    The box constraints are removed by optimizing over an unconstrained
-    vector :math:`z`.
+    The box constraints are removed by optimizing over an unconstrained vector :math:`z`.
 
     .. math::
 
         h = \operatorname{softplus}(z), \qquad
         \lambda = \lambda_{\max}\, \sigma(z)
 
-    Here :math:`\sigma` is the logistic function and :math:`\lambda_{\max}`
-    is the kernel's upper bound for that column, see
-    :class:`kerneljax.bandwidth.BandwidthTransform`.
-
-    A smoothing parameter returned at its upper bound smooths that column
-    away entirely.
+    Here :math:`\sigma` is the logistic function and :math:`\lambda_{\max}` is the kernel's
+    upper bound for that column, see :class:`~kerneljax.BandwidthTransform`. A
+    smoothing parameter returned at its upper bound smooths that column away entirely.
 
     Parameters
     ----------
@@ -90,27 +58,42 @@ def select_bandwidth(
         Training sample defining the column spec optimized over.
     criterion : callable
         Cross-validation criterion, called as
-        ``criterion(train, bandwidth, kernels=kernels, chunk=chunk)`` and
-        minimized. Matches :func:`kerneljax.tuning.objectives.cv_ml_density`
-        and :func:`kerneljax.tuning.objectives.cv_ls_density`. Static.
+        ``criterion(train, bandwidth, **criterion_kwargs, kernels=kernels, chunk=chunk)``
+        and minimized. Every criterion in :mod:`kerneljax.tuning.criteria`
+        and :mod:`kerneljax.tuning.objectives` matches this signature. Static,
+        and a :func:`functools.partial` built fresh on each call is never equal
+        to an earlier one, so prefer a criterion object or a module level
+        function.
+    y : Float[Array, " n"], optional
+        Response values, one per row of ``train``, forwarded to criteria that
+        take one. Traced, so varying it reuses the compiled selector.
+    criterion_kwargs : mapping, optional
+        Further arguments forwarded to ``criterion``, for criteria that need
+        more than a response. Traced on the same terms as ``y``.
     kernels : KernelSet, optional
         Kernel families, one per column kind. Defaults to ``KernelSet()``.
     solver : callable, optional
         Optimizer called as ``solver(objective, z0)`` in the unconstrained
         parameterization, returning ``(z, value, n_iter, converged)``.
-        Defaults to :func:`lbfgs`; any callable matching this signature is
+        Defaults to :func:`~kerneljax.lbfgs`; any callable matching this signature is
         accepted. Static.
     n_starts : int
-        Number of perturbed starting points screened before the full
-        solve. Static.
+        Number of starting points the solver runs from, the first being the
+        reference rule and the rest perturbations of it. The best solve wins.
+        Static.
     chunk : int or tuple of int, optional
         Chunk sizes passed through to ``criterion``. Static.
 
     Returns
     -------
     SelectionResult
-        The selected bandwidth together with the criterion value and
-        solver diagnostics from the full solve.
+        Object containing the selected bandwidth and the solve that found it:
+
+        - **bandwidth**: Selected bandwidth, in natural constrained scale
+        - **value**: Criterion value at the selected bandwidth
+        - **n_iter**: Number of solver iterations used by the full solve
+        - **converged**: Whether the solver stopped because its progress stalled
+        - **criterion**: Criterion that was minimized
 
     Examples
     --------
@@ -131,34 +114,36 @@ def select_bandwidth(
     ----------
     .. [1] Hall, P., Racine, J., & Li, Q. (2004). "Cross-validation and the
            estimation of conditional probability densities." Journal of the
-           American Statistical Association, 99(468), 1015-1026.
+           American Statistical Association, 99, 1015-1026.
     .. [2] Li, Q., & Racine, J. S. (2007). Nonparametric Econometrics: Theory
            and Practice. Princeton University Press.
     """
     kernels = KernelSet() if kernels is None else kernels
     solver = lbfgs if solver is None else solver
+    extra = {} if criterion_kwargs is None else dict(criterion_kwargs)
+    if y is not None:
+        extra["y"] = y
     transform = BandwidthTransform(spec=train.spec, kernels=kernels)
     start = normal_reference(train, kernels)
     z0 = transform.to_unconstrained(start)
 
     def objective(z: Array) -> ScalarFloat:
-        return criterion(train, transform.from_unconstrained(z), kernels=kernels, chunk=chunk)
+        bandwidth = transform.from_unconstrained(z)
+        return criterion(train, bandwidth, **extra, kernels=kernels, chunk=chunk)
 
     perturbations = jnp.linspace(-1.5, 1.5, n_starts - 1) if n_starts > 1 else jnp.zeros(0)
     offsets = jnp.concatenate([jnp.zeros(1), perturbations])[:, None] * jnp.ones_like(z0)[None, :]
     candidates = z0[None, :] + offsets
-    screened = jax.vmap(objective)(candidates)
 
-    finite = jnp.isfinite(screened)
-    ranked = jnp.argmin(jnp.where(finite, screened, jnp.inf))
-    best = jnp.where(jnp.any(finite), candidates[ranked], z0)
+    solved, values, iterations, flags = jax.vmap(lambda start: solver(objective, start))(candidates)
+    ranked = jnp.argmin(jnp.where(jnp.isfinite(values), values, jnp.inf))
 
-    z, value, n_iter, converged = solver(objective, best)
     return SelectionResult(
-        bandwidth=transform.from_unconstrained(z),
-        value=value,
-        n_iter=n_iter,
-        converged=converged,
+        bandwidth=transform.from_unconstrained(solved[ranked]),
+        value=values[ranked],
+        n_iter=iterations[ranked],
+        converged=flags[ranked],
+        criterion=criterion,
     )
 
 
@@ -172,34 +157,29 @@ def lbfgs(
 ) -> tuple[Array, ScalarFloat, Array, Array]:
     r"""Minimize ``fun`` from ``z0`` with limited-memory BFGS.
 
-    Limited-memory BFGS builds an implicit approximation to the inverse
-    Hessian from the ``history`` most recent curvature pairs, following
-    [1]_ and [2]_.
+    Limited-memory BFGS builds an implicit approximation to the inverse Hessian from the
+    ``history`` most recent curvature pairs, following [1]_ and [2]_.
 
     .. math::
 
         s_k = z_{k+1} - z_k, \qquad y_k = g_{k+1} - g_k
 
-    Here :math:`s_k` and :math:`y_k` are the step and gradient differences
-    between consecutive iterates.
-
-    The search direction is recovered from these pairs by the two loop
+    Here :math:`s_k` and :math:`y_k` are the step and gradient differences between
+    consecutive iterates. The search direction is recovered from these pairs by the two loop
     recursion, without ever forming the Hessian.
 
-    A step length :math:`\alpha` is accepted once backtracking from
-    :math:`\alpha = 1` satisfies the Armijo condition
+    A step length :math:`\alpha` is accepted once backtracking from :math:`\alpha = 1`
+    satisfies the Armijo condition
 
     .. math::
 
         f(z + \alpha p) \le f(z) + c_1 \alpha\, p^{\top} g
 
-    with :math:`p` the search direction and :math:`g` the gradient at
-    :math:`z`.
+    with :math:`p` the search direction and :math:`g` the gradient at :math:`z`. A step
+    whose objective value comes back non-finite is rejected.
 
-    A step whose objective value comes back non-finite is rejected.
-
-    A curvature pair is stored only when :math:`s_k^{\top} y_k` is
-    positive, keeping the inverse Hessian approximation well defined.
+    A curvature pair is stored only when :math:`s_k^{\top} y_k` is positive, keeping the
+    inverse Hessian approximation well defined.
 
     Parameters
     ----------
@@ -225,12 +205,23 @@ def lbfgs(
     References
     ----------
     .. [1] Nocedal, J. (1980). "Updating quasi-Newton matrices with limited
-           storage." Mathematics of Computation, 35(151), 773-782.
+           storage." Mathematics of Computation, 35, 773-782.
     .. [2] Liu, D. C., & Nocedal, J. (1989). "On the limited memory BFGS
-           method for large scale optimization." Mathematical Programming,
-           45(1), 503-528.
+           method for large scale optimization." Mathematical Programming, 45,
+           503-528.
     """
-    value_and_grad_fn = jax.value_and_grad(fun)
+    # Every tolerance below is compared against `tol` directly, which only means
+    # anything for an objective of order one. A criterion sitting around 1e-6, which
+    # is nothing more than a response measured in small units, would otherwise meet
+    # the stopping tests at its own starting point and never move. Dividing through
+    # by the magnitude at the start makes the search independent of those units.
+    start_value = fun(z0)
+    scale = jnp.where(start_value == 0.0, 1.0, jnp.abs(start_value))
+
+    def scaled(z: Array) -> ScalarFloat:
+        return fun(z) / scale
+
+    value_and_grad_fn = jax.value_and_grad(scaled)
     dim = z0.shape[0]
 
     state_type = tuple[Array, Array, Array, Array, Array, Array, Array]
@@ -246,7 +237,7 @@ def lbfgs(
         search = -direction
         search = jnp.where(search @ grad < 0, search, -grad)
 
-        z_new, _ = _backtracking_step(fun, z, search, value, grad)
+        z_new, _ = _backtracking_step(scaled, z, search, value, grad)
 
         value_new, grad_new = value_and_grad_fn(z_new)
         step_diff = z_new - z
@@ -275,7 +266,7 @@ def lbfgs(
         jnp.asarray(False),
     )
     z, value, _, _, _, n_iter, converged = jax.lax.while_loop(cond_fn, body_fn, init)
-    return z, value, n_iter, converged
+    return z, value * scale, n_iter, converged
 
 
 def _two_loop_direction(gradient: Array, step_history: Array, grad_history: Array) -> Array:

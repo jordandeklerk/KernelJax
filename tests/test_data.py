@@ -7,7 +7,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from kerneljax.data import ColumnSpec, Kind, MixedData
+from kerneljax.data import ColumnSpec, Kind, MixedData, grid
 
 
 @pytest.mark.parametrize(
@@ -74,3 +74,99 @@ def test_from_blocks_rejects_out_of_range_codes():
 def test_frozen(continuous_data):
     with pytest.raises(dataclasses.FrozenInstanceError):
         continuous_data.con = jnp.zeros((5, 2))
+
+
+@pytest.mark.parametrize("n", [3, 7, 50])
+def test_continuous_sweep_has_n_rows(grid_sample, n):
+    assert grid(grid_sample, vary=0, n=n).con.shape == (n, 2)
+
+
+@pytest.mark.parametrize("vary, rows", [(2, 3), (3, 4)])
+def test_categorical_sweep_has_one_row_per_level(grid_sample, vary, rows):
+    assert grid(grid_sample, vary=vary, n=99).con.shape[0] == rows
+
+
+def test_swept_column_spans_the_observed_range(grid_sample):
+    points = grid(grid_sample, vary=0, n=9)
+    assert float(points.con[:, 0].min()) == pytest.approx(float(grid_sample.con[:, 0].min()))
+    assert float(points.con[:, 0].max()) == pytest.approx(float(grid_sample.con[:, 0].max()))
+
+
+def test_pinned_continuous_sits_at_its_quantile(grid_sample):
+    points = grid(grid_sample, vary=0, n=5, quantile=0.25)
+    want = jnp.quantile(grid_sample.con[:, 1], 0.25)
+    assert jnp.allclose(points.con[:, 1], want)
+
+
+def test_pinned_unordered_sits_at_the_mode(grid_sample):
+    points = grid(grid_sample, vary=0, n=5)
+    counts = jnp.bincount(grid_sample.uno[:, 0], length=3)
+    assert jnp.all(points.uno[:, 0] == jnp.argmax(counts))
+
+
+def test_swept_categorical_covers_every_level(grid_sample):
+    assert jnp.array_equal(grid(grid_sample, vary=2).uno[:, 0], jnp.arange(3))
+
+
+def test_grid_shares_the_input_spec(grid_sample):
+    assert grid(grid_sample).spec == grid_sample.spec
+
+
+def test_grid_runs_under_jit(grid_sample):
+    assert jax.jit(lambda d: grid(d, n=6))(grid_sample).con.shape == (6, 2)
+
+
+def test_grid_accepts_a_raw_array():
+    raw = jnp.linspace(-1.0, 1.0, 10)
+    assert grid(raw, n=4).con.shape == (4, 1)
+
+
+def test_grid_selects_a_column_by_name():
+    data = MixedData.continuous(jnp.zeros((5, 2))).replace(
+        spec=ColumnSpec(kinds=(Kind.CONTINUOUS, Kind.CONTINUOUS), n_levels=(0, 0), names=("age", "wage"))
+    )
+    assert grid(data, vary="wage", n=3).con.shape == (3, 2)
+
+
+@pytest.mark.parametrize("vary", [4, -5, "missing"])
+def test_unknown_swept_column_raises(grid_sample, vary):
+    with pytest.raises(ValueError):
+        grid(grid_sample, vary=vary)
+
+
+def test_default_sweep_spans_the_full_range(grid_sample):
+    points = grid(grid_sample, vary=0, n=9)
+    column = grid_sample.con[:, 0]
+    assert float(points.con[:, 0].min()) == pytest.approx(float(column.min()), rel=1e-6)
+    assert float(points.con[:, 0].max()) == pytest.approx(float(column.max()), rel=1e-6)
+
+
+@pytest.mark.parametrize("trim", [0.05, 0.1, 0.25])
+def test_positive_trim_pulls_the_range_in(grid_sample, trim):
+    column = grid_sample.con[:, 0]
+    points = grid(grid_sample, vary=0, n=9, trim=trim)
+    assert float(points.con[:, 0].min()) > float(column.min())
+    assert float(points.con[:, 0].max()) < float(column.max())
+    assert float(points.con[:, 0].min()) == pytest.approx(float(jnp.quantile(column, trim)), rel=1e-6)
+    assert float(points.con[:, 0].max()) == pytest.approx(float(jnp.quantile(column, 1.0 - trim)), rel=1e-6)
+
+
+@pytest.mark.parametrize("trim", [-0.05, -0.1, -0.25])
+def test_negative_trim_reaches_past_the_data(grid_sample, trim):
+    column = grid_sample.con[:, 0]
+    points = grid(grid_sample, vary=0, n=9, trim=trim)
+    assert float(points.con[:, 0].min()) < float(column.min())
+    assert float(points.con[:, 0].max()) > float(column.max())
+
+
+def test_negative_trim_reflects_the_inner_quantiles(grid_sample):
+    column = grid_sample.con[:, 0]
+    points = grid(grid_sample, vary=0, n=9, trim=-0.1)
+    want_low = 2.0 * column.min() - jnp.quantile(column, 0.1)
+    want_high = 2.0 * column.max() - jnp.quantile(column, 0.9)
+    assert float(points.con[:, 0].min()) == pytest.approx(float(want_low), rel=1e-6)
+    assert float(points.con[:, 0].max()) == pytest.approx(float(want_high), rel=1e-6)
+
+
+def test_trim_does_not_move_a_categorical_sweep(grid_sample):
+    assert jnp.array_equal(grid(grid_sample, vary=2, trim=0.25).uno[:, 0], grid(grid_sample, vary=2).uno[:, 0])

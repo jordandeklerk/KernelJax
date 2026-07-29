@@ -1,18 +1,22 @@
-"""Cross-validation criteria for bandwidth selection, written to be minimized."""
+"""Cross-validation criteria for bandwidth selection."""
 
 from __future__ import annotations
 
 from typing import Literal
 
+import jax
 import jax.numpy as jnp
+from jaxtyping import Float
 
 from kerneljax.bandwidth import Bandwidth
+from kerneljax.basis import LocalPolyBasis
 from kerneljax.data import MixedData
 from kerneljax.kernels import KernelSet, Op
-from kerneljax.ksum import ksum
+from kerneljax.ksum import _pad_index, _pad_rows, ksum, kweights
+from kerneljax.linalg import hat_diagonal, wls
 from kerneljax.typing import Array, ScalarFloat
 
-__all__ = ["cv_ls_density", "cv_ml_density"]
+__all__ = ["aic_c_regression", "cv_ls_density", "cv_ls_regression", "cv_ml_density"]
 
 
 def cv_ml_density(
@@ -34,10 +38,8 @@ def cv_ml_density(
     :math:`(n - 1) \prod h`.
 
     Minimizing this criterion over :math:`(h, \lambda)`, as
-    :func:`kerneljax.tuning.optimize.select_bandwidth` does, gives the
-    likelihood cross validated bandwidth.
-
-    np reports the negative of this value.
+    :func:`~kerneljax.select_bandwidth` does, gives the likelihood cross
+    validated bandwidth.
 
     Parameters
     ----------
@@ -48,7 +50,7 @@ def cv_ml_density(
     kernels : KernelSet, optional
         Kernel families, one per column kind. Defaults to ``KernelSet()``.
     chunk : int or tuple of int, optional
-        Chunk sizes passed through to :func:`kerneljax.ksum.ksum`.
+        Chunk sizes passed through to :func:`~kerneljax.ksum`.
 
     Returns
     -------
@@ -74,7 +76,7 @@ def cv_ml_density(
     ----------
     .. [1] Hall, P., Racine, J., & Li, Q. (2004). "Cross-validation and the
            estimation of conditional probability densities." Journal of the
-           American Statistical Association, 99(468), 1015-1026.
+           American Statistical Association, 99, 1015-1026.
     """
     kernels = KernelSet() if kernels is None else kernels
 
@@ -104,19 +106,15 @@ def cv_ls_density(
 
         \int \hat f^2 = \frac{1}{n^2 \prod h} \sum_{i} \sum_{j} \bar K(X_i, X_j)
 
-    where :math:`\bar K` is the convolution product across every column
-    kind, continuous and categorical alike.
-
-    The double sum runs over the full matrix including its diagonal.
+    where :math:`\bar K` is the convolution product across every column kind, continuous and
+    categorical alike. The double sum runs over the full matrix including its diagonal.
 
     Here :math:`\hat f_{-i}` is the same leave-one-out density used by
-    :func:`cv_ml_density`.
+    :func:`~kerneljax.cv_ml_density`.
 
     Minimizing this criterion over :math:`(h, \lambda)`, as
-    :func:`kerneljax.tuning.optimize.select_bandwidth` does, gives the
-    least squares cross validated bandwidth.
-
-    np reports the negative of this value.
+    :func:`~kerneljax.select_bandwidth` does, gives the least squares cross
+    validated bandwidth.
 
     Parameters
     ----------
@@ -127,7 +125,7 @@ def cv_ls_density(
     kernels : KernelSet, optional
         Kernel families, one per column kind. Defaults to ``KernelSet()``.
     chunk : int or tuple of int, optional
-        Chunk sizes passed through to :func:`kerneljax.ksum.ksum`.
+        Chunk sizes passed through to :func:`~kerneljax.ksum`.
 
     Returns
     -------
@@ -153,7 +151,7 @@ def cv_ls_density(
     ----------
     .. [1] Hall, P., Racine, J., & Li, Q. (2004). "Cross-validation and the
            estimation of conditional probability densities." Journal of the
-           American Statistical Association, 99(468), 1015-1026.
+           American Statistical Association, 99, 1015-1026.
     """
     kernels = KernelSet() if kernels is None else kernels
     n = train.n
@@ -164,6 +162,202 @@ def cv_ls_density(
 
     f_loo = _loo_density(train, bw, kernels, chunk)
     return integral_f_squared - 2.0 * jnp.sum(f_loo) / n
+
+
+def cv_ls_regression(
+    train: MixedData,
+    bw: Bandwidth,
+    *,
+    y: Float[Array, " n"],
+    kernels: KernelSet | None = None,
+    degree: int = 0,
+    chunk: int | tuple[int, int] | None = None,
+) -> ScalarFloat:
+    r"""Least squares cross-validation criterion for a local polynomial regression.
+
+    The leave-one-out mean squared residual of [1]_ is
+
+    .. math::
+
+        \mathrm{CV}_{ls}(h, \lambda) = \frac{1}{n} \sum_{i=1}^{n}
+            \bigl(y_i - \hat m_{-i}(X_i)\bigr)^2
+
+    where :math:`\hat m_{-i}` is the local polynomial fit of :math:`m(x) = E[y \mid X = x]`
+    with training point :math:`i` held out of its own weighted design.
+
+    Minimizing this criterion over :math:`(h, \lambda)`, as
+    :func:`~kerneljax.select_bandwidth` does, gives the least squares cross
+    validated bandwidth for the regression.
+
+    Parameters
+    ----------
+    train : MixedData
+        Training sample, supplying the leave-one-out sum over :math:`i`.
+    bw : Bandwidth
+        Bandwidths for every column.
+    y : Float[Array, " n"]
+        Response values, one per row of ``train``.
+    kernels : KernelSet, optional
+        Kernel families, one per column kind. Defaults to ``KernelSet()``.
+    degree : int, optional
+        Total degree of the local polynomial basis. Supports 0, 1 and 2. Static.
+    chunk : int or tuple of int, optional
+        Chunk sizes passed through to the underlying fit.
+
+    Returns
+    -------
+    ScalarFloat
+        The criterion value, minimized over ``bw`` to select a bandwidth.
+
+    Examples
+    --------
+    Evaluate the least squares cross validation criterion at a bandwidth.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import jax.numpy as jnp
+           ...: import kerneljax as kj
+           ...:
+           ...: x = jnp.linspace(-2.0, 2.0, 50).reshape(-1, 1)
+           ...: y = 3.0 + 2.0 * x[:, 0]
+           ...: train = kj.MixedData.continuous(x)
+           ...: bw = kj.Bandwidth(h=jnp.array([0.3]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+           ...: print(kj.cv_ls_regression(train, bw, y=y))
+
+    Minimizing the same criterion over the bandwidth selects it.
+
+    .. ipython::
+        :okwarning:
+
+        In [2]: result = kj.select_bandwidth(train, kj.cv_ls_regression, y=y, n_starts=1)
+           ...: print(result.bandwidth.h)
+
+    References
+    ----------
+    .. [1] Li, Q., & Racine, J. S. (2007). Nonparametric Econometrics: Theory
+           and Practice. Princeton University Press.
+    """
+    from kerneljax.estimators.regression import local_poly
+
+    kernels = KernelSet() if kernels is None else kernels
+    fold = jnp.arange(train.n)
+
+    fit = local_poly(train, y, bw, kernels=kernels, degree=degree, fold=fold, chunk=chunk)
+    residual = y - fit.mean
+    return jnp.mean(residual * residual)
+
+
+def aic_c_regression(
+    train: MixedData,
+    bw: Bandwidth,
+    *,
+    y: Float[Array, " n"],
+    kernels: KernelSet | None = None,
+    degree: int = 0,
+    chunk: int | tuple[int, int] | None = None,
+) -> ScalarFloat:
+    r"""Corrected Akaike information criterion for a local polynomial regression.
+
+    The corrected AIC of [1]_ weighs the fit of the full local polynomial regression against
+    the effective degrees of freedom it spends,
+
+    .. math::
+
+        \mathrm{AIC}_c(h, \lambda) = \log \hat\sigma^2
+            + \frac{1 + \operatorname{tr}(H) / n}{1 - (\operatorname{tr}(H) + 2) / n}
+
+    where :math:`\hat\sigma^2` is the mean squared residual of the full fit, using every
+    training point, and :math:`H` is the smoother matrix carrying the observed responses to
+    the fitted values.
+
+    Writing :math:`w_i` for the kernel weight of training point :math:`i` on itself and
+    centering the local polynomial basis at that point, its own row in the design reduces to
+    a single one in the constant position, so the diagonal entries of the smoother matrix
+    follow [2]_ as
+
+    .. math::
+
+        H_{ii} = w_i \bigl[(X^\top W X)^{-1}\bigr]_{11}, \qquad
+        \operatorname{tr}(H) = \sum_{i=1}^{n} H_{ii}
+
+    with the inverse taken at that same training point. Past a pole at
+    :math:`\operatorname{tr}(H) = n - 2`, where the denominator above turns negative, the
+    penalty term is replaced by a smooth barrier instead.
+
+    The barrier agrees with the formula above wherever the denominator is comfortably
+    positive, stays finite everywhere else, and grows as the trace increases past the pole,
+    pushing a gradient based search back toward the valid region rather than leaving it to
+    wander.
+
+    Minimizing this criterion over :math:`(h, \lambda)`, as
+    :func:`~kerneljax.select_bandwidth` does, gives the corrected AIC
+    bandwidth for the regression.
+
+    Parameters
+    ----------
+    train : MixedData
+        Training sample, supplying the residual sum and the smoother matrix.
+    bw : Bandwidth
+        Bandwidths for every column.
+    y : Float[Array, " n"]
+        Response values, one per row of ``train``.
+    kernels : KernelSet, optional
+        Kernel families, one per column kind. Defaults to ``KernelSet()``.
+    degree : int, optional
+        Total degree of the local polynomial basis. Supports 0, 1 and 2. Static.
+    chunk : int or tuple of int, optional
+        Chunk sizes passed through to the underlying fit and the smoother matrix trace.
+
+    Returns
+    -------
+    ScalarFloat
+        The criterion value, minimized over ``bw`` to select a bandwidth.
+
+    Examples
+    --------
+    Evaluate the corrected AIC criterion at a bandwidth.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import jax.numpy as jnp
+           ...: import kerneljax as kj
+           ...:
+           ...: x = jnp.linspace(-2.0, 2.0, 50).reshape(-1, 1)
+           ...: y = 3.0 + 2.0 * x[:, 0]
+           ...: train = kj.MixedData.continuous(x)
+           ...: bw = kj.Bandwidth(h=jnp.array([0.3]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+           ...: print(kj.aic_c_regression(train, bw, y=y))
+
+    Minimizing the same criterion over the bandwidth selects it.
+
+    .. ipython::
+        :okwarning:
+
+        In [2]: result = kj.select_bandwidth(train, kj.aic_c_regression, y=y, n_starts=1)
+           ...: print(result.bandwidth.h)
+
+    References
+    ----------
+    .. [1] Hurvich, C. M., Simonoff, J. S., & Tsai, C. L. (1998). "Smoothing
+           parameter selection in nonparametric regression using an improved
+           Akaike information criterion." Journal of the Royal Statistical
+           Society B, 60, 271-293.
+    .. [2] Li, Q., & Racine, J. S. (2007). Nonparametric Econometrics: Theory
+           and Practice. Princeton University Press.
+    """
+    from kerneljax.estimators.regression import local_poly
+
+    kernels = KernelSet() if kernels is None else kernels
+    n = train.n
+
+    fit = local_poly(train, y, bw, kernels=kernels, degree=degree, chunk=chunk)
+    residual = y - fit.mean
+    sigma_squared = jnp.mean(residual * residual)
+
+    trace = _hat_trace(train, bw, kernels, degree, chunk)
+    return jnp.log(sigma_squared) + _aic_c_penalty(trace, n)
 
 
 def _loo_density(
@@ -177,3 +371,71 @@ def _loo_density(
     scale: Literal["per_train", "per_eval"] = "per_train" if bw.h_axis == "train" else "per_eval"
     total = ksum(train, bw, kernels=kernels, fold=fold, weight_scale=scale, chunk=chunk)
     return total.reshape(-1) / (train.n - 1)
+
+
+def _hat_trace(
+    train: MixedData,
+    bw: Bandwidth,
+    kernels: KernelSet,
+    degree: int,
+    chunk: int | tuple[int, int] | None,
+) -> ScalarFloat:
+    """Sum the leverage of every training point under the full weighted least squares design."""
+    from kerneljax.estimators.regression import _moments
+
+    basis = LocalPolyBasis(degree=degree)
+    dim = basis.dim(train.spec, degree)
+    onehot = jnp.zeros((dim,), dtype=train.con.dtype).at[0].set(1.0)
+    dummy_y = jnp.zeros(train.n, dtype=train.con.dtype)
+    dummy_index = jnp.asarray(0)
+
+    if chunk is None:
+        chunk_eval, chunk_train = None, None
+    elif isinstance(chunk, tuple):
+        chunk_eval, chunk_train = chunk
+    else:
+        chunk_eval, chunk_train = chunk, None
+
+    def leverage(con_row: Array, uno_row: Array, orde_row: Array, h_row: Array | None) -> Array:
+        at_row = MixedData(con=con_row[None, :], uno=uno_row[None, :], orde=orde_row[None, :], spec=train.spec)
+        self_bw = bw if h_row is None else bw.replace(h=h_row, h_axis="shared")
+        moments_bw = self_bw if bw.h_axis == "eval" else bw
+
+        xtwx, _, _ = _moments(train, moments_bw, dummy_y, at_row, basis, kernels, None, dummy_index, chunk_train)
+        cho = wls(xtwx, onehot[:, None]).cho
+        weight_self = kweights(at_row, self_bw, kernels=kernels)[0, 0]
+        return hat_diagonal(cho, onehot, weight_self)
+
+    h_rows = bw.h if bw.h_axis != "shared" else None
+
+    if chunk_eval is None:
+        in_axes = (0, 0, 0, None if h_rows is None else 0)
+        leverages = jax.vmap(leverage, in_axes=in_axes)(train.con, train.uno, train.orde, h_rows)
+        return jnp.sum(leverages)
+
+    train_blocks = jax.tree.map(lambda column: _pad_rows(column, chunk_eval), train)
+    idx_blocks = _pad_index(jnp.arange(train.n), train.n, chunk_eval)
+    h_blocks = _pad_rows(bw.h, chunk_eval) if h_rows is not None else None
+
+    def step(carry: Array, block: tuple[MixedData, Array, Array | None]) -> tuple[Array, None]:
+        train_block, idx_block, h_block = block
+        in_axes = (0, 0, 0, None if h_block is None else 0)
+        block_leverages = jax.vmap(leverage, in_axes=in_axes)(
+            train_block.con, train_block.uno, train_block.orde, h_block
+        )
+        valid = idx_block < train.n
+        return carry + jnp.sum(jnp.where(valid, block_leverages, 0.0)), None
+
+    total, _ = jax.lax.scan(step, jnp.zeros((), dtype=train.con.dtype), (train_blocks, idx_blocks, h_blocks))
+    return total
+
+
+def _aic_c_penalty(trace: ScalarFloat, n: int) -> ScalarFloat:
+    """Return the corrected AIC penalty, replacing its pole with a smooth increasing barrier."""
+    denominator = 1.0 - (trace + 2.0) / n
+    margin = 0.1
+
+    floor = margin * jnp.exp((denominator - margin) / margin)
+    safe_denominator = jnp.where(denominator > margin, denominator, floor)
+
+    return (1.0 + trace / n) / safe_denominator

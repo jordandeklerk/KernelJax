@@ -12,9 +12,16 @@ from jaxtyping import Float
 
 from kerneljax.data import ColumnSpec, MixedData
 from kerneljax.kernels import KernelSet
-from kerneljax.typing import Array, FloatArray
+from kerneljax.typing import Array, FloatArray, ScalarFloat
 
-__all__ = ["Bandwidth", "BandwidthTransform", "ConditionalBandwidth", "broadcast_h", "normal_reference"]
+__all__ = [
+    "Bandwidth",
+    "BandwidthTransform",
+    "ConditionalBandwidth",
+    "SelectionResult",
+    "broadcast_h",
+    "normal_reference",
+]
 
 HAxis = Literal["shared", "eval", "train"]
 
@@ -29,8 +36,8 @@ class Bandwidth:
     r"""Bandwidths in natural, constrained scale.
 
     Values are the bandwidths themselves, so :math:`h > 0` and each
-    :math:`\lambda` lies in its own bounded interval. Every leaf is
-    floating point, so the whole tree can be differentiated.
+    :math:`\lambda` lies in its own bounded interval. Every entry is
+    floating point, so a bandwidth can be differentiated through.
 
     Parameters
     ----------
@@ -108,7 +115,8 @@ class BandwidthTransform:
         Entries run continuous first, then unordered, then ordered,
         matching the block order of ``spec``. Values are clamped into the
         open interval before inverting, so the result stays finite at the
-        box boundary.
+        box boundary. Only a bandwidth shared across rows can be mapped,
+        since a per row bandwidth holds no single value per column.
 
         Parameters
         ----------
@@ -120,6 +128,12 @@ class BandwidthTransform:
         Float[Array, " k"]
             The unconstrained vector, length ``p_con + p_uno + p_ord``.
         """
+        if bw.h_axis != "shared":
+            raise ValueError(
+                f"to_unconstrained needs h_axis 'shared', got {bw.h_axis!r}. Flattening a per row "
+                "bandwidth would feed continuous entries into the categorical blocks."
+            )
+
         parts = [_softplus_inv(jnp.reshape(bw.h, (-1,)))]
 
         if self._uno_bounds:
@@ -185,6 +199,40 @@ class BandwidthTransform:
         )
 
         return lower, upper
+
+
+@partial(
+    jax.tree_util.register_dataclass,
+    data_fields=["bandwidth", "value", "n_iter", "converged"],
+    meta_fields=["criterion"],
+)
+@dataclasses.dataclass(frozen=True)
+class SelectionResult:
+    """Outcome of a bandwidth selection.
+
+    Parameters
+    ----------
+    bandwidth : Bandwidth
+        The selected bandwidth, in natural, constrained scale.
+    value : ScalarFloat
+        Criterion value at ``bandwidth``.
+    n_iter : Array
+        Number of solver iterations used by the full solve.
+    criterion : callable, optional
+        The criterion that was minimized, carried so a later fit can read
+        back the settings it was selected under. Static.
+    converged : Array
+        Whether the solver stopped because its progress stalled, either
+        the gradient or the objective value stopped moving, rather than
+        because it ran out of its iteration budget. ``True`` does not by
+        itself mean the gradient tolerance was the one that was met.
+    """
+
+    bandwidth: Bandwidth
+    value: ScalarFloat
+    n_iter: Array
+    converged: Array
+    criterion: Any = None
 
 
 def broadcast_h(bw: Bandwidth, p_con: int) -> Float[Array, "n_eval n_train p_con"]:
@@ -262,14 +310,14 @@ def normal_reference(data: MixedData, kernels: KernelSet) -> Bandwidth:
         scale = jnp.min(jnp.where(candidates > 0, candidates, jnp.inf), axis=0)
         scale = jnp.where(jnp.isfinite(scale), scale, 1.0)
 
-        h = 1.06 * scale * n ** (-1.0 / (4.0 + spec.p_con))
+        h = 1.059224 * scale * n ** (-1.0 / (4.0 + spec.p_con))
     else:
         h = jnp.zeros(0)
 
     return Bandwidth(
         h=h,
-        lam_uno=jnp.full((spec.p_uno,), 0.1),
-        lam_ord=jnp.full((spec.p_ord,), 0.1),
+        lam_uno=jnp.zeros(spec.p_uno),
+        lam_ord=jnp.zeros(spec.p_ord),
         h_axis="shared",
     )
 

@@ -5,10 +5,14 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from kerneljax.bandwidth import Bandwidth
+from kerneljax.bandwidth import Bandwidth, normal_reference
 from kerneljax.data import MixedData
 from kerneljax.estimators.density import DensityFit, density
+from kerneljax.estimators.regression import local_poly
+from kerneljax.kernels import KernelSet
 from kerneljax.ksum import kweights
+from kerneljax.tuning.criteria import DensityCriterion
+from kerneljax.tuning.optimize import select_bandwidth
 
 
 def test_returns_a_record_not_a_bare_array(density_data, density_bandwidth):
@@ -33,13 +37,13 @@ def test_matches_an_independent_numpy_expression(density_data, density_bandwidth
     gaussian = np.exp(-0.5 * diff * diff) / np.sqrt(2.0 * np.pi)
     aitchison = np.where(uno == uno.T, 1.0 - lam_uno, lam_uno / 2.0)
     dist = np.abs(orde - orde.T)
-    wang = np.where(dist == 0, 1.0 - lam_ord, 0.5 * (1.0 - lam_ord) * lam_ord**dist)
+    liracine = (1.0 - lam_ord) / (1.0 + lam_ord) * lam_ord**dist
 
-    want = (gaussian * aitchison * wang).sum(axis=1) / (n * h)
+    want = (gaussian * aitchison * liracine).sum(axis=1) / (n * h)
     assert np.max(np.abs(got - want) / np.abs(want)) < 1e-6
 
 
-def test_continuous_only_density_integrates_to_approximately_one():
+def test_density_integrates_to_one():
     rng = np.random.default_rng(0)
     x = rng.normal(size=(200, 1))
     data = MixedData.continuous(jnp.asarray(x))
@@ -56,7 +60,7 @@ def test_gaussian_estimate_is_strictly_positive(density_data, density_bandwidth)
     assert jnp.all(value > 0)
 
 
-def test_doubling_every_bandwidth_changes_the_estimate(density_data, density_bandwidth):
+def test_doubling_bandwidth_changes_estimate(density_data, density_bandwidth):
     base = density(density_data, density_bandwidth).value
     doubled = density_bandwidth.replace(
         h=density_bandwidth.h * 2.0,
@@ -67,7 +71,7 @@ def test_doubling_every_bandwidth_changes_the_estimate(density_data, density_ban
     assert not jnp.allclose(base, changed)
 
 
-def test_large_h_flattens_the_estimate_toward_a_constant():
+def test_large_h_flattens_toward_constant():
     rng = np.random.default_rng(4)
     data = MixedData.continuous(jnp.asarray(rng.normal(size=(30, 1))))
     grid = jnp.asarray(np.linspace(-3.0, 3.0, 25)).reshape(-1, 1)
@@ -78,7 +82,7 @@ def test_large_h_flattens_the_estimate_toward_a_constant():
     assert jnp.std(value) < 1e-3 * jnp.mean(value)
 
 
-def test_leave_one_out_differs_from_full_fit_and_stays_positive(density_data, density_bandwidth):
+def test_leave_one_out_differs_and_is_positive(density_data, density_bandwidth):
     fold = jnp.arange(density_data.n)
     loo = density(density_data, density_bandwidth, fold=fold).value
     full = density(density_data, density_bandwidth).value
@@ -97,7 +101,7 @@ def test_leave_one_out_divides_by_the_retained_count(density_data, density_bandw
     assert np.allclose(np.asarray(got), want, rtol=1e-6)
 
 
-def test_k_fold_normalizes_by_the_per_row_retained_count(density_data, density_bandwidth):
+def test_k_fold_normalizes_by_retained_count(density_data, density_bandwidth):
     fold = jnp.asarray([i % 3 for i in range(density_data.n)])
     got = density(density_data, density_bandwidth, fold=fold).value
 
@@ -126,7 +130,7 @@ def test_chunked_matches_unchunked(density_data, density_bandwidth, chunk):
     assert jnp.allclose(got, ref, rtol=1e-6, atol=1e-8)
 
 
-def test_chunked_with_fold_avoids_the_pairwise_fold_memory_blowup():
+def test_chunked_fold_avoids_pairwise_memory():
     n = 4000
     data = MixedData.continuous(jnp.zeros((n, 1)))
     bw = Bandwidth(h=jnp.array([0.5]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
@@ -165,3 +169,63 @@ def test_density_quartet_eager_jit_grad_vmap(public_api_data, public_api_bandwid
     out = jax.vmap(lambda h: total(public_api_bandwidth.replace(h=h)))(jnp.array([[0.5], [0.6]]))
     assert out.shape == (2,)
     assert jnp.all(jnp.isfinite(out))
+
+
+def test_positional_construction_still_works(bandwidth):
+    fit = DensityFit(jnp.zeros(3), bandwidth)
+    assert fit.selection is None
+    assert fit.spec is None
+    assert fit.n_train == 0
+
+
+def test_fit_records_what_produced_it(density_data, density_bandwidth):
+    fit = density(density_data, density_bandwidth)
+    assert fit.n_train == density_data.n
+    assert fit.spec == density_data.spec
+    assert jax.tree_util.tree_structure(fit) == jax.tree_util.tree_structure(jax.jit(lambda f: f)(fit))
+
+
+@pytest.mark.parametrize("method", ["cv_ml", "cv_ls"])
+def test_string_bw_matches_the_two_step(criteria_train, method):
+    selection = select_bandwidth(criteria_train, DensityCriterion(method=method))
+    want = density(criteria_train, selection.bandwidth)
+
+    got = density(criteria_train, method)
+    assert jnp.allclose(got.value, want.value)
+    assert got.selection is not None
+
+
+def test_normal_reference_matches_the_rule(criteria_train):
+    want = normal_reference(criteria_train, KernelSet())
+    got = density(criteria_train, "normal_reference")
+    assert jnp.allclose(got.bandwidth.h, want.h)
+    assert got.selection is None
+
+
+def test_reusing_a_fit_matches_its_bandwidth(criteria_train):
+    first = density(criteria_train, "cv_ml")
+    again = density(criteria_train, first)
+    assert jnp.array_equal(again.bandwidth.h, first.bandwidth.h)
+
+
+def test_unknown_string_bw_raises(criteria_train):
+    with pytest.raises(ValueError, match="normal_reference"):
+        density(criteria_train, "cv.ml")
+
+
+def test_array_train_matches_mixed_data(criteria_train):
+    raw = criteria_train.con[:, 0]
+    bw = Bandwidth(h=jnp.array([0.4]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+    assert jnp.allclose(density(raw, bw).value, density(MixedData.continuous(raw), bw).value)
+
+
+@pytest.mark.parametrize("bad", [0.4, None, ("cv_ml",), jnp.array([0.4])])
+def test_unsupported_bw_type_raises(criteria_train, bad):
+    with pytest.raises(TypeError, match="bw must be"):
+        density(criteria_train, bad)
+
+
+def test_wrong_family_fit_is_rejected(criteria_train, criteria_response):
+    fit = local_poly(criteria_train, criteria_response, "cv_ls")
+    with pytest.raises(TypeError, match="bw must be"):
+        density(criteria_train, fit)
