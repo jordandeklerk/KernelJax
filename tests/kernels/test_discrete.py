@@ -147,36 +147,22 @@ def test_ordered_cdf_is_monotone(kernel_cls, lam):
 
 
 @pytest.mark.parametrize("kernel_cls", [LiRacine, WangVanRyzin])
-def test_ordered_cdf_sums_the_lattice(kernel_cls):
+@pytest.mark.parametrize("lam", [0.2, 0.6, 0.9])
+def test_ordered_cdf_sums_the_full_lattice(kernel_cls, lam):
     kernel = kernel_cls()
-    levels, y, lam = 5, 2, jnp.asarray(0.4)
-    lattice = jnp.arange(-(levels - 1), levels)
+    levels, y = 5, 2
+    far = jnp.arange(y - 400, y + 1 + 400)
 
     for x in range(levels):
-        want = sum(
-            float(kernel.value(jnp.asarray(int(node)), jnp.asarray(y), lam, levels))
-            for node in lattice
-            if int(node) <= x
-        )
-        got = float(kernel.cdf(jnp.asarray(x), jnp.asarray(y), lam, levels))
-        assert got == pytest.approx(want, rel=1e-6)
+        weights = kernel.value(far, jnp.asarray(y), jnp.asarray(lam), levels)
+        want = float(jnp.sum(jnp.where(far <= x, weights, 0.0)))
+        got = float(kernel.cdf(jnp.asarray(x), jnp.asarray(y), jnp.asarray(lam), levels))
+        assert got == pytest.approx(want, rel=1e-5)
 
 
-def test_unordered_cdf_sums_observed_levels():
-    kernel = AitchisonAitken()
-    levels, y, lam = 4, 1, jnp.asarray(0.3)
-    for x in range(levels):
-        want = sum(
-            float(kernel.value(jnp.asarray(level), jnp.asarray(y), lam, levels))
-            for level in range(levels)
-            if level <= x
-        )
-        got = float(kernel.cdf(jnp.asarray(x), jnp.asarray(y), lam, levels))
-        assert got == pytest.approx(want, rel=1e-6)
-
-
-def test_unordered_cdf_reaches_one_at_the_top():
-    kernel = AitchisonAitken()
-    levels = 4
-    total = kernel.cdf(jnp.asarray(levels - 1), jnp.asarray(1), jnp.asarray(0.3), levels)
-    assert float(total) == pytest.approx(1.0, rel=1e-6)
+@pytest.mark.parametrize("kernel_cls", [LiRacine, WangVanRyzin])
+def test_ordered_cdf_spans_the_unit(kernel_cls):
+    kernel = kernel_cls()
+    lam, y = jnp.asarray(0.5), jnp.asarray(3)
+    assert float(kernel.cdf(jnp.asarray(-200), y, lam, 5)) == pytest.approx(0.0, abs=1e-9)
+    assert float(kernel.cdf(jnp.asarray(200), y, lam, 5)) == pytest.approx(1.0, rel=1e-9)

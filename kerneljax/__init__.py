@@ -9,7 +9,14 @@ from kerneljax.bandwidth import (
 )
 from kerneljax.basis import LocalPolyBasis
 from kerneljax.data import ColumnSpec, Kind, MixedData, grid
-from kerneljax.estimators import DensityFit, LocalPolyFit, density, local_poly
+from kerneljax.estimators import (
+    DensityFit,
+    DistributionFit,
+    LocalPolyFit,
+    density,
+    distribution,
+    local_poly,
+)
 from kerneljax.kernels import (
     AitchisonAitken,
     ContinuousKernel,
@@ -47,6 +54,7 @@ __all__ = [
     "ContinuousKernel",
     "DensityCriterion",
     "DensityFit",
+    "DistributionFit",
     "Gaussian",
     "KernelSet",
     "Kind",
@@ -66,6 +74,7 @@ __all__ = [
     "cv_ls_regression",
     "cv_ml_density",
     "density",
+    "distribution",
     "grid",
     "hat_diagonal",
     "ksum",

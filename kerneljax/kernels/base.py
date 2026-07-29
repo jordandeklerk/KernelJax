@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import abc
 
-import jax.numpy as jnp
-
 from kerneljax.typing import FloatArray, IntArray
 
 __all__ = ["ContinuousKernel", "Op", "OrderedKernel", "UnorderedKernel"]
@@ -91,27 +89,8 @@ class UnorderedKernel(abc.ABC):
         """
 
     def cdf(self, x: IntArray, y: IntArray, lam: FloatArray, levels: int) -> FloatArray:
-        """Sum the kernel cumulatively over the levels at or below ``x``.
-
-        Parameters
-        ----------
-        x : IntArray
-            Evaluation levels.
-        y : IntArray
-            Data levels, broadcastable against ``x``.
-        lam : FloatArray
-            Smoothing parameter.
-        levels : int
-            Number of levels of the column, static under ``jit``.
-
-        Returns
-        -------
-        FloatArray
-            The cumulative kernel weight at or below ``x``.
-        """
-        support = jnp.arange(levels)
-        weights = self.value(support, jnp.asarray(y)[..., None], lam, levels)
-        return jnp.sum(jnp.where(support <= jnp.asarray(x)[..., None], weights, 0.0), axis=-1)
+        """Sum the kernel cumulatively over the levels at or below ``x``."""
+        raise NotImplementedError(f"{type(self).__name__} does not implement cdf")
 
     def conv(self, x: IntArray, y: IntArray, lam: FloatArray, levels: int) -> FloatArray:
         """Convolve the kernel with itself by summing the product over the support."""
@@ -163,30 +142,8 @@ class OrderedKernel(abc.ABC):
         """
 
     def cdf(self, x: IntArray, y: IntArray, lam: FloatArray, levels: int) -> FloatArray:
-        """Sum the kernel cumulatively over the integer lattice at or below ``x``.
-
-        The lattice runs one full level range below the observed levels, since
-        stopping at the lowest observed level leaves the sum short of one.
-
-        Parameters
-        ----------
-        x : IntArray
-            Evaluation levels.
-        y : IntArray
-            Data levels, broadcastable against ``x``.
-        lam : FloatArray
-            Smoothing parameter.
-        levels : int
-            Number of levels of the column, static under ``jit``.
-
-        Returns
-        -------
-        FloatArray
-            The cumulative kernel weight at or below ``x``.
-        """
-        lattice = jnp.arange(-(levels - 1), levels)
-        weights = self.value(lattice, jnp.asarray(y)[..., None], lam, levels)
-        return jnp.sum(jnp.where(lattice <= jnp.asarray(x)[..., None], weights, 0.0), axis=-1)
+        """Sum the kernel over the integer lattice at or below ``x``."""
+        raise NotImplementedError(f"{type(self).__name__} does not implement cdf")
 
     def conv(self, x: IntArray, y: IntArray, lam: FloatArray, levels: int) -> FloatArray:
         """Convolve the kernel with itself over the integer lattice."""

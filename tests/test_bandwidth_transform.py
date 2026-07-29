@@ -128,3 +128,48 @@ def test_purely_categorical_spec_round_trips():
     assert bw_normal_reference.h.shape == (0,)
     assert bw_normal_reference.lam_uno.shape == (1,)
     assert bw_normal_reference.lam_ord.shape == (1,)
+
+
+@pytest.mark.parametrize("target", ["density", "distribution"])
+def test_normal_reference_starts_categoricals_at_zero(mixed_bandwidth_data, target):
+    bw = normal_reference(mixed_bandwidth_data, KernelSet(), target=target)
+    assert bw.lam_uno[0] == 0.0
+    assert bw.lam_ord[0] == 0.0
+
+
+def test_distribution_target_uses_its_own_rate(mixed_bandwidth_data):
+    data = MixedData.continuous(mixed_bandwidth_data.con)
+    n = data.n
+    scale = jnp.min(
+        jnp.stack(
+            [
+                jnp.std(data.con, axis=0, ddof=1),
+                (jnp.percentile(data.con, 75.0, axis=0) - jnp.percentile(data.con, 25.0, axis=0))
+                / (2.0 * jax.scipy.special.ndtri(0.75)),
+                jnp.median(jnp.abs(data.con - jnp.median(data.con, axis=0)), axis=0) * 1.4826,
+            ]
+        ),
+        axis=0,
+    )
+
+    want = 1.587 * scale * n ** (-1.0 / 3.0)
+    got = normal_reference(data, KernelSet(), target="distribution").h
+    assert jnp.allclose(got, want, rtol=1e-6)
+
+
+def test_distribution_rate_ignores_column_count():
+    single = MixedData.continuous(jnp.linspace(-2.0, 2.0, 30).reshape(-1, 1))
+    double = MixedData.continuous(jnp.tile(jnp.linspace(-2.0, 2.0, 30).reshape(-1, 1), (1, 2)))
+
+    one = normal_reference(single, KernelSet(), target="distribution").h[0]
+    two = normal_reference(double, KernelSet(), target="distribution").h[0]
+    assert float(one) == pytest.approx(float(two), rel=1e-6)
+
+
+def test_density_rate_does_depend_on_column_count():
+    single = MixedData.continuous(jnp.linspace(-2.0, 2.0, 30).reshape(-1, 1))
+    double = MixedData.continuous(jnp.tile(jnp.linspace(-2.0, 2.0, 30).reshape(-1, 1), (1, 2)))
+
+    one = normal_reference(single, KernelSet()).h[0]
+    two = normal_reference(double, KernelSet()).h[0]
+    assert float(one) != pytest.approx(float(two), rel=1e-3)
