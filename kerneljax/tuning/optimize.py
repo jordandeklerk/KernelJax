@@ -210,11 +210,6 @@ def lbfgs(
            method for large scale optimization." Mathematical Programming, 45,
            503-528.
     """
-    # Every tolerance below is compared against `tol` directly, which only means
-    # anything for an objective of order one. A criterion sitting around 1e-6, which
-    # is nothing more than a response measured in small units, would otherwise meet
-    # the stopping tests at its own starting point and never move. Dividing through
-    # by the magnitude at the start makes the search independent of those units.
     start_value = fun(z0)
     scale = jnp.where(start_value == 0.0, 1.0, jnp.abs(start_value))
 
