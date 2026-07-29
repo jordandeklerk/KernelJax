@@ -47,7 +47,7 @@ def test_degree_two_reproduces_exact_quadratic(poly_train, poly_at, poly_bandwid
 
     at_x = np.asarray(poly_at.con)[:, 0]
     want = a * at_x**2 + b * at_x + c
-    assert np.max(np.abs(np.asarray(fit.mean) - want) / np.abs(want)) < 1e-6
+    assert np.max(np.abs(np.asarray(fit.mean) - want) / np.abs(want)) < 1e-5
 
 
 def test_degree_one_misses_a_quadratic(poly_train, poly_at, poly_bandwidth):

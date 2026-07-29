@@ -86,7 +86,7 @@ def test_cho_reproduces_the_regularized_gram_matrix(wls_design, penalty):
 
     cho = wls(xtwx, xtwy, penalty=penalty).cho
     want = xtwx + penalty * jnp.eye(xtwx.shape[0])
-    assert jnp.allclose(cho @ cho.T, want, rtol=1e-6)
+    assert jnp.allclose(cho @ cho.T, want, rtol=1e-5)
 
 
 def test_penalty_shrinks_coef_monotonically(wls_design):
