@@ -272,31 +272,49 @@ def broadcast_h(bw: Bandwidth, p_con: int) -> Float[Array, "n_eval n_train p_con
     return h[None, :, :]
 
 
-def normal_reference(data: MixedData, kernels: KernelSet) -> Bandwidth:
+def normal_reference(
+    data: MixedData,
+    kernels: KernelSet,
+    *,
+    target: Literal["density", "distribution"] = "density",
+) -> Bandwidth:
     r"""Compute a normal-reference starting bandwidth.
 
-    Continuous entries scale :math:`1.06 \, n^{-1 / (4 + p_{\text{con}})}`
-    by :math:`\sigma`, the smallest positive value among the standard
-    deviation, the interquartile range divided by
-    :math:`2 \, \Phi^{-1}(0.75)`, and the median absolute deviation scaled
-    by :math:`1.4826`, for that column. Categorical entries start at
-    ``0.1``.
+    Every continuous entry scales :math:`\sigma`, the smallest positive value
+    among the standard deviation, the interquartile range divided by
+    :math:`2 \, \Phi^{-1}(0.75)`, and the median absolute deviation scaled by
+    :math:`1.4826`, for that column. Categorical entries start at zero, which
+    makes a categorical column an exact match indicator until the search moves
+    it.
+
+    A density and a cumulative distribution take different constants and
+    different rates, and the distribution rate does not depend on how many
+    continuous columns there are,
+
+    .. math::
+
+        h_j = 1.059224 \, \sigma_j \, n^{-1 / (2P + p_{\text{con}})}, \qquad
+        h_j = 1.587 \, \sigma_j \, n^{-1 / (1 + P)}
+
+    with :math:`P` the order of the continuous kernel.
 
     Parameters
     ----------
     data : MixedData
         Design matrix supplying the sample size and continuous columns.
     kernels : KernelSet
-        Unused, accepted for interface uniformity with other starting rules.
+        Kernel families, consulted for the order of the continuous kernel.
+    target : {"density", "distribution"}
+        Which estimator the bandwidth starts a search for. Static.
 
     Returns
     -------
     Bandwidth
         A starting bandwidth with ``h_axis="shared"``.
     """
-    del kernels
     n = data.n
     spec = data.spec
+    order = getattr(kernels.continuous, "order", 2)
 
     if spec.p_con:
         sd = jnp.std(data.con, axis=0, ddof=1)
@@ -310,7 +328,10 @@ def normal_reference(data: MixedData, kernels: KernelSet) -> Bandwidth:
         scale = jnp.min(jnp.where(candidates > 0, candidates, jnp.inf), axis=0)
         scale = jnp.where(jnp.isfinite(scale), scale, 1.0)
 
-        h = 1.059224 * scale * n ** (-1.0 / (4.0 + spec.p_con))
+        if target == "distribution":
+            h = 1.587 * scale * n ** (-1.0 / (1.0 + order))
+        else:
+            h = 1.059224 * scale * n ** (-1.0 / (2.0 * order + spec.p_con))
     else:
         h = jnp.zeros(0)
 
