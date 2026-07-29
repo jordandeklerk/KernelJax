@@ -86,10 +86,10 @@ def density(
         read as continuous columns.
     bw : Bandwidth or SelectionResult or DensityFit or str
         Bandwidths for every column, or a way of arriving at them. A
-        :class:`~kerneljax.Bandwidth` is used as given. ``"cv_ml"`` and
-        ``"cv_ls"`` select one by minimizing that criterion and
-        ``"normal_reference"`` applies the starting rule without a search.
-        A previous selection or estimate reuses its bandwidth. To select
+        :class:`~kerneljax.Bandwidth` is used as given. ``"cv_ml"`` and ``"cv_ls"``
+        select one by minimizing that criterion, and ``"normal_reference"``
+        applies :func:`~kerneljax.normal_reference` without a search. A previous
+        selection or estimate reuses its bandwidth. To select
         with a criterion built by hand, minimize it with
         :func:`~kerneljax.select_bandwidth` and pass the result here.
     at : MixedData or Array, optional

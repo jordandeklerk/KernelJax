@@ -144,11 +144,11 @@ def local_poly(
         Response values, one per row of ``train``.
     bw : Bandwidth or SelectionResult or LocalPolyFit or str
         Bandwidths for every column, or a way of arriving at them. A
-        :class:`~kerneljax.Bandwidth` is used as given. ``"cv_ls"`` and
-        ``"aic"`` select one by minimizing that criterion and
-        ``"normal_reference"`` applies the starting rule without a search.
-        A previous selection or fit reuses its bandwidth along with the
-        degree it was chosen under. To select with a criterion built by hand,
+        :class:`~kerneljax.Bandwidth` is used as given. ``"cv_ls"`` and ``"aic"``
+        select one by minimizing that criterion, and ``"normal_reference"``
+        applies :func:`~kerneljax.normal_reference` without a search. A previous
+        selection or fit reuses its bandwidth along with the degree it was
+        chosen under. To select with a criterion built by hand,
         minimize it with :func:`~kerneljax.select_bandwidth` and pass the
         result here.
     at : MixedData or Array, optional
