@@ -503,8 +503,10 @@ def cv_cdf_distribution(
     kernels : KernelSet, optional
         Kernel families, one per column kind. Defaults to ``KernelSet()``.
     chunk : int or tuple of int, optional
-        Accepted for interface uniformity. The leave-one-out needs whole weight
-        rows, so the training axis is never chunked.
+        Chunk size along the evaluation axis, bounding peak memory at the cost
+        of additional compute. A tuple gives its first entry, since the leave
+        one out reads a whole weight row and the training axis cannot be split.
+        Static.
 
     Returns
     -------
@@ -537,7 +539,6 @@ def cv_cdf_distribution(
            for nonparametric conditional distribution and quantile functions."
            Journal of Business and Economic Statistics, 35, 57-65.
     """
-    del chunk
     kernels = KernelSet() if kernels is None else kernels
 
     if train.spec.p_uno:
@@ -548,7 +549,42 @@ def cv_cdf_distribution(
 
     on_train = at is None and full_integral
     evaluate = train if on_train else (at if at is not None else quantile_grid(train, n=n_grid))
+    chunk_eval = chunk[0] if isinstance(chunk, tuple) else chunk
 
+    if chunk_eval is None:
+        total = _cv_cdf_block(train, bw, kernels, evaluate, jnp.arange(evaluate.n), evaluate.n, on_train)
+    else:
+        blocks = (
+            _pad_rows(evaluate.con, chunk_eval),
+            _pad_rows(evaluate.orde, chunk_eval),
+            _pad_index(jnp.arange(evaluate.n), evaluate.n, chunk_eval),
+        )
+
+        def accumulate(running: ScalarFloat, block: tuple[Array, Array, Array]) -> tuple[ScalarFloat, None]:
+            con, orde, rows = block
+            piece = MixedData(
+                con=con,
+                uno=jnp.zeros((chunk_eval, 0), dtype=evaluate.uno.dtype),
+                orde=orde,
+                spec=evaluate.spec,
+            )
+            return running + _cv_cdf_block(train, bw, kernels, piece, rows, evaluate.n, on_train), None
+
+        total, _ = jax.lax.scan(accumulate, jnp.zeros((), dtype=train.con.dtype), blocks)
+
+    return total / (train.n * evaluate.n)
+
+
+def _cv_cdf_block(
+    train: MixedData,
+    bw: Bandwidth,
+    kernels: KernelSet,
+    evaluate: MixedData,
+    rows: Array,
+    n_eval: int,
+    on_train: bool,
+) -> ScalarFloat:
+    """Sum the squared leave-one-out error over one block of evaluation points."""
     weights = kweights(train, bw, at=evaluate, kernels=kernels, op=Op.CDF)
     loo = (jnp.sum(weights, axis=1, keepdims=True) - weights) / (train.n - 1.0)
 
@@ -560,7 +596,11 @@ def cv_cdf_distribution(
 
     residual = below.astype(weights.dtype) - loo
     squared = residual * residual
-    if on_train:
-        squared = squared * (1.0 - jnp.eye(train.n, dtype=weights.dtype))
 
-    return jnp.sum(squared) / (train.n * evaluate.n)
+    # A padded block repeats its last row, so those rows carry an index past the end
+    # of the evaluation points and must not reach the total.
+    squared = jnp.where(rows[:, None] < n_eval, squared, 0.0)
+    if on_train:
+        squared = jnp.where(rows[:, None] == jnp.arange(train.n)[None, :], 0.0, squared)
+
+    return jnp.sum(squared)

@@ -19,12 +19,6 @@ __all__ = ["ColumnSpec", "Kind", "MixedData", "grid", "quantile_grid"]
 class Kind(enum.Enum):
     r"""The kind of a design matrix column.
 
-    ``ColumnSpec`` and ``MixedData`` use this enum to tag each column of a
-    mixed-type design matrix as continuous, unordered categorical, or ordered
-    categorical. The tag determines which of the three dense blocks of a
-    :class:`~kerneljax.MixedData` instance the column's data lives in, and which kernel
-    arithmetic applies to it.
-
     Attributes
     ----------
     CONTINUOUS : Kind
@@ -46,11 +40,7 @@ class Kind(enum.Enum):
 
 @dataclasses.dataclass(frozen=True)
 class ColumnSpec:
-    r"""Static, hashable, array-free description of a mixed-type design matrix.
-
-    A ``ColumnSpec`` records the kind and level count of every column using
-    only tuples of enums, ints and strings, with no arrays, so it carries the
-    static metadata of a :class:`~kerneljax.MixedData`.
+    r"""Static description of a mixed-type design matrix.
 
     Parameters
     ----------
@@ -108,11 +98,6 @@ class ColumnSpec:
 class MixedData:
     r"""A mixed-type design matrix held as three dense blocks.
 
-    Continuous columns use :math:`(x - y) / h`, unordered columns use
-    :math:`x = y`, and ordered columns use :math:`|i - j|`. Registered as a
-    JAX pytree with ``spec`` static. Build with :meth:`from_blocks` or
-    :meth:`continuous`, which are where validation runs.
-
     Parameters
     ----------
     con : Float[Array, "n p_con"]
@@ -127,9 +112,6 @@ class MixedData:
         Static column metadata.
     """
 
-    # Validation lives in `from_blocks`, not here. JAX rebuilds pytrees by
-    # calling this constructor, and under `vmap` it passes placeholder objects
-    # instead of arrays, so anything that inspects the values would blow up.
     con: Float[Array, "n p_con"]
     uno: Int[Array, "n p_uno"]
     orde: Int[Array, "n p_ord"]

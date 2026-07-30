@@ -236,6 +236,7 @@ class DistributionCriterion:
     See Also
     --------
     cv_cdf_distribution : Leave-one-out squared error against the indicator.
+    cdf : Estimate a mixed-type cumulative distribution.
 
     References
     ----------

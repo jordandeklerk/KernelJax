@@ -14,7 +14,7 @@ from kerneljax.estimators import (
     DistributionFit,
     LocalPolyFit,
     density,
-    distribution,
+    cdf,
     local_poly,
 )
 from kerneljax.kernels import (
@@ -73,12 +73,12 @@ __all__ = [
     "UnorderedKernel",
     "WangVanRyzin",
     "aic_c_regression",
+    "cdf",
     "cv_cdf_distribution",
     "cv_ls_density",
     "cv_ls_regression",
     "cv_ml_density",
     "density",
-    "distribution",
     "grid",
     "hat_diagonal",
     "ksum",
