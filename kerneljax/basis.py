@@ -19,21 +19,7 @@ __all__ = ["Basis", "LocalPolyBasis"]
 
 
 class Basis(Protocol):
-    r"""Interface for a design basis shared by local and global smoothers.
-
-    ``design`` is called once per evaluation point for a local method
-    such as local polynomial regression, with ``at`` a single row of
-    :class:`~kerneljax.MixedData` compared against every row of
-    ``train``.
-
-    A future series basis instead builds one design over every
-    evaluation point at once, so it would call ``design`` a single time
-    globally, with ``at`` holding the whole evaluation sample.
-
-    ``dim`` takes only a :class:`~kerneljax.ColumnSpec` and a
-    degree, both static, so the column count of the design is known
-    before any array is built.
-    """
+    r"""Interface for a design basis shared by local and global smoothers."""
 
     def dim(self, spec: ColumnSpec, degree: int) -> int:
         """Return the number of design columns for a spec and a degree.
@@ -114,7 +100,6 @@ class LocalPolyBasis:
 
     Only continuous columns enter the basis. Categorical columns are smoothed entirely
     through the kernel weights, so ``design`` and ``deriv`` ignore ``uno`` and ``orde``.
-
     Fitted coefficients come back in bandwidth units. For a degree 1 fit, the constant
     column recovers the fitted value, while the coefficient of :math:`u_j` recovers
     :math:`h_j` times the derivative in :math:`x_j`, not the derivative itself.
