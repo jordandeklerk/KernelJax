@@ -13,7 +13,7 @@ from jaxtyping import Float, Int
 
 from kerneljax.typing import Array
 
-__all__ = ["ColumnSpec", "Kind", "MixedData", "grid"]
+__all__ = ["ColumnSpec", "Kind", "MixedData", "grid", "quantile_grid"]
 
 
 class Kind(enum.Enum):
@@ -352,6 +352,76 @@ def grid(
         con=jnp.stack(con, axis=1) if con else jnp.zeros((rows, 0), dtype=data.con.dtype),
         uno=jnp.stack(uno, axis=1) if uno else jnp.zeros((rows, 0), dtype=data.uno.dtype),
         orde=jnp.stack(orde, axis=1) if orde else jnp.zeros((rows, 0), dtype=data.orde.dtype),
+        spec=spec,
+    )
+
+
+def quantile_grid(data: MixedData | Array, *, n: int = 100) -> MixedData:
+    r"""Build evaluation points at evenly spaced probabilities, one point per probability.
+
+    Every column is evaluated at the same vector of probabilities
+    :math:`p_1, \ldots, p_n` spanning the unit interval, so point :math:`j` is
+    the tuple of column quantiles at :math:`p_j`. The result has ``n`` rows
+    whatever the number of columns, unlike a product grid.
+
+    A continuous column takes its own quantile, an unordered column takes its
+    most common level at every probability, and an ordered column takes the
+    first level whose cumulative share reaches the probability.
+
+    Parameters
+    ----------
+    data : MixedData or Array
+        Sample the quantiles are taken from. A raw array is read as continuous
+        columns.
+    n : int
+        Number of probabilities, and so the number of rows returned. Static.
+
+    Returns
+    -------
+    MixedData
+        Evaluation points sharing the column metadata of ``data``, with ``n`` rows.
+
+    Examples
+    --------
+    Build a hundred points spanning a two column sample.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import jax.numpy as jnp
+           ...: import kerneljax as kj
+           ...:
+           ...: x = jnp.stack([jnp.linspace(-2.0, 2.0, 20), jnp.linspace(0.0, 1.0, 20)], axis=1)
+           ...: points = kj.quantile_grid(kj.MixedData.continuous(x), n=5)
+           ...: print(points.con)
+
+    See Also
+    --------
+    grid : Sweep one column and hold the rest fixed.
+    """
+    data = _as_points(data)
+    spec = data.spec
+    probs = jnp.linspace(0.0, 1.0, n, dtype=data.con.dtype if spec.p_con else jnp.float32)
+
+    con = [jnp.quantile(data.con[:, pos], probs) for pos in range(spec.p_con)]
+
+    uno = []
+    for pos, levels in enumerate(spec.uno_levels):
+        column = data.uno[:, pos]
+        mode = jnp.argmax(jnp.bincount(column, length=levels))
+        uno.append(jnp.full((n,), mode, dtype=column.dtype))
+
+    orde = []
+    for pos, levels in enumerate(spec.ord_levels):
+        column = data.orde[:, pos]
+        cumulative = jnp.cumsum(jnp.bincount(column, length=levels))
+        reached = jnp.searchsorted(cumulative, probs * column.shape[0])
+        orde.append(jnp.clip(reached, 0, levels - 1).astype(column.dtype))
+
+    return MixedData(
+        con=jnp.stack(con, axis=1) if con else jnp.zeros((n, 0), dtype=data.con.dtype),
+        uno=jnp.stack(uno, axis=1) if uno else jnp.zeros((n, 0), dtype=data.uno.dtype),
+        orde=jnp.stack(orde, axis=1) if orde else jnp.zeros((n, 0), dtype=data.orde.dtype),
         spec=spec,
     )
 

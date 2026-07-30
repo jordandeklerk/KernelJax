@@ -7,7 +7,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from kerneljax.data import ColumnSpec, Kind, MixedData, grid
+from kerneljax.data import ColumnSpec, Kind, MixedData, grid, quantile_grid
 
 
 @pytest.mark.parametrize(
@@ -170,3 +170,48 @@ def test_negative_trim_reflects_the_inner_quantiles(grid_sample):
 
 def test_trim_does_not_move_a_categorical_sweep(grid_sample):
     assert jnp.array_equal(grid(grid_sample, vary=2, trim=0.25).uno[:, 0], grid(grid_sample, vary=2).uno[:, 0])
+
+
+@pytest.mark.parametrize("n", [3, 7, 100])
+def test_quantile_grid_has_n_rows(grid_sample, n):
+    points = quantile_grid(grid_sample, n=n)
+    assert points.con.shape == (n, 2)
+    assert points.uno.shape == (n, 1)
+    assert points.orde.shape == (n, 1)
+
+
+def test_quantile_grid_rows_are_aligned_not_crossed():
+    data = MixedData.continuous(jnp.stack([jnp.linspace(0.0, 1.0, 20), jnp.linspace(5.0, 6.0, 20)], axis=1))
+    points = quantile_grid(data, n=9)
+    assert points.con.shape == (9, 2)
+
+
+def test_quantile_grid_continuous_are_quantiles(grid_sample):
+    probs = jnp.linspace(0.0, 1.0, 11)
+    points = quantile_grid(grid_sample, n=11)
+    for pos in range(2):
+        want = jnp.quantile(grid_sample.con[:, pos], probs)
+        assert jnp.allclose(points.con[:, pos], want, rtol=1e-6)
+
+
+def test_quantile_grid_unordered_is_the_mode(grid_sample):
+    points = quantile_grid(grid_sample, n=11)
+    counts = jnp.bincount(grid_sample.uno[:, 0], length=3)
+    assert jnp.all(points.uno[:, 0] == jnp.argmax(counts))
+
+
+def test_quantile_grid_ordered_is_nondecreasing(grid_sample):
+    points = quantile_grid(grid_sample, n=25)
+    assert jnp.all(jnp.diff(points.orde[:, 0]) >= 0)
+
+
+def test_quantile_grid_shares_the_input_spec(grid_sample):
+    assert quantile_grid(grid_sample, n=5).spec == grid_sample.spec
+
+
+def test_quantile_grid_runs_under_jit(grid_sample):
+    assert jax.jit(lambda d: quantile_grid(d, n=6))(grid_sample).con.shape == (6, 2)
+
+
+def test_quantile_grid_accepts_a_raw_array():
+    assert quantile_grid(jnp.linspace(-1.0, 1.0, 12), n=4).con.shape == (4, 1)

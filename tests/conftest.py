@@ -595,3 +595,18 @@ def noiseless_train():
 @pytest.fixture
 def noiseless_response(noiseless_train):
     return jnp.sin(noiseless_train.con[:, 0])
+
+
+@pytest.fixture
+def cdf_train():
+    rng = np.random.default_rng(53)
+    return MixedData.from_blocks(
+        con=jnp.asarray(rng.normal(size=(30, 1))),
+        orde=jnp.asarray(rng.integers(0, 4, size=(30, 1))),
+        ord_levels=(4,),
+    )
+
+
+@pytest.fixture
+def cdf_bandwidth():
+    return Bandwidth(h=jnp.array([0.35]), lam_uno=jnp.zeros(0), lam_ord=jnp.array([0.3]))
