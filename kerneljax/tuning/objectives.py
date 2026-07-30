@@ -10,13 +10,19 @@ from jaxtyping import Float
 
 from kerneljax.bandwidth import Bandwidth
 from kerneljax.basis import LocalPolyBasis
-from kerneljax.data import MixedData
+from kerneljax.data import MixedData, quantile_grid
 from kerneljax.kernels import KernelSet, Op
 from kerneljax.ksum import _pad_index, _pad_rows, ksum, kweights
 from kerneljax.linalg import hat_diagonal, wls
 from kerneljax.typing import Array, ScalarFloat
 
-__all__ = ["aic_c_regression", "cv_ls_density", "cv_ls_regression", "cv_ml_density"]
+__all__ = [
+    "aic_c_regression",
+    "cv_cdf_distribution",
+    "cv_ls_density",
+    "cv_ls_regression",
+    "cv_ml_density",
+]
 
 
 def cv_ml_density(
@@ -439,3 +445,122 @@ def _aic_c_penalty(trace: ScalarFloat, n: int) -> ScalarFloat:
     safe_denominator = jnp.where(denominator > margin, denominator, floor)
 
     return (1.0 + trace / n) / safe_denominator
+
+
+def cv_cdf_distribution(
+    train: MixedData,
+    bw: Bandwidth,
+    *,
+    at: MixedData | None = None,
+    full_integral: bool = False,
+    n_grid: int = 100,
+    kernels: KernelSet | None = None,
+    chunk: int | tuple[int, int] | None = None,
+) -> ScalarFloat:
+    r"""Least squares cross-validation criterion for a cumulative distribution.
+
+    The criterion of [1]_ compares the leave-one-out estimate against the
+    indicator it is trying to reproduce, averaged over evaluation points,
+
+    .. math::
+
+        \mathrm{CV}_{cdf}(h, \lambda) = \frac{1}{n N} \sum_{j=1}^{N} \sum_{i=1}^{n}
+            \Bigl( \mathbf{1}\{X_i \le x_j\} - \hat F_{-i}(x_j) \Bigr)^2
+
+    where the leave-one-out estimate removes the pair weight from the row total
+    rather than dropping a fold,
+
+    .. math::
+
+        \hat F_{-i}(x_j) = \frac{1}{n - 1}
+            \Bigl( \sum_{k=1}^{n} G(x_j, X_k) - G(x_j, X_i) \Bigr).
+
+    The indicator compares every continuous and ordered column at once, so a
+    training point counts only when it lies at or below the evaluation point in
+    all of them.
+
+    Evaluation points come from one of three places. Supplying ``at`` uses those
+    points, ``full_integral`` evaluates on the training sample itself and drops
+    the self term from each row, and otherwise the points come from
+    :func:`~kerneljax.quantile_grid`. Evaluating on the training sample without
+    dropping the self term is a different criterion, so passing the sample as
+    ``at`` does not reproduce ``full_integral``.
+
+    Parameters
+    ----------
+    train : MixedData
+        Training sample, supplying the sum over :math:`i`.
+    bw : Bandwidth
+        Bandwidths for every column.
+    at : MixedData, optional
+        Evaluation points. Takes priority over ``full_integral``.
+    full_integral : bool, optional
+        Whether to evaluate on the training sample and drop the self term from
+        every row. Static.
+    n_grid : int, optional
+        Number of evaluation points when neither ``at`` nor ``full_integral``
+        is given. Static.
+    kernels : KernelSet, optional
+        Kernel families, one per column kind. Defaults to ``KernelSet()``.
+    chunk : int or tuple of int, optional
+        Accepted for interface uniformity. The leave-one-out needs whole weight
+        rows, so the training axis is never chunked.
+
+    Returns
+    -------
+    ScalarFloat
+        The criterion value, minimized over ``bw`` to select a bandwidth.
+
+    Examples
+    --------
+    Evaluate the criterion at a bandwidth.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import jax.numpy as jnp
+           ...: import kerneljax as kj
+           ...:
+           ...: x = jnp.linspace(-2.0, 2.0, 50).reshape(-1, 1)
+           ...: train = kj.MixedData.continuous(x)
+           ...: bw = kj.Bandwidth(h=jnp.array([0.3]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+           ...: print(kj.cv_cdf_distribution(train, bw))
+
+    See Also
+    --------
+    cv_ml_density : Leave-one-out log likelihood for a density.
+    cv_ls_density : Integrated squared error for a density.
+
+    References
+    ----------
+    .. [1] Li, Q., Li, J., & Racine, J. S. (2017). "Optimal bandwidth selection
+           for nonparametric conditional distribution and quantile functions."
+           Journal of Business and Economic Statistics, 35, 57-65.
+    """
+    del chunk
+    kernels = KernelSet() if kernels is None else kernels
+
+    if train.spec.p_uno:
+        raise ValueError(
+            "cv_cdf_distribution supports continuous and ordered columns only, "
+            f"got {train.spec.p_uno} unordered columns which carry no order to accumulate along"
+        )
+
+    on_train = at is None and full_integral
+    evaluate = train if on_train else (at if at is not None else quantile_grid(train, n=n_grid))
+
+    weights = kweights(train, bw, at=evaluate, kernels=kernels, op=Op.CDF)
+    loo = (jnp.sum(weights, axis=1, keepdims=True) - weights) / (train.n - 1.0)
+
+    below = jnp.ones_like(weights, dtype=bool)
+    if train.spec.p_con:
+        below = below & jnp.all(train.con[None, :, :] <= evaluate.con[:, None, :], axis=-1)
+    if train.spec.p_ord:
+        below = below & jnp.all(train.orde[None, :, :] <= evaluate.orde[:, None, :], axis=-1)
+
+    residual = below.astype(weights.dtype) - loo
+    squared = residual * residual
+    if on_train:
+        squared = squared * (1.0 - jnp.eye(train.n, dtype=weights.dtype))
+
+    return jnp.sum(squared) / (train.n * evaluate.n)

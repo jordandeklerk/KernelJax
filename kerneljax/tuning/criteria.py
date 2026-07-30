@@ -13,7 +13,7 @@ from kerneljax.kernels import KernelSet
 from kerneljax.tuning.objectives import aic_c_regression, cv_ls_density, cv_ls_regression, cv_ml_density
 from kerneljax.typing import Array, ScalarFloat
 
-__all__ = ["Criterion", "DensityCriterion", "RegressionCriterion"]
+__all__ = ["Criterion", "DensityCriterion", "DistributionCriterion", "RegressionCriterion"]
 
 
 class Criterion(Protocol):
@@ -46,10 +46,6 @@ class Criterion(Protocol):
 @dataclasses.dataclass(frozen=True)
 class RegressionCriterion:
     r"""Regression selection rule carrying the local polynomial degree.
-
-    Evaluating an instance runs the chosen rule at a bandwidth, with the degree
-    taken from the instance rather than from a default, so one degree governs
-    both the search and the fit that follows.
 
     Parameters
     ----------
@@ -137,8 +133,6 @@ class RegressionCriterion:
 class DensityCriterion:
     r"""Density selection rule.
 
-    Evaluating an instance runs the chosen rule at a bandwidth.
-
     Parameters
     ----------
     method : {"cv_ml", "cv_ls"}
@@ -207,3 +201,91 @@ class DensityCriterion:
         """
         rule = cv_ml_density if self.method == "cv_ml" else cv_ls_density
         return rule(train, bw, kernels=kernels, chunk=chunk)
+
+
+@dataclasses.dataclass(frozen=True)
+class DistributionCriterion:
+    r"""Cumulative distribution selection rule.
+
+    Parameters
+    ----------
+    method : {"cv_cdf"}
+        Selection rule. ``"cv_cdf"`` is the leave-one-out squared error against
+        the empirical indicator, following [1]_.
+    full_integral : bool
+        Whether to evaluate on the training sample and drop the self term from
+        every row, rather than on a quantile grid. Static.
+    n_grid : int
+        Number of evaluation points when ``full_integral`` is false. Static.
+
+    Examples
+    --------
+    Select a distribution bandwidth by cross validation.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import jax.numpy as jnp
+           ...: import kerneljax as kj
+           ...:
+           ...: x = jnp.linspace(-2.0, 2.0, 40).reshape(-1, 1)
+           ...: train = kj.MixedData.continuous(x)
+           ...: result = kj.select_bandwidth(train, kj.DistributionCriterion(), n_starts=1)
+           ...: print(result.bandwidth.h)
+
+    See Also
+    --------
+    cv_cdf_distribution : Leave-one-out squared error against the indicator.
+
+    References
+    ----------
+    .. [1] Li, Q., Li, J., & Racine, J. S. (2017). "Optimal bandwidth selection
+           for nonparametric conditional distribution and quantile functions."
+           Journal of Business and Economic Statistics, 35, 57-65.
+    """
+
+    method: Literal["cv_cdf"] = "cv_cdf"
+    full_integral: bool = False
+    n_grid: int = 100
+
+    def __post_init__(self) -> None:
+        """Reject a method the criterion does not implement."""
+        if self.method != "cv_cdf":
+            raise ValueError(f"method must be 'cv_cdf', got {self.method!r}.")
+
+    def __call__(
+        self,
+        train: MixedData,
+        bw: Bandwidth,
+        *,
+        kernels: KernelSet | None = None,
+        chunk: int | tuple[int, int] | None = None,
+    ) -> ScalarFloat:
+        """Evaluate the selection rule at a bandwidth.
+
+        Parameters
+        ----------
+        train : MixedData
+            Training sample.
+        bw : Bandwidth
+            Bandwidths for every column.
+        kernels : KernelSet, optional
+            Kernel families, one per column kind. Defaults to ``KernelSet()``.
+        chunk : int or tuple of int, optional
+            Passed through to the underlying criterion.
+
+        Returns
+        -------
+        ScalarFloat
+            The criterion value, minimized over ``bw`` to select a bandwidth.
+        """
+        from kerneljax.tuning.objectives import cv_cdf_distribution
+
+        return cv_cdf_distribution(
+            train,
+            bw,
+            full_integral=self.full_integral,
+            n_grid=self.n_grid,
+            kernels=kernels,
+            chunk=chunk,
+        )

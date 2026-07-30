@@ -4,8 +4,14 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from kerneljax.tuning.criteria import DensityCriterion, RegressionCriterion
-from kerneljax.tuning.objectives import aic_c_regression, cv_ls_density, cv_ls_regression, cv_ml_density
+from kerneljax.tuning.criteria import DensityCriterion, DistributionCriterion, RegressionCriterion
+from kerneljax.tuning.objectives import (
+    aic_c_regression,
+    cv_cdf_distribution,
+    cv_ls_density,
+    cv_ls_regression,
+    cv_ml_density,
+)
 from kerneljax.tuning.optimize import select_bandwidth
 
 
@@ -100,4 +106,55 @@ def test_fresh_object_reuses_compilation(criteria_train, criteria_response):
         y=criteria_response,
         n_starts=1,
     )
+    assert select_bandwidth._cache_size() == compiled + 1
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        lambda: DistributionCriterion(),
+        lambda: DistributionCriterion(full_integral=True),
+        lambda: DistributionCriterion(n_grid=25),
+    ],
+)
+def test_distribution_objects_are_equal(build):
+    first, second = build(), build()
+    assert first is not second
+    assert first == second
+    assert hash(first) == hash(second)
+
+
+@pytest.mark.parametrize("method", ["cv_ls", "cvcdf", "CV_CDF", ""])
+def test_distribution_rejects_unknown_method(method):
+    with pytest.raises(ValueError, match="method must be"):
+        DistributionCriterion(method=method)
+
+
+@pytest.mark.parametrize("full_integral", [False, True])
+def test_distribution_matches_the_rule(cdf_train, cdf_bandwidth, full_integral):
+    criterion = DistributionCriterion(full_integral=full_integral)
+    got = criterion(cdf_train, cdf_bandwidth)
+    want = cv_cdf_distribution(cdf_train, cdf_bandwidth, full_integral=full_integral)
+    assert float(got) == float(want)
+
+
+def test_distribution_grid_size_travels_on_the_object(cdf_train, cdf_bandwidth):
+    coarse = DistributionCriterion(n_grid=10)(cdf_train, cdf_bandwidth)
+    fine = DistributionCriterion(n_grid=200)(cdf_train, cdf_bandwidth)
+    assert abs(float(coarse) - float(fine)) > 1e-9
+
+
+def test_distribution_selects_a_bandwidth(cdf_train):
+    result = select_bandwidth(cdf_train, DistributionCriterion(), n_starts=1)
+    assert jnp.all(jnp.isfinite(result.bandwidth.h))
+    assert result.criterion == DistributionCriterion()
+
+
+def test_distribution_fresh_object_reuses_compilation(cdf_train):
+    select_bandwidth(cdf_train, DistributionCriterion(), n_starts=1)
+    compiled = select_bandwidth._cache_size()
+    select_bandwidth(cdf_train, DistributionCriterion(), n_starts=1)
+    assert select_bandwidth._cache_size() == compiled
+
+    select_bandwidth(cdf_train, DistributionCriterion(full_integral=True), n_starts=1)
     assert select_bandwidth._cache_size() == compiled + 1

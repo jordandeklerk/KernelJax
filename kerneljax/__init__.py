@@ -8,7 +8,7 @@ from kerneljax.bandwidth import (
     normal_reference,
 )
 from kerneljax.basis import LocalPolyBasis
-from kerneljax.data import ColumnSpec, Kind, MixedData, grid
+from kerneljax.data import ColumnSpec, Kind, MixedData, grid, quantile_grid
 from kerneljax.estimators import (
     DensityFit,
     DistributionFit,
@@ -33,8 +33,10 @@ from kerneljax.linalg import WLS, hat_diagonal, wls
 from kerneljax.summary import Summary, summary
 from kerneljax.tuning import (
     DensityCriterion,
+    DistributionCriterion,
     RegressionCriterion,
     aic_c_regression,
+    cv_cdf_distribution,
     cv_ls_density,
     cv_ls_regression,
     cv_ml_density,
@@ -54,6 +56,7 @@ __all__ = [
     "ContinuousKernel",
     "DensityCriterion",
     "DensityFit",
+    "DistributionCriterion",
     "DistributionFit",
     "Gaussian",
     "KernelSet",
@@ -70,6 +73,7 @@ __all__ = [
     "UnorderedKernel",
     "WangVanRyzin",
     "aic_c_regression",
+    "cv_cdf_distribution",
     "cv_ls_density",
     "cv_ls_regression",
     "cv_ml_density",
@@ -82,6 +86,7 @@ __all__ = [
     "lbfgs",
     "local_poly",
     "normal_reference",
+    "quantile_grid",
     "select_bandwidth",
     "summary",
     "wls",

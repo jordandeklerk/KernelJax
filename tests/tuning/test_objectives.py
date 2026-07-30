@@ -6,11 +6,18 @@ import numpy as np
 import pytest
 
 from kerneljax.bandwidth import Bandwidth, normal_reference
-from kerneljax.data import MixedData
+from kerneljax.data import MixedData, quantile_grid
 from kerneljax.estimators.density import density
 from kerneljax.kernels import KernelSet, Op
 from kerneljax.ksum import kweights
-from kerneljax.tuning.objectives import _aic_c_penalty, aic_c_regression, cv_ls_density, cv_ls_regression, cv_ml_density
+from kerneljax.tuning.objectives import (
+    _aic_c_penalty,
+    aic_c_regression,
+    cv_cdf_distribution,
+    cv_ls_density,
+    cv_ls_regression,
+    cv_ml_density,
+)
 from kerneljax.tuning.optimize import select_bandwidth
 
 
@@ -344,3 +351,76 @@ def test_varying_response_reuses_compilation(poly_mixed_train, poly_mixed_respon
 
     select_bandwidth(poly_mixed_train, cv_ls_regression, y=poly_mixed_response + 1.0, n_starts=1)
     assert select_bandwidth._cache_size() == compiled
+
+
+def test_cv_cdf_modes_are_three_different_criteria(cdf_train, cdf_bandwidth):
+    grid = float(cv_cdf_distribution(cdf_train, cdf_bandwidth))
+    full = float(cv_cdf_distribution(cdf_train, cdf_bandwidth, full_integral=True))
+    as_at = float(cv_cdf_distribution(cdf_train, cdf_bandwidth, at=cdf_train))
+
+    assert abs(full - as_at) > 1e-9
+    assert abs(grid - full) > 1e-9
+    assert abs(grid - as_at) > 1e-9
+
+
+def test_cv_cdf_matches_a_hand_built_criterion(cdf_train, cdf_bandwidth):
+    weights = np.asarray(kweights(cdf_train, cdf_bandwidth, op=Op.CDF))
+    n = cdf_train.n
+    loo = (weights.sum(axis=1, keepdims=True) - weights) / (n - 1.0)
+
+    con = np.asarray(cdf_train.con)
+    orde = np.asarray(cdf_train.orde)
+    below = np.all(con[None, :, :] <= con[:, None, :], axis=-1) & np.all(orde[None, :, :] <= orde[:, None, :], axis=-1)
+    residual = below.astype(float) - loo
+    want = np.sum(residual**2 * (1.0 - np.eye(n))) / (n * n)
+
+    got = float(cv_cdf_distribution(cdf_train, cdf_bandwidth, full_integral=True))
+    assert got == pytest.approx(want, rel=1e-5)
+
+
+def test_cv_cdf_rejects_unordered_columns(cv_mixed_data, cv_mixed_bandwidth):
+    with pytest.raises(ValueError, match="unordered"):
+        cv_cdf_distribution(cv_mixed_data, cv_mixed_bandwidth)
+
+
+def test_cv_cdf_is_finite_across_bandwidths(cdf_train):
+    for h in (0.02, 0.3, 3.0):
+        bw = Bandwidth(h=jnp.array([h]), lam_uno=jnp.zeros(0), lam_ord=jnp.array([0.3]))
+        assert jnp.isfinite(cv_cdf_distribution(cdf_train, bw))
+
+
+def test_cv_cdf_grid_size_changes_the_value(cdf_train, cdf_bandwidth):
+    coarse = float(cv_cdf_distribution(cdf_train, cdf_bandwidth, n_grid=10))
+    fine = float(cv_cdf_distribution(cdf_train, cdf_bandwidth, n_grid=200))
+    assert abs(coarse - fine) > 1e-9
+
+
+def test_cv_cdf_jit_grad_and_vmap(cdf_train, cdf_bandwidth):
+    assert jnp.isfinite(jax.jit(cv_cdf_distribution)(cdf_train, cdf_bandwidth))
+
+    grads = jax.grad(cv_cdf_distribution, argnums=1)(cdf_train, cdf_bandwidth)
+    assert jnp.all(jnp.isfinite(grads.h))
+    assert jnp.all(jnp.isfinite(grads.lam_ord))
+
+    out = jax.vmap(lambda h: cv_cdf_distribution(cdf_train, cdf_bandwidth.replace(h=h)))(
+        jnp.array([[0.2], [0.4], [0.6]])
+    )
+    assert out.shape == (3,)
+    assert jnp.all(jnp.isfinite(out))
+
+
+def test_cv_cdf_grid_mode_matches_a_hand_built_criterion(cdf_train, cdf_bandwidth):
+    points = quantile_grid(cdf_train, n=37)
+    weights = np.asarray(kweights(cdf_train, cdf_bandwidth, at=points, op=Op.CDF))
+    n = cdf_train.n
+    loo = (weights.sum(axis=1, keepdims=True) - weights) / (n - 1.0)
+
+    below = np.all(np.asarray(cdf_train.con)[None, :, :] <= np.asarray(points.con)[:, None, :], axis=-1) & np.all(
+        np.asarray(cdf_train.orde)[None, :, :] <= np.asarray(points.orde)[:, None, :], axis=-1
+    )
+
+    residual = below.astype(float) - loo
+    want = np.sum(residual**2) / (n * points.n)
+
+    got = float(cv_cdf_distribution(cdf_train, cdf_bandwidth, at=points))
+    assert got == pytest.approx(want, rel=1e-5)
