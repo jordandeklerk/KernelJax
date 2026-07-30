@@ -9,13 +9,15 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Float
 
-from kerneljax.bandwidth import Bandwidth, SelectionResult
+from kerneljax.bandwidth import Bandwidth, SelectionResult, normal_reference
 from kerneljax.data import ColumnSpec, MixedData, _as_points
 from kerneljax.kernels import KernelSet, Op
 from kerneljax.ksum import ksum
+from kerneljax.tuning.criteria import DistributionCriterion
+from kerneljax.tuning.optimize import select_bandwidth
 from kerneljax.typing import Array
 
-__all__ = ["DistributionFit", "distribution"]
+__all__ = ["DistributionFit", "cdf"]
 
 
 @partial(
@@ -55,12 +57,13 @@ class DistributionFit:
     n_train: int = 0
 
 
-def distribution(
+def cdf(
     train: MixedData | Array,
-    bw: Bandwidth,
+    bw: Bandwidth | SelectionResult | DistributionFit | str,
     *,
     at: MixedData | Array | None = None,
     kernels: KernelSet | None = None,
+    n_starts: int = 3,
     chunk: int | tuple[int, int] | None = None,
 ) -> DistributionFit:
     r"""Estimate a mixed-type cumulative distribution.
@@ -92,13 +95,22 @@ def distribution(
     train : MixedData or Array
         Training sample, supplying the sum over :math:`i`. A raw array is read
         as continuous columns.
-    bw : Bandwidth
-        Bandwidths for every column.
+    bw : Bandwidth or SelectionResult or DistributionFit or str
+        Bandwidths for every column, or a way of arriving at them. A
+        :class:`~kerneljax.Bandwidth` is used as given, ``"cv_cdf"`` selects one
+        by minimizing that criterion, and ``"normal_reference"`` applies
+        :func:`~kerneljax.normal_reference` without a search. A previous
+        selection or estimate reuses its bandwidth. To select with a criterion
+        built by hand, minimize it with :func:`~kerneljax.select_bandwidth` and
+        pass the result here.
     at : MixedData or Array, optional
         Evaluation points. Defaults to ``train``. A raw array is accepted only
         when the training sample is purely continuous.
     kernels : KernelSet, optional
         Kernel families, one per column kind. Defaults to ``KernelSet()``.
+    n_starts : int, optional
+        Number of perturbed starting points screened when ``bw`` names a
+        criterion to minimize. Ignored otherwise. Static.
     chunk : int or tuple of int, optional
         Chunk sizes as ``(eval, train)``. A bare int chunks only the evaluation
         axis. Bounds the peak memory of the sum at the cost of additional
@@ -130,7 +142,7 @@ def distribution(
            ...: x = jnp.linspace(-2.0, 2.0, 50).reshape(-1, 1)
            ...: train = kj.MixedData.continuous(x)
            ...: bw = kj.Bandwidth(h=jnp.array([0.3]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
-           ...: print(kj.distribution(train, bw).value[:5])
+           ...: print(kj.cdf(train, bw).value[:5])
 
     See Also
     --------
@@ -147,19 +159,60 @@ def distribution(
 
     if train.spec.p_uno:
         raise ValueError(
-            "distribution supports continuous and ordered columns only, "
+            "cdf supports continuous and ordered columns only, "
             f"got {train.spec.p_uno} unordered columns which carry no order to accumulate along"
         )
 
+    bandwidth, selection = _resolve_bandwidth(train, bw, kernels, n_starts, chunk)
+
     evaluate = None if at is None else _as_points(at, train.spec)
-    total = ksum(train, bw, at=evaluate, kernels=kernels, op=Op.CDF, chunk=chunk)
+    if at is not None and isinstance(bw, SelectionResult | DistributionFit) and bandwidth.h_axis != "shared":
+        raise ValueError(
+            "reusing a bandwidth at new evaluation points requires h_axis 'shared', "
+            f"got {bandwidth.h_axis!r} which is tied to the rows it was built for"
+        )
+
+    total = ksum(train, bandwidth, at=evaluate, kernels=kernels, op=Op.CDF, chunk=chunk)
 
     value = (total / train.n).reshape(-1)
     return DistributionFit(
         value=value,
         se=jnp.sqrt(value * (1.0 - value) / train.n),
-        bandwidth=bw,
+        bandwidth=bandwidth,
+        selection=selection,
         kernels=kernels,
         spec=train.spec,
         n_train=train.n,
     )
+
+
+def _resolve_bandwidth(
+    train: MixedData,
+    bw: Bandwidth | SelectionResult | DistributionFit | str,
+    kernels: KernelSet,
+    n_starts: int,
+    chunk: int | tuple[int, int] | None,
+) -> tuple[Bandwidth, SelectionResult | None]:
+    """Turn any accepted ``bw`` into a bandwidth and the selection behind it."""
+    if isinstance(bw, Bandwidth):
+        return bw, None
+
+    if isinstance(bw, DistributionFit):
+        return bw.bandwidth, bw.selection
+
+    if isinstance(bw, SelectionResult):
+        return bw.bandwidth, bw
+
+    if not isinstance(bw, str):
+        raise TypeError(
+            f"bw must be a Bandwidth, a SelectionResult, a DistributionFit or a method name, got {type(bw).__name__}"
+        )
+
+    if bw == "normal_reference":
+        return normal_reference(train, kernels, target="distribution"), None
+
+    if bw != "cv_cdf":
+        raise ValueError(f"bw must be 'cv_cdf' or 'normal_reference', got {bw!r}")
+
+    selection = select_bandwidth(train, DistributionCriterion(), kernels=kernels, n_starts=n_starts, chunk=chunk)
+    return selection.bandwidth, selection
