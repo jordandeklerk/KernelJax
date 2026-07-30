@@ -424,3 +424,23 @@ def test_cv_cdf_grid_mode_matches_a_hand_built_criterion(cdf_train, cdf_bandwidt
 
     got = float(cv_cdf_distribution(cdf_train, cdf_bandwidth, at=points))
     assert got == pytest.approx(want, rel=1e-5)
+
+
+@pytest.mark.parametrize("chunk", [1, 4, 7, 100, (5, 3)])
+@pytest.mark.parametrize("mode", [{}, {"full_integral": True}, {"n_grid": 37}])
+def test_cv_cdf_chunked_matches_unchunked(cdf_train, cdf_bandwidth, chunk, mode):
+    ref = float(cv_cdf_distribution(cdf_train, cdf_bandwidth, **mode))
+    got = float(cv_cdf_distribution(cdf_train, cdf_bandwidth, chunk=chunk, **mode))
+    assert got == pytest.approx(ref, rel=1e-6)
+
+
+def test_cv_cdf_chunking_survives_jit(cdf_train, cdf_bandwidth):
+    ref = float(cv_cdf_distribution(cdf_train, cdf_bandwidth))
+    fitted = jax.jit(cv_cdf_distribution, static_argnames=("chunk",))
+    assert float(fitted(cdf_train, cdf_bandwidth, chunk=4)) == pytest.approx(ref, rel=1e-6)
+
+
+def test_cv_cdf_chunking_is_differentiable(cdf_train, cdf_bandwidth):
+    grads = jax.grad(lambda b: cv_cdf_distribution(cdf_train, b, chunk=5))(cdf_bandwidth)
+    assert jnp.all(jnp.isfinite(grads.h))
+    assert jnp.all(jnp.isfinite(grads.lam_ord))
