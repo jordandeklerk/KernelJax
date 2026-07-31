@@ -255,10 +255,6 @@ def ksum(
     for the same ``train``, ``bw``, ``at``, ``kernels``, ``op`` and ``power``, after any
     pair sharing a fold is dropped.
 
-    This contraction is the primitive from which the density and cross-validation estimators
-    in this package are built. Passing ``chunk`` never changes the result, only how much
-    memory computing it needs.
-
     Parameters
     ----------
     train : MixedData
@@ -293,7 +289,9 @@ def ksum(
     chunk : int or tuple of int, optional
         Chunk sizes as ``(eval, train)``. A bare int chunks only the
         evaluation axis. Bounds the peak memory of the contraction at the
-        cost of additional compute. Static.
+        cost of additional compute. A single column ``v`` already contracts
+        without holding the weight matrix, so chunking it buys nothing.
+        Static.
 
     Returns
     -------
@@ -422,7 +420,10 @@ def _sum_over_train(
     if chunk_train is None:
         weights = kweights(train, bw, at=eval_block, kernels=kernels, op=op, power=power)
         if fold is not None:
-            weights = weights * (fold[eval_idx][:, None] != fold[None, :])
+            labels = fold.astype(jnp.promote_types(weights.dtype, jnp.float32))
+            weights = weights * jnp.abs(jnp.sign(labels[eval_idx][:, None] - labels[None, :]))
+        if v.shape[1] == 1:
+            return jnp.sum(weights * v[:, 0][None, :], axis=1)[:, None]
         return weights @ v
 
     train_blocks = jax.tree.map(lambda column: _pad_rows(column, chunk_train), train)
@@ -434,11 +435,17 @@ def _sum_over_train(
         train_block, v_block, idx_block, h_block = block
         bw_block = bw if h_block is None else bw.replace(h=h_block)
 
-        valid = (idx_block < train.n)[None, :]
-        mask = valid if fold is None else valid & (fold[eval_idx][:, None] != fold[idx_block][None, :])
+        valid = (idx_block < train.n).astype(v.dtype)[None, :]
+        if fold is None:
+            mask = valid
+        else:
+            labels = fold.astype(jnp.promote_types(v.dtype, jnp.float32))
+            mask = valid * jnp.abs(jnp.sign(labels[eval_idx][:, None] - labels[idx_block][None, :]))
 
-        weights = kweights(train_block, bw_block, at=eval_block, kernels=kernels, op=op, power=power)
-        return accumulated + (weights * mask) @ v_block, None
+        weights = kweights(train_block, bw_block, at=eval_block, kernels=kernels, op=op, power=power) * mask
+        if v.shape[1] == 1:
+            return accumulated + jnp.sum(weights * v_block[:, 0][None, :], axis=1)[:, None], None
+        return accumulated + weights @ v_block, None
 
     initial = jnp.zeros((eval_block.n, v.shape[1]), dtype=v.dtype)
     total, _ = jax.lax.scan(jax.checkpoint(step), initial, (train_blocks, v_blocks, idx_blocks, h_blocks))
