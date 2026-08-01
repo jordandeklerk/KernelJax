@@ -2,6 +2,7 @@
 
 import dataclasses
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -595,6 +596,24 @@ def noiseless_train():
 @pytest.fixture
 def noiseless_response(noiseless_train):
     return jnp.sin(noiseless_train.con[:, 0])
+
+
+@pytest.fixture
+def peak_bytes():
+    def measure(call, *args):
+        return jax.jit(call).lower(*args).compile().memory_analysis().temp_size_in_bytes
+
+    return measure
+
+
+@pytest.fixture
+def memory_sample():
+    def build(sample_size):
+        train = MixedData.continuous(jnp.zeros((sample_size, 1)))
+        bandwidth = Bandwidth(h=jnp.array([0.5]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+        return train, bandwidth
+
+    return build
 
 
 @pytest.fixture

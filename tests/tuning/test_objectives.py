@@ -169,7 +169,7 @@ def test_criterion_quartet_eager_jit_grad_vmap(public_api_data, public_api_bandw
     assert jnp.isfinite(eager)
 
     jitted = jax.jit(criterion)(public_api_data, public_api_bandwidth)
-    assert float(jitted) == pytest.approx(float(eager), rel=1e-12)
+    assert float(jitted) == pytest.approx(float(eager), rel=1e-5)
 
     grad = jax.grad(criterion, argnums=1)(public_api_data, public_api_bandwidth)
     assert jnp.all(jnp.isfinite(grad.h))

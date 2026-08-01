@@ -8,6 +8,7 @@ import pytest
 from kerneljax.bandwidth import Bandwidth, normal_reference
 from kerneljax.data import Kind, MixedData
 from kerneljax.estimators.density import density
+from kerneljax.estimators.regression import local_poly
 from kerneljax.kernels import KernelSet, Op
 from kerneljax.ksum import ksum, kweights
 from kerneljax.tuning.objectives import cv_ls_density, cv_ml_density
@@ -71,6 +72,15 @@ def _trace_cv_ls_density_at_a_large_sample_size():
     train = MixedData.continuous(jnp.zeros((50000, 1)))
     bandwidth = Bandwidth(h=jnp.array([0.5]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
     return cv_ls_density(train, bandwidth)
+
+
+def _multi_column_ksum(train, bandwidth, *, chunk):
+    v = jnp.stack([jnp.ones(train.n, dtype=train.con.dtype), train.con[:, 0]], axis=1)
+    return ksum(train, bandwidth, v, fold=jnp.arange(train.n), chunk=chunk)
+
+
+def _local_poly_mean(train, bandwidth, *, chunk):
+    return local_poly(train, train.con[:, 0], bandwidth, degree=1, chunk=chunk).mean
 
 
 def _echo_solver(objective, best_candidate, **solver_kwargs):
@@ -192,25 +202,43 @@ def test_duplicating_rows_leaves_density_unchanged(cv_mixed_data, cv_mixed_bandw
 
 
 @pytest.mark.parametrize("use_fold", [False, True])
-def test_chunked_memory_scales_with_chunk(use_fold):
-    sample_size = 3000
-    train = MixedData.continuous(jnp.zeros((sample_size, 1)))
-    bandwidth = Bandwidth(h=jnp.array([0.5]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
-    fold = jnp.arange(sample_size) if use_fold else None
+def test_density_memory_does_not_grow_with_the_weight_matrix(peak_bytes, memory_sample, use_fold):
+    small, large = 1000, 4000
 
-    def chunked_call(train_data, bandwidth_value):
-        return density(train_data, bandwidth_value, fold=fold, chunk=64).value
+    def peak_at(sample_size):
+        train, bandwidth = memory_sample(sample_size)
+        fold = jnp.arange(sample_size) if use_fold else None
 
-    def unchunked_call(train_data, bandwidth_value):
-        return density(train_data, bandwidth_value, fold=fold).value
+        def call(train_data, bandwidth_value):
+            return density(train_data, bandwidth_value, fold=fold).value
 
-    chunked = jax.jit(chunked_call)
-    unchunked = jax.jit(unchunked_call)
+        return peak_bytes(call, train, bandwidth)
 
-    chunked_bytes = chunked.lower(train, bandwidth).compile().memory_analysis().temp_size_in_bytes
-    unchunked_bytes = unchunked.lower(train, bandwidth).compile().memory_analysis().temp_size_in_bytes
+    small_bytes = peak_at(small)
+    large_bytes = peak_at(large)
+
+    train, _ = memory_sample(large)
+    assert large_bytes < 0.01 * large * large * train.con.dtype.itemsize
+    assert large_bytes / max(small_bytes, 1) < 0.5 * (large / small) ** 2
+
+
+@pytest.mark.parametrize("materializing_call", [_multi_column_ksum, _local_poly_mean])
+def test_chunked_memory_scales_with_chunk(peak_bytes, memory_sample, materializing_call):
+    train, bandwidth = memory_sample(1600)
+
+    chunked_bytes = peak_bytes(lambda t, b: materializing_call(t, b, chunk=64), train, bandwidth)
+    unchunked_bytes = peak_bytes(lambda t, b: materializing_call(t, b, chunk=None), train, bandwidth)
 
     assert chunked_bytes < 0.1 * unchunked_bytes
+
+
+def test_chunking_bounds_criterion_memory(peak_bytes, memory_sample):
+    sample_size = 1600
+    train, bandwidth = memory_sample(sample_size)
+
+    chunked_bytes = peak_bytes(lambda t, b: cv_ls_density(t, b, chunk=64), train, bandwidth)
+
+    assert chunked_bytes < 0.05 * sample_size * sample_size * train.con.dtype.itemsize
 
 
 @pytest.mark.parametrize(
