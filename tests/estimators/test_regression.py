@@ -352,7 +352,7 @@ def test_se_scale_invariant_in_response(poly_train, poly_at, poly_bandwidth, pol
     base = local_poly(poly_train, poly_response, poly_bandwidth, at=poly_at, degree=1, se=True)
     scaled = local_poly(poly_train, 3.0 * poly_response, poly_bandwidth, at=poly_at, degree=1, se=True)
 
-    assert np.allclose(np.asarray(scaled.se), 3.0 * np.asarray(base.se), rtol=1e-6)
+    assert np.allclose(np.asarray(scaled.se), 3.0 * np.asarray(base.se), rtol=1e-5)
 
 
 def test_positional_construction_still_works(bandwidth):

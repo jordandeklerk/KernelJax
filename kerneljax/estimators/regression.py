@@ -341,6 +341,60 @@ def _resolve_bandwidth(
     return selection.bandwidth, selection, criterion.degree
 
 
+def _augmented_moments(weights: Array, design: Array, y: Array) -> tuple[Array, Array, Array]:
+    r"""Contract the weighted augmented design against itself in a single reduction.
+
+    Appending the response to the design as one more column gives :math:`Z = [X, y]`, whose
+    weighted cross product holds all three moments at once,
+
+    .. math::
+
+        Z^\top W Z = \begin{pmatrix} X^\top W X & X^\top W y \\
+                                     y^\top W X & y^\top W y \end{pmatrix}
+
+    so the Gram block, the moment vector and the weighted sum of squares are the blocks of
+    one symmetric matrix rather than three separate contractions.
+
+    Only the upper triangle is summed, and every entry is contracted by one variadic
+    :func:`jax.lax.reduce` over the training axis. A single consumer for the weights and
+    the design columns is what lets XLA fuse them into the reduction, so neither the
+    ``(n_train, k)`` design nor the ``(n_train,)`` weights is ever held under ``vmap``.
+
+    Parameters
+    ----------
+    weights : Array
+        Kernel weight of every training point, shape ``(n_train,)``,
+        already masked.
+    design : Array
+        Design matrix at the evaluation point, shape ``(n_train, k)``.
+    y : Array
+        Response values, shape ``(n_train,)``.
+
+    Returns
+    -------
+    tuple of Array
+        The Gram matrix ``(k, k)``, the moment vector ``(k,)`` and the
+        weighted sum of squared responses.
+    """
+    dim = design.shape[-1]
+    columns = [design[:, index] for index in range(dim)] + [y]
+
+    pairs = [(row, column) for row in range(dim + 1) for column in range(row, dim + 1)]
+    terms = tuple(weights * columns[row] * columns[column] for row, column in pairs)
+    zeros = tuple(jnp.zeros((), dtype=term.dtype) for term in terms)
+
+    totals = jax.lax.reduce(terms, zeros, lambda left, right: tuple(map(jnp.add, left, right)), (0,))
+
+    gram: list[list[Array]] = [[zeros[0]] * (dim + 1) for _ in range(dim + 1)]
+    for (row, column), total in zip(pairs, totals, strict=True):
+        gram[row][column] = total
+        gram[column][row] = total
+
+    xtwx = jnp.stack([jnp.stack(gram[row][:dim]) for row in range(dim)])
+    xtwy = jnp.stack([gram[row][dim] for row in range(dim)])
+    return xtwx, xtwy, gram[dim][dim]
+
+
 def _moments(
     train: MixedData,
     bw: Bandwidth,
@@ -354,12 +408,10 @@ def _moments(
 ) -> tuple[Array, Array, Array]:
     """Form the weighted design moments for a single evaluation point, chunking the training axis when asked."""
     if chunk_train is None:
-        design = basis.design(train, at_row, bw)
         weights = kweights(train, bw, at=at_row, kernels=kernels)[0]
         if fold is not None:
             weights = jnp.where(fold[row_index] != fold, weights, 0.0)
-        weighted = design * weights[:, None]
-        return weighted.T @ design, weighted.T @ y, jnp.sum(weights * y * y)
+        return _augmented_moments(weights, basis.design(train, at_row, bw), y)
 
     train_blocks = jax.tree.map(lambda column: _pad_rows(column, chunk_train), train)
     y_blocks = _pad_rows(y, chunk_train)
@@ -384,12 +436,11 @@ def _moments(
         if fold is not None:
             weights = jnp.where(fold[row_index] != fold[idx_block], weights, 0.0)
 
-        design = basis.design(train_block, at_row, bw_block)
-        weighted = design * weights[:, None]
-
         xtwx, xtwy, weight_y2 = carry
-        next_y2 = weight_y2 + jnp.sum(weights * y_block * y_block)
-        return (xtwx + weighted.T @ design, xtwy + weighted.T @ y_block, next_y2), None
+        block_xtwx, block_xtwy, block_y2 = _augmented_moments(
+            weights, basis.design(train_block, at_row, bw_block), y_block
+        )
+        return (xtwx + block_xtwx, xtwy + block_xtwy, weight_y2 + block_y2), None
 
     (xtwx, xtwy, weight_y2), _ = jax.lax.scan(
         jax.checkpoint(step), initial, (train_blocks, y_blocks, idx_blocks, h_blocks)
