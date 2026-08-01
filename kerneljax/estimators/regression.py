@@ -352,13 +352,13 @@ def _augmented_moments(weights: Array, design: Array, y: Array) -> tuple[Array, 
         Z^\top W Z = \begin{pmatrix} X^\top W X & X^\top W y \\
                                      y^\top W X & y^\top W y \end{pmatrix}
 
-    so the Gram block, the moment vector and the weighted sum of squares are the blocks of
+    so the Gram block, the moment vector, and the weighted sum of squares are the blocks of
     one symmetric matrix rather than three separate contractions.
 
-    Only the upper triangle is summed, and every entry is contracted by one variadic
-    :func:`jax.lax.reduce` over the training axis. A single consumer for the weights and
-    the design columns is what lets XLA fuse them into the reduction, so neither the
-    ``(n_train, k)`` design nor the ``(n_train,)`` weights is ever held under ``vmap``.
+    Only the upper triangle is summed, and every entry is accumulated in one pass over the
+    training points. Reading the weights and each design column exactly once is what keeps
+    the full ``(n_train, k)`` design from having to be held for every evaluation point at
+    once, which is what makes the memory grow with the sample rather than with its square.
 
     Parameters
     ----------
