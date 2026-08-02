@@ -135,7 +135,11 @@ def select_bandwidth(
     offsets = jnp.concatenate([jnp.zeros(1), perturbations])[:, None] * jnp.ones_like(z0)[None, :]
     candidates = z0[None, :] + offsets
 
-    solved, values, iterations, flags = jax.vmap(lambda start: solver(objective, start))(candidates)
+    # One start at a time rather than batched. Batching widens every reduction inside the
+    # criterion, and a GPU holds a reduction's running totals in the 48 KB of shared memory
+    # a thread block gets, which a local polynomial fit overruns from two basis terms up.
+    # Solving in sequence also stops every start paying for the slowest one to converge.
+    solved, values, iterations, flags = jax.lax.map(lambda start: solver(objective, start), candidates)
     ranked = jnp.argmin(jnp.where(jnp.isfinite(values), values, jnp.inf))
 
     return SelectionResult(
