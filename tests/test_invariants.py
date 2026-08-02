@@ -83,6 +83,14 @@ def _local_poly_mean(train, bandwidth, *, chunk):
     return local_poly(train, train.con[:, 0], bandwidth, degree=1, chunk=chunk).mean
 
 
+def _density_plain(train, bandwidth, *, chunk):
+    return density(train, bandwidth, chunk=chunk).value
+
+
+def _density_leave_one_out(train, bandwidth, *, chunk):
+    return density(train, bandwidth, fold=jnp.arange(train.n), chunk=chunk).value
+
+
 def _echo_solver(objective, best_candidate, **solver_kwargs):
     del solver_kwargs
     return best_candidate, objective(best_candidate), jnp.asarray(0), jnp.asarray(True)
@@ -201,18 +209,13 @@ def test_duplicating_rows_leaves_density_unchanged(cv_mixed_data, cv_mixed_bandw
     assert jnp.allclose(doubled, reference, rtol=1e-6, atol=1e-8)
 
 
-@pytest.mark.parametrize("use_fold", [False, True])
-def test_density_memory_does_not_grow_with_the_weight_matrix(peak_bytes, memory_sample, use_fold):
+@pytest.mark.parametrize("estimator", [_density_plain, _density_leave_one_out, _local_poly_mean])
+def test_memory_is_not_quadratic(peak_bytes, memory_sample, estimator):
     small, large = 1000, 4000
 
     def peak_at(sample_size):
         train, bandwidth = memory_sample(sample_size)
-        fold = jnp.arange(sample_size) if use_fold else None
-
-        def call(train_data, bandwidth_value):
-            return density(train_data, bandwidth_value, fold=fold).value
-
-        return peak_bytes(call, train, bandwidth)
+        return peak_bytes(lambda t, b: estimator(t, b, chunk=None), train, bandwidth)
 
     small_bytes = peak_at(small)
     large_bytes = peak_at(large)
@@ -222,7 +225,7 @@ def test_density_memory_does_not_grow_with_the_weight_matrix(peak_bytes, memory_
     assert large_bytes / max(small_bytes, 1) < 0.5 * (large / small) ** 2
 
 
-@pytest.mark.parametrize("materializing_call", [_multi_column_ksum, _local_poly_mean])
+@pytest.mark.parametrize("materializing_call", [_multi_column_ksum])
 def test_chunked_memory_scales_with_chunk(peak_bytes, memory_sample, materializing_call):
     train, bandwidth = memory_sample(1600)
 

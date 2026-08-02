@@ -308,7 +308,16 @@ def regression_discrete_response(cv_discrete_data):
 
 
 @pytest.fixture
-def regression_reference_train():
+def float64_enabled():
+    jax.config.update("jax_enable_x64", True)
+    try:
+        yield
+    finally:
+        jax.config.update("jax_enable_x64", False)
+
+
+@pytest.fixture
+def regression_reference_train(float64_enabled):
     x = jnp.array(
         [
             -0.766796,
@@ -333,7 +342,7 @@ def regression_reference_train():
 
 
 @pytest.fixture
-def regression_reference_y():
+def regression_reference_y(float64_enabled):
     return jnp.array(
         [
             2.084996,

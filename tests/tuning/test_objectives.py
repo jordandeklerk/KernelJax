@@ -247,7 +247,7 @@ def test_matches_the_reference_optimum(
 ):
     bandwidth = Bandwidth(h=jnp.array([h]), lam_uno=jnp.array([lam]), lam_ord=jnp.zeros(0))
     got = criterion(regression_reference_train, bandwidth, y=regression_reference_y, degree=degree)
-    assert float(got) == pytest.approx(expected, rel=5e-5)
+    assert float(got) == pytest.approx(expected, rel=1e-10)
 
 
 def test_cv_ls_matches_hand_built_leave_one_out(cv_mixed_data, cv_mixed_bandwidth, regression_mixed_response):
