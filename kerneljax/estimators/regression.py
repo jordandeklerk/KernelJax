@@ -539,15 +539,7 @@ def _fit_block(
         )
 
     in_axes = (0, 0, 0, 0, None if h_rows is None else 0)
-
-    # Recompute each point on the way back rather than keeping the forward values alive.
-    # Differentiating through the moment sums otherwise leaves roughly twice as many
-    # running totals in flight at once, and a GPU keeps those in the 48 KB of shared memory
-    # a thread block gets, which the local linear fit already overruns.
-    fitted = jax.vmap(jax.checkpoint(step), in_axes=in_axes)(
-        eval_block.con, eval_block.uno, eval_block.orde, idx_block, h_rows
-    )
-    return cast(tuple[Array, Array, Array, Array | None, Array | None], fitted)
+    return jax.vmap(step, in_axes=in_axes)(eval_block.con, eval_block.uno, eval_block.orde, idx_block, h_rows)
 
 
 def _fit_eval_chunks(
