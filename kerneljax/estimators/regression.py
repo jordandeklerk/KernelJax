@@ -191,7 +191,11 @@ def local_poly(
     chunk : int or tuple of int, optional
         Chunk sizes as ``(eval, train)``. A bare int chunks only the
         evaluation axis. Bounds the peak memory of the fit at the cost
-        of additional compute.
+        of additional compute. Memory otherwise grows with the sample
+        rather than its square, so chunking is worth paying for only
+        once fifteen or more basis terms make the moments too wide to
+        accumulate in one pass, as ``degree=2`` does from four
+        continuous columns upwards.
     penalty : FloatArray or float, optional
         The ridge penalty passed through to
         :func:`~kerneljax.wls`. Defaults to no penalty.
@@ -535,7 +539,15 @@ def _fit_block(
         )
 
     in_axes = (0, 0, 0, 0, None if h_rows is None else 0)
-    return jax.vmap(step, in_axes=in_axes)(eval_block.con, eval_block.uno, eval_block.orde, idx_block, h_rows)
+
+    # Recompute each point on the way back rather than keeping the forward values alive.
+    # Differentiating through the moment sums otherwise leaves roughly twice as many
+    # running totals in flight at once, and a GPU keeps those in the 48 KB of shared memory
+    # a thread block gets, which the local linear fit already overruns.
+    fitted = jax.vmap(jax.checkpoint(step), in_axes=in_axes)(
+        eval_block.con, eval_block.uno, eval_block.orde, idx_block, h_rows
+    )
+    return cast(tuple[Array, Array, Array, Array | None, Array | None], fitted)
 
 
 def _fit_eval_chunks(

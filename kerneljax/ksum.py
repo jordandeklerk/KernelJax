@@ -40,8 +40,8 @@ def kweights(
         W_{ji} = \prod_{d} K_d(\mathrm{at}_{jd}, \mathrm{train}_{id}).
 
     The default kernel families are the Gaussian kernel for continuous columns, the
-    Aitchison and Aitken (1976) kernel for unordered columns [2]_, and the Wang and van
-    Ryzin (1981) kernel for ordered columns [3]_.
+    Aitchison and Aitken kernel for unordered columns [2]_, and the Wang and van
+    Ryzin kernel for ordered columns [3]_.
 
     Parameters
     ----------
@@ -353,57 +353,6 @@ def ksum(
     return out
 
 
-def _resolve_ops(spec: ColumnSpec, op: OpSpec) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
-    """Normalize an operator specification to a method name per column."""
-    if isinstance(op, str):
-        return op, (op,) * spec.p_uno, (op,) * spec.p_ord
-
-    if isinstance(op, Mapping):
-        return (
-            op.get(Kind.CONTINUOUS, Op.VALUE),
-            (op.get(Kind.UNORDERED, Op.VALUE),) * spec.p_uno,
-            (op.get(Kind.ORDERED, Op.VALUE),) * spec.p_ord,
-        )
-
-    if not isinstance(op, tuple):
-        raise TypeError(f"op must be a string, a mapping or a tuple, got {type(op).__name__}")
-    if len(op) != spec.p:
-        raise ValueError(f"op has {len(op)} entries for {spec.p} columns")
-
-    con_ops = tuple(entry for entry, kind in zip(op, spec.kinds, strict=True) if kind is Kind.CONTINUOUS)
-    uno_ops = tuple(entry for entry, kind in zip(op, spec.kinds, strict=True) if kind is Kind.UNORDERED)
-    ord_ops = tuple(entry for entry, kind in zip(op, spec.kinds, strict=True) if kind is Kind.ORDERED)
-
-    return con_ops[0] if con_ops else Op.VALUE, uno_ops, ord_ops
-
-
-def _h_divisor(bw: Bandwidth, p_con: int) -> Array:
-    """Return the product of the continuous bandwidths, per row when train indexed."""
-    if p_con == 0:
-        return jnp.asarray(1.0)
-    if bw.h_axis == "shared":
-        return jnp.prod(bw.h)
-    return jnp.prod(bw.h, axis=-1)
-
-
-def _pad_rows(x: Array, chunk: int) -> Array:
-    """Pad an array's leading axis to a multiple of chunk by repeating its last row, reshaped into blocks."""
-    n_blocks = -(-x.shape[0] // chunk)
-    pad = n_blocks * chunk - x.shape[0]
-    if pad:
-        x = jnp.concatenate([x, jnp.repeat(x[-1:], pad, axis=0)], axis=0)
-    return x.reshape(n_blocks, chunk, *x.shape[1:])
-
-
-def _pad_index(idx: Array, size: int, chunk: int) -> Array:
-    """Pad an index vector with an out of range fill value, reshaped into blocks."""
-    n_blocks = -(-size // chunk)
-    pad = n_blocks * chunk - size
-    if pad:
-        idx = jnp.concatenate([idx, jnp.full((pad,), size, dtype=idx.dtype)])
-    return idx.reshape(n_blocks, chunk)
-
-
 def _sum_over_train(
     train: MixedData,
     bw: Bandwidth,
@@ -566,3 +515,54 @@ def _grad_over_eval_chunks(
     p_con = train.spec.p_con
     combined = jnp.moveaxis(stacked, 0, 1).reshape(p_con, -1, train.n)
     return combined[:, : evaluate.n, :]
+
+
+def _resolve_ops(spec: ColumnSpec, op: OpSpec) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
+    """Normalize an operator specification to a method name per column."""
+    if isinstance(op, str):
+        return op, (op,) * spec.p_uno, (op,) * spec.p_ord
+
+    if isinstance(op, Mapping):
+        return (
+            op.get(Kind.CONTINUOUS, Op.VALUE),
+            (op.get(Kind.UNORDERED, Op.VALUE),) * spec.p_uno,
+            (op.get(Kind.ORDERED, Op.VALUE),) * spec.p_ord,
+        )
+
+    if not isinstance(op, tuple):
+        raise TypeError(f"op must be a string, a mapping or a tuple, got {type(op).__name__}")
+    if len(op) != spec.p:
+        raise ValueError(f"op has {len(op)} entries for {spec.p} columns")
+
+    con_ops = tuple(entry for entry, kind in zip(op, spec.kinds, strict=True) if kind is Kind.CONTINUOUS)
+    uno_ops = tuple(entry for entry, kind in zip(op, spec.kinds, strict=True) if kind is Kind.UNORDERED)
+    ord_ops = tuple(entry for entry, kind in zip(op, spec.kinds, strict=True) if kind is Kind.ORDERED)
+
+    return con_ops[0] if con_ops else Op.VALUE, uno_ops, ord_ops
+
+
+def _h_divisor(bw: Bandwidth, p_con: int) -> Array:
+    """Return the product of the continuous bandwidths, per row when train indexed."""
+    if p_con == 0:
+        return jnp.asarray(1.0)
+    if bw.h_axis == "shared":
+        return jnp.prod(bw.h)
+    return jnp.prod(bw.h, axis=-1)
+
+
+def _pad_rows(x: Array, chunk: int) -> Array:
+    """Pad an array's leading axis to a multiple of chunk by repeating its last row, reshaped into blocks."""
+    n_blocks = -(-x.shape[0] // chunk)
+    pad = n_blocks * chunk - x.shape[0]
+    if pad:
+        x = jnp.concatenate([x, jnp.repeat(x[-1:], pad, axis=0)], axis=0)
+    return x.reshape(n_blocks, chunk, *x.shape[1:])
+
+
+def _pad_index(idx: Array, size: int, chunk: int) -> Array:
+    """Pad an index vector with an out of range fill value, reshaped into blocks."""
+    n_blocks = -(-size // chunk)
+    pad = n_blocks * chunk - size
+    if pad:
+        idx = jnp.concatenate([idx, jnp.full((pad,), size, dtype=idx.dtype)])
+    return idx.reshape(n_blocks, chunk)
