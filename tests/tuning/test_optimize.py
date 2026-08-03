@@ -161,3 +161,12 @@ def test_a_stalled_start_does_not_win(noiseless_train, noiseless_response):
     result = select_bandwidth(noiseless_train, criterion, y=noiseless_response, n_starts=3)
     assert bool(result.converged)
     assert float(result.value) < 1e-5
+
+
+def test_selection_matches_the_reference(selection_reference_train, selection_reference_y):
+    criterion = RegressionCriterion(method="cv_ls", degree=1)
+
+    result = select_bandwidth(selection_reference_train, criterion, y=selection_reference_y)
+
+    assert float(result.bandwidth.h[0]) == pytest.approx(0.4391394172, rel=1e-4)
+    assert float(result.bandwidth.lam_uno[0]) == pytest.approx(0.0467427679, rel=1e-4)

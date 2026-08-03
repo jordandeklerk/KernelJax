@@ -4,7 +4,8 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from kerneljax.bandwidth import Bandwidth, broadcast_h
+from kerneljax.bandwidth import Bandwidth, broadcast_h, normal_reference
+from kerneljax.kernels import KernelSet
 
 
 def test_leaves_are_all_inexact(bandwidth):
@@ -101,3 +102,16 @@ def test_ambiguous_per_observation_vector_raises():
     bw = Bandwidth(h=jnp.ones((5,)), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0), h_axis="train")
     with pytest.raises(ValueError, match="two dimensional"):
         broadcast_h(bw, p_con=1)
+
+
+def test_reference_lambda_starts_interior(mixed_bandwidth_data):
+    kernels = KernelSet()
+    start = normal_reference(mixed_bandwidth_data, kernels)
+    spec = mixed_bandwidth_data.spec
+    unordered = jnp.asarray([kernels.unordered.upper_bound(levels) for levels in spec.uno_levels])
+    ordered = jnp.asarray([kernels.ordered.upper_bound(levels) for levels in spec.ord_levels])
+
+    assert jnp.all(start.lam_uno > 0.0)
+    assert jnp.all(start.lam_uno < unordered)
+    assert jnp.all(start.lam_ord > 0.0)
+    assert jnp.all(start.lam_ord < ordered)
