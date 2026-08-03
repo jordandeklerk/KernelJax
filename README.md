@@ -82,7 +82,7 @@ Or select the bandwidth on its own and reuse it.
 ```python
 bw = kj.select_bandwidth(x, kj.RegressionCriterion(method="cv_ls", degree=1), y=y)
 refit = kj.local_poly(x, y, bw)
-print(float(refit.bandwidth.h[0]))
+print(refit.bandwidth.h[0])
 ```
 
 ```
