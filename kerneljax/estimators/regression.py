@@ -191,11 +191,7 @@ def local_poly(
     chunk : int or tuple of int, optional
         Chunk sizes as ``(eval, train)``. A bare int chunks only the
         evaluation axis. Bounds the peak memory of the fit at the cost
-        of additional compute. Memory otherwise grows with the sample
-        rather than its square, so chunking is worth paying for only
-        once fifteen or more basis terms make the moments too wide to
-        accumulate in one pass, as ``degree=2`` does from four
-        continuous columns upwards.
+        of additional compute.
     penalty : FloatArray or float, optional
         The ridge penalty passed through to
         :func:`~kerneljax.wls`. Defaults to no penalty.
