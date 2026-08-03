@@ -182,25 +182,3 @@ d/dlambda [-10.769775]
 
 `jit` and `vmap` compose the same way. Selection uses these gradients internally,
 running L-BFGS where these criteria are usually minimized by a derivative-free search.
-
-## What is implemented
-
-| | |
-| --- | --- |
-| Densities | `density`, with likelihood and least squares cross-validation |
-| Distributions | `cdf`, with its own cross-validation criterion |
-| Regression | `local_poly` at any degree, with standard errors and derivatives |
-| Bandwidths | `select_bandwidth`, `normal_reference`, and a jittable `lbfgs` |
-| Primitives | `ksum` and `kweights`, the generalized product kernel |
-| Kernels | Gaussian, Aitchison and Aitken, Wang and van Ryzin, Li and Racine |
-| Reporting | `summary`, for densities and regressions |
-
-Data may mix continuous, unordered categorical, and ordered categorical columns
-in any combination.
-
-## Design notes
-
-Estimators contract the kernel weights as they go rather than holding the pairwise
-weight matrix. On an A100 at n=16000 a density fit needs a few bytes where that matrix
-would take 0.954 GiB. Results are checked against established implementations to
-machine precision in double precision, and the test suite covers that agreement.
