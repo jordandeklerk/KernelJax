@@ -269,15 +269,21 @@ def local_poly(
     else:
         chunk_eval, chunk_train = chunk, None
 
-    if chunk_eval is None:
-        eval_idx = jnp.arange(evaluate.n)
-        mean, coef, rcond, grad, se_value = _fit_block(
-            train, bandwidth, y, evaluate, eval_idx, basis, kernels, fold, gradient, se, penalty, chunk_train, p_con
-        )
-    else:
-        mean, coef, rcond, grad, se_value = _fit_eval_chunks(
-            train, bandwidth, y, evaluate, basis, kernels, fold, gradient, se, penalty, chunk_eval, chunk_train, p_con
-        )
+    mean, coef, rcond, grad, se_value = _fit_values(
+        train,
+        bandwidth,
+        y,
+        evaluate,
+        fold,
+        penalty,
+        basis=basis,
+        kernels=kernels,
+        gradient=gradient,
+        se=se,
+        chunk_eval=chunk_eval,
+        chunk_train=chunk_train,
+        p_con=p_con,
+    )
 
     return LocalPolyFit(
         mean=mean,
@@ -492,6 +498,74 @@ def _fit_point(
         se_value = jnp.sqrt(sigma2 * roughness / weight_total)
 
     return fit.coef[0], fit.coef, fit.rcond, grad, se_value
+
+
+@partial(
+    jax.jit,
+    static_argnames=("basis", "kernels", "gradient", "se", "chunk_eval", "chunk_train", "p_con"),
+)
+def _fit_values(
+    train: MixedData,
+    bandwidth: Bandwidth,
+    y: Array,
+    evaluate: MixedData,
+    fold: Array | None,
+    penalty: FloatArray | float,
+    *,
+    basis: LocalPolyBasis,
+    kernels: KernelSet,
+    gradient: bool,
+    se: bool,
+    chunk_eval: int | None,
+    chunk_train: int | None,
+    p_con: int,
+) -> tuple[Array, Array, Array, Array | None, Array | None]:
+    """Fit every evaluation point.
+
+    Parameters
+    ----------
+    train : MixedData
+        Training sample the fit is built from.
+    bandwidth : Bandwidth
+        Bandwidths for every column.
+    y : Array
+        Response values, one per training row.
+    evaluate : MixedData
+        Evaluation points.
+    fold : Array, optional
+        Fold label of every point, dropping any pair that shares one.
+    penalty : FloatArray or float
+        Ridge penalty added to the moment system.
+    basis : LocalPolyBasis
+        Polynomial basis, fixing the degree. Static.
+    kernels : KernelSet
+        Kernel families, one per column kind. Static.
+    gradient : bool
+        Whether to return the derivative rows. Static.
+    se : bool
+        Whether to return standard errors. Static.
+    chunk_eval : int, optional
+        Evaluation axis chunk size. Static.
+    chunk_train : int, optional
+        Training axis chunk size. Static.
+    p_con : int
+        Number of continuous columns. Static.
+
+    Returns
+    -------
+    tuple
+        The fitted mean, the coefficients, the reciprocal condition
+        estimate, the derivative rows and the standard errors.
+    """
+    if chunk_eval is None:
+        eval_idx = jnp.arange(evaluate.n)
+        return _fit_block(
+            train, bandwidth, y, evaluate, eval_idx, basis, kernels, fold, gradient, se, penalty, chunk_train, p_con
+        )
+
+    return _fit_eval_chunks(
+        train, bandwidth, y, evaluate, basis, kernels, fold, gradient, se, penalty, chunk_eval, chunk_train, p_con
+    )
 
 
 def _fit_block(

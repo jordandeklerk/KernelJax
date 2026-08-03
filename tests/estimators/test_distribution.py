@@ -8,7 +8,7 @@ import pytest
 from kerneljax.bandwidth import Bandwidth, normal_reference
 from kerneljax.data import MixedData
 from kerneljax.estimators.density import density
-from kerneljax.estimators.distribution import DistributionFit, cdf
+from kerneljax.estimators.distribution import DistributionFit, _cdf_values, cdf
 from kerneljax.kernels import KernelSet
 from kerneljax.tuning.criteria import DistributionCriterion
 from kerneljax.tuning.optimize import select_bandwidth
@@ -169,3 +169,12 @@ def test_reusing_a_non_shared_bandwidth_raises(criteria_train, criteria_response
     fit = cdf(criteria_train, per_row)
     with pytest.raises(ValueError, match="h_axis 'shared'"):
         cdf(criteria_train, fit, at=jnp.zeros((3, 1)))
+
+
+def test_cdf_reuses_one_compile(criteria_train, criteria_bandwidth):
+    _cdf_values.clear_cache()
+
+    for h in (0.4, 0.5, 0.6, 0.7):
+        cdf(criteria_train, criteria_bandwidth.replace(h=jnp.array([h])))
+
+    assert _cdf_values._cache_size() == 1

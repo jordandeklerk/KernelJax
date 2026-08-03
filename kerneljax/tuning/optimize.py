@@ -134,8 +134,7 @@ def select_bandwidth(
     perturbations = jnp.linspace(-1.5, 1.5, n_starts - 1) if n_starts > 1 else jnp.zeros(0)
     offsets = jnp.concatenate([jnp.zeros(1), perturbations])[:, None] * jnp.ones_like(z0)[None, :]
     candidates = z0[None, :] + offsets
-
-    solved, values, iterations, flags = jax.vmap(lambda start: solver(objective, start))(candidates)
+    solved, values, iterations, flags = jax.lax.map(lambda start: solver(objective, start), candidates)
     ranked = jnp.argmin(jnp.where(jnp.isfinite(values), values, jnp.inf))
 
     return SelectionResult(
