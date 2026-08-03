@@ -44,8 +44,10 @@ the CPU, CUDA, and TPU wheels.
 
 ## Quickstart
 
-A continuous fit needs nothing beyond the data. `"cv_ls"` selects the bandwidth by
-least squares cross-validation, and `degree=1` fits a local line.
+Nonparametric regression fits `y` against `x` without assuming a functional form. What
+it needs instead is a bandwidth, setting how much of the sample informs each point, and
+choosing one is most of the work. Passing `"cv_ls"` picks it by least squares cross
+validation before fitting, and `degree=1` fits a local line at every point.
 
 ```python
 import numpy as np
@@ -56,7 +58,7 @@ x = rng.uniform(size=200)
 y = np.sin(2 * np.pi * x) + rng.normal(0, 0.2, 200)
 
 fit = kj.local_poly(x, y, "cv_ls", degree=1)
-print(kj.summary(fit, y=y))
+print(kj.summary(fit))
 ```
 
 ```
@@ -93,7 +95,7 @@ print(float(refit.bandwidth.h[0]))
 0.03601887822151184
 ```
 
-### Mixed types
+### Mixed Types
 
 Categorical columns sit alongside continuous ones, each with a smoothing parameter
 chosen jointly with the bandwidths instead of the sample being split per category.
@@ -105,62 +107,25 @@ region = rng.integers(0, 3, size=200)
 log_wage = 2.0 + 0.04 * experience - 0.0005 * experience**2 + 0.1 * region + rng.normal(0, 0.2, 200)
 
 covariates = kj.MixedData.from_blocks(continuous=experience, unordered=region)
+
 mixed = kj.local_poly(covariates, log_wage, "cv_ls", degree=1, se=True)
-print(kj.summary(mixed, y=log_wage))
-```
-
-```
-Local polynomial regression
-
-  Observations                         200
-  Continuous variables                   1
-  Unordered variables                    1
-  Estimator                   local linear
-  Bandwidth type                    shared
-
-  Variable      Kind             Bandwidth
-  x1            continuous        6.623884
-  x2            unordered         0.124881
-
-  Continuous kernel         Gaussian, order 2
-
-  Residual standard error         0.204661
-  R-squared                       0.586877
-
-  Selection                          cv_ls
-  Criterion value                 0.046175
-  Converged                           True
-```
-
-That parameter is a dial. Near zero keeps the categories apart, at its upper bound it
-pools them and drops the column. Region matters for wages, so it stays low. It says
-nothing about how experience is distributed, so the density below pools it away.
-
-```python
 density = kj.density(covariates, "cv_ml")
-print(kj.summary(density))
+
+print("regression  h", mixed.bandwidth.h, " lambda", mixed.bandwidth.lam_uno)
+print("density     h", density.bandwidth.h, " lambda", density.bandwidth.lam_uno)
+print("standard errors", mixed.se[:3])
 ```
 
 ```
-Mixed-type density estimate
-
-  Observations                         200
-  Continuous variables                   1
-  Unordered variables                    1
-  Bandwidth type                    shared
-
-  Variable      Kind             Bandwidth
-  x1            continuous        1.394879
-  x2            unordered         0.666663
-
-  Continuous kernel         Gaussian, order 2
-
-  Log likelihood               -955.369202
-
-  Selection                          cv_ml
-  Criterion value               966.392151
-  Converged                           True
+regression  h [6.623884]  lambda [0.12488104]
+density     h [1.3948787]  lambda [0.6666628]
+standard errors [0.03195919 0.03875961 0.03553929]
 ```
+
+That smoothing parameter is a dial. Near zero keeps the categories apart, at its upper
+bound of two thirds it pools them and drops the column. Region matters for wages, so the
+regression keeps it. It says nothing about how experience is distributed, so the density
+pools it away. Pass either fit to `kj.summary` for the full report.
 
 ### Composing with JAX
 
@@ -182,3 +147,61 @@ d/dlambda [-10.769775]
 
 `jit` and `vmap` compose the same way. Selection uses these gradients internally,
 running L-BFGS where these criteria are usually minimized by a derivative-free search.
+
+### Custom Kernels
+
+Subclass the base for the column kind and implement `value`. Two rules always hold.
+
+> [!IMPORTANT]
+> `value` is elementwise. It receives the pair `(x, y)` already broadcast against each
+> other and scaled by `h`, and must return that same shape. It must never reduce.
+>
+> Bandwidths only mean the same thing between kernels scaled the same way. The built-in
+> kernels have unit variance. The tricube below does not, so its `h` sits on its own
+> scale and is not comparable to the Gaussian's.
+
+`deriv`, `cdf` and `conv` are optional, needed only by the estimators that use them.
+Making the class a frozen dataclass is worth the one line, since estimators take the
+kernel set as a static argument and two separately built kernels that do not compare
+equal force a recompile on every call.
+
+```python
+import dataclasses
+import jax.numpy as jnp
+
+@dataclasses.dataclass(frozen=True)
+class Tricube(kj.ContinuousKernel):
+    power: int = 3
+
+    def value(self, x, y, h):
+        u = jnp.abs((x - y) / h)
+        return jnp.where(u < 1.0, (1.0 - u**3) ** self.power, 0.0)
+
+own = kj.local_poly(x, y, "cv_ls", degree=1, kernels=kj.KernelSet(continuous=Tricube(power=8)))
+print(kj.summary(own))
+```
+
+```
+Local polynomial regression
+
+  Observations                         200
+  Continuous variables                   1
+  Estimator                   local linear
+  Bandwidth type                    shared
+
+  Variable      Kind             Bandwidth
+  x1            continuous        0.123780
+
+  Continuous kernel         Tricube(power=8)
+
+  Residual standard error         0.175727
+  R-squared                       0.947239
+
+  Selection                          cv_ls
+  Criterion value                 0.034177
+  Converged                           True
+```
+
+The kernel reports itself with whatever parameterizes it, so `Tricube(3)` and
+`Tricube(8)` are visibly different kernels. They are also different to the cache, and
+each compiles once.

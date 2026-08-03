@@ -389,7 +389,7 @@ def test_fit_round_trips_through_jit(poly_mixed_train, poly_mixed_response, poly
 def test_static_fields_hold_no_leaves(poly_mixed_train, poly_mixed_response, poly_mixed_bandwidth):
     fit = local_poly(poly_mixed_train, poly_mixed_response, poly_mixed_bandwidth, degree=1)
     leaves = jax.tree_util.tree_leaves(fit)
-    assert len(leaves) == 6
+    assert len(leaves) == 8
     assert all(jnp.issubdtype(jnp.asarray(leaf).dtype, jnp.floating) for leaf in leaves)
 
 

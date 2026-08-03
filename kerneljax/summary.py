@@ -7,7 +7,6 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-from jaxtyping import Float
 
 from kerneljax.bandwidth import Bandwidth
 from kerneljax.data import ColumnSpec, Kind
@@ -145,7 +144,7 @@ class Summary:
         return [(n, k.name.lower(), widths[i]) for i, (n, k) in enumerate(zip(sorted_names, order, strict=True))]
 
 
-def summary(fit: DensityFit | LocalPolyFit, y: Float[Array, " n"] | None = None) -> Summary:
+def summary(fit: DensityFit | LocalPolyFit) -> Summary:
     r"""Measure how well a fitted estimator describes the sample it was fit on.
 
     For a regression the report carries the squared correlation between fitted
@@ -202,7 +201,7 @@ def summary(fit: DensityFit | LocalPolyFit, y: Float[Array, " n"] | None = None)
            ...: x = jnp.linspace(-2.0, 2.0, 50)
            ...: y = jnp.sin(x)
            ...: fit = kj.local_poly(x, y, "cv_ls")
-           ...: print(kj.summary(fit, y))
+           ...: print(kj.summary(fit))
 
     See Also
     --------
@@ -241,13 +240,6 @@ def summary(fit: DensityFit | LocalPolyFit, y: Float[Array, " n"] | None = None)
             log_likelihood=jnp.sum(jnp.log(fit.value)),
         )
 
-    if y is None:
-        raise ValueError("summary of a regression needs the response it was fit to")
-
-    centered = y - jnp.mean(y)
-    predicted = fit.mean - jnp.mean(y)
-    covariance = jnp.sum(centered * predicted)
-
     return Summary(
         label="Local polynomial regression",
         method=method,
@@ -259,8 +251,8 @@ def summary(fit: DensityFit | LocalPolyFit, y: Float[Array, " n"] | None = None)
         criterion_value=None if selection is None else selection.value,
         converged=None if selection is None else selection.converged,
         n_iter=None if selection is None else selection.n_iter,
-        r_squared=covariance * covariance / (jnp.sum(centered**2) * jnp.sum(predicted**2)),
-        residual_se=jnp.sqrt(jnp.mean((y - fit.mean) ** 2)),
+        r_squared=fit.r_squared,
+        residual_se=fit.residual_se,
         log_likelihood=None,
     )
 
@@ -287,7 +279,16 @@ def _estimator_name(degree: int) -> str:
 
 
 def _kernel_name(kernels: KernelSet) -> str:
-    """Name the continuous kernel family and its order."""
-    order = getattr(kernels.continuous, "order", None)
-    name = type(kernels.continuous).__name__
-    return name if order is None else f"{name}, order {order}"
+    """Name the continuous kernel family, with its order or whatever else parameterizes it."""
+    kernel = kernels.continuous
+    name = type(kernel).__name__
+
+    order = getattr(kernel, "order", None)
+    if order is not None:
+        return f"{name}, order {order}"
+
+    settings: list[str] = []
+    if dataclasses.is_dataclass(kernel):
+        settings = [f"{field.name}={getattr(kernel, field.name)}" for field in dataclasses.fields(kernel) if field.repr]
+
+    return f"{name}({', '.join(settings)})" if settings else name
