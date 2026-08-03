@@ -117,7 +117,8 @@ standard errors [0.03195919 0.03875961 0.03553929]
 
 ### Custom Kernels
 
-Subclass the base for the column kind and implement the `value` function.
+Subclass `ContinuousKernel`, `UnorderedKernel` or `OrderedKernel`, implement `value`, and
+it works anywhere the built-in kernels do.
 
 > [!IMPORTANT]
 > `value` is elementwise and must never reduce. It receives `(x, y)` already broadcast
