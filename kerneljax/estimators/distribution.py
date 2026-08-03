@@ -172,18 +172,51 @@ def cdf(
             f"got {bandwidth.h_axis!r} which is tied to the rows it was built for"
         )
 
-    total = ksum(train, bandwidth, at=evaluate, kernels=kernels, op=Op.CDF, chunk=chunk)
-
-    value = (total / train.n).reshape(-1)
+    value, se = _cdf_values(train, bandwidth, evaluate, kernels=kernels, chunk=chunk)
     return DistributionFit(
         value=value,
-        se=jnp.sqrt(value * (1.0 - value) / train.n),
+        se=se,
         bandwidth=bandwidth,
         selection=selection,
         kernels=kernels,
         spec=train.spec,
         n_train=train.n,
     )
+
+
+@partial(jax.jit, static_argnames=("kernels", "chunk"))
+def _cdf_values(
+    train: MixedData,
+    bandwidth: Bandwidth,
+    evaluate: MixedData | None,
+    *,
+    kernels: KernelSet,
+    chunk: int | tuple[int, int] | None,
+) -> tuple[Array, Array]:
+    """Average the integrated product kernel over the training sample.
+
+    Parameters
+    ----------
+    train : MixedData
+        Training sample, supplying the sum.
+    bandwidth : Bandwidth
+        Bandwidths for every column.
+    evaluate : MixedData, optional
+        Evaluation points. ``None`` evaluates at the training sample.
+    kernels : KernelSet
+        Kernel families, one per column kind. Static.
+    chunk : int or tuple of int, optional
+        Chunk sizes passed through to :func:`~kerneljax.ksum`. Static.
+
+    Returns
+    -------
+    tuple of Array
+        The distribution estimate and its standard error at every
+        evaluation point.
+    """
+    total = ksum(train, bandwidth, at=evaluate, kernels=kernels, op=Op.CDF, chunk=chunk)
+    value = (total / train.n).reshape(-1)
+    return value, jnp.sqrt(value * (1.0 - value) / train.n)
 
 
 def _resolve_bandwidth(

@@ -10,7 +10,7 @@ import pytest
 
 from kerneljax.bandwidth import Bandwidth, normal_reference
 from kerneljax.data import MixedData
-from kerneljax.estimators.regression import LocalPolyFit, local_poly
+from kerneljax.estimators.regression import LocalPolyFit, _fit_values, local_poly
 from kerneljax.kernels import KernelSet
 from kerneljax.ksum import kweights
 from kerneljax.tuning.criteria import DensityCriterion, RegressionCriterion
@@ -491,3 +491,21 @@ def test_reusing_a_non_shared_bandwidth_raises(criteria_train, criteria_response
     fit = local_poly(criteria_train, criteria_response, per_row)
     with pytest.raises(ValueError, match="h_axis 'shared'"):
         local_poly(criteria_train, criteria_response, fit, at=jnp.zeros((3, 1)))
+
+
+def test_local_poly_reuses_one_compile(poly_train, poly_bandwidth, poly_response):
+    _fit_values.clear_cache()
+
+    for h in (0.4, 0.5, 0.6, 0.7):
+        local_poly(poly_train, poly_response, poly_bandwidth.replace(h=jnp.array([h])), degree=1)
+
+    assert _fit_values._cache_size() == 1
+
+
+def test_each_degree_compiles_separately(poly_train, poly_bandwidth, poly_response):
+    _fit_values.clear_cache()
+
+    for degree in (0, 1, 2):
+        local_poly(poly_train, poly_response, poly_bandwidth, degree=degree)
+
+    assert _fit_values._cache_size() == 3
