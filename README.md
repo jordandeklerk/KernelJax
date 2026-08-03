@@ -44,11 +44,6 @@ the CPU, CUDA, and TPU wheels.
 
 ## Quickstart
 
-Nonparametric regression fits `y` against `x` without assuming a functional form. What
-it needs instead is a bandwidth, setting how much of the sample informs each point, and
-choosing one is most of the work. Passing `"cv_ls"` picks it by least squares cross
-validation before fitting, and `degree=1` fits a local line at every point.
-
 ```python
 import numpy as np
 import kerneljax as kj
@@ -82,8 +77,7 @@ Local polynomial regression
   Converged                           True
 ```
 
-Selection is its own function when you want the bandwidth itself. The result goes to
-any estimator over the same columns.
+Or select the bandwidth on its own and reuse it.
 
 ```python
 bw = kj.select_bandwidth(x, kj.RegressionCriterion(method="cv_ls", degree=1), y=y)
@@ -97,9 +91,8 @@ print(float(refit.bandwidth.h[0]))
 
 ### Mixed Types
 
-Categorical columns sit alongside continuous ones, each with a smoothing parameter
-chosen jointly with the bandwidths instead of the sample being split per category.
-Level counts are read from the data unless you give them.
+Categorical columns sit alongside continuous ones, with their smoothing parameters
+chosen jointly.
 
 ```python
 experience = rng.uniform(0, 40, size=200)
@@ -122,48 +115,18 @@ density     h [1.3948787]  lambda [0.6666628]
 standard errors [0.03195919 0.03875961 0.03553929]
 ```
 
-That smoothing parameter is a dial. Near zero keeps the categories apart, at its upper
-bound of two thirds it pools them and drops the column. Region matters for wages, so the
-regression keeps it. It says nothing about how experience is distributed, so the density
-pools it away. Pass either fit to `kj.summary` for the full report.
-
-### Composing with JAX
-
-Criteria are ordinary JAX functions. Differentiating one with respect to its bandwidth
-returns a `Bandwidth` of gradients, one per parameter.
-
-```python
-import jax
-
-grads = jax.grad(kj.cv_ml_density, argnums=1)(covariates, density.bandwidth)
-print("d/dh     ", grads.h)
-print("d/dlambda", grads.lam_uno)
-```
-
-```
-d/dh      [0.00796509]
-d/dlambda [-10.769775]
-```
-
-`jit` and `vmap` compose the same way. Selection uses these gradients internally,
-running L-BFGS where these criteria are usually minimized by a derivative-free search.
-
 ### Custom Kernels
 
-Subclass the base for the column kind and implement `value`. Two rules always hold.
+Subclass the base for the column kind and implement the `value` function.
 
 > [!IMPORTANT]
-> `value` is elementwise. It receives the pair `(x, y)` already broadcast against each
-> other and scaled by `h`, and must return that same shape. It must never reduce.
+> `value` is elementwise and must never reduce. It receives `(x, y)` already broadcast
+> and scaled by `h`, and returns that same shape.
 >
-> Bandwidths only mean the same thing between kernels scaled the same way. The built-in
-> kernels have unit variance. The tricube below does not, so its `h` sits on its own
-> scale and is not comparable to the Gaussian's.
+> Scale to unit variance, as the built-in kernels are, or bandwidths will not be
+> comparable across kernels.
 
-`deriv`, `cdf` and `conv` are optional, needed only by the estimators that use them.
-Making the class a frozen dataclass is worth the one line, since estimators take the
-kernel set as a static argument and two separately built kernels that do not compare
-equal force a recompile on every call.
+`deriv`, `cdf` and `conv` are optional.
 
 ```python
 import dataclasses
@@ -202,6 +165,21 @@ Local polynomial regression
   Converged                           True
 ```
 
-The kernel reports itself with whatever parameterizes it, so `Tricube(3)` and
-`Tricube(8)` are visibly different kernels. They are also different to the cache, and
-each compiles once.
+### Composing with JAX
+
+Every criterion is differentiable, and the gradient comes back shaped like the bandwidth.
+
+```python
+import jax
+
+grads = jax.grad(kj.cv_ml_density, argnums=1)(covariates, density.bandwidth)
+print("d/dh     ", grads.h)
+print("d/dlambda", grads.lam_uno)
+```
+
+```
+d/dh      [0.00796509]
+d/dlambda [-10.769775]
+```
+
+`jit` and `vmap` compose too.

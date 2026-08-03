@@ -115,9 +115,12 @@ def wls(xtwx: FloatArray, xtwy: FloatArray, *, penalty: FloatArray | float = 0.0
     diagonal_penalty = jnp.ndim(penalty) == 0
 
     regularized = xtwx + penalty * jnp.eye(dim, dtype=xtwx.dtype) if diagonal_penalty else xtwx + penalty
-    factor = jnp.linalg.cholesky(regularized)
-    ok = jnp.all(jnp.isfinite(factor))
-    cho = jnp.where(ok, factor, jnp.eye(dim, dtype=regularized.dtype))
+
+    probe = jnp.linalg.cholesky(regularized)
+    ok = jnp.all(jnp.isfinite(probe))
+
+    safe_regularized = jnp.where(ok, regularized, jnp.eye(dim, dtype=regularized.dtype))
+    cho = jnp.linalg.cholesky(safe_regularized)
 
     solved = jax.scipy.linalg.cho_solve((cho, True), xtwy)
     coef = jnp.where(ok, solved, jnp.zeros_like(solved))
