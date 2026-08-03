@@ -18,14 +18,14 @@ from kerneljax.ksum import _pad_index, _pad_rows, kweights
 from kerneljax.linalg import wls
 from kerneljax.tuning.criteria import RegressionCriterion
 from kerneljax.tuning.optimize import select_bandwidth
-from kerneljax.typing import Array, FloatArray
+from kerneljax.typing import Array, FloatArray, ScalarFloat
 
 __all__ = ["LocalPolyFit", "local_poly"]
 
 
 @partial(
     jax.tree_util.register_dataclass,
-    data_fields=["mean", "grad", "coef", "rcond", "bandwidth", "se", "selection"],
+    data_fields=["mean", "grad", "coef", "rcond", "bandwidth", "se", "selection", "r_squared", "residual_se"],
     meta_fields=["degree", "kernels", "spec", "n_train"],
 )
 @dataclasses.dataclass(frozen=True)
@@ -73,6 +73,12 @@ class LocalPolyFit:
         Column metadata of the training sample. Static.
     n_train : int
         Number of training points. Static.
+    r_squared : ScalarFloat, optional
+        Squared correlation between the fitted and observed responses,
+        or ``None`` when the fit was evaluated away from its training
+        points and there is nothing to compare against.
+    residual_se : ScalarFloat, optional
+        Root mean squared residual, on the same terms as ``r_squared``.
     """
 
     mean: Float[Array, " n_eval"]
@@ -86,6 +92,8 @@ class LocalPolyFit:
     kernels: KernelSet = dataclasses.field(default_factory=KernelSet)
     spec: ColumnSpec | None = None
     n_train: int = 0
+    r_squared: ScalarFloat | None = None
+    residual_se: ScalarFloat | None = None
 
 
 def local_poly(
@@ -212,6 +220,8 @@ def local_poly(
         - **kernels**: Kernel families the fit was produced with
         - **spec**: Column metadata of the training sample
         - **n_train**: Number of training points
+        - **r_squared**: Squared correlation with the response, or None when ``at`` was given
+        - **residual_se**: Root mean squared residual, on the same terms
 
     Examples
     --------
@@ -269,7 +279,7 @@ def local_poly(
     else:
         chunk_eval, chunk_train = chunk, None
 
-    mean, coef, rcond, grad, se_value = _fit_values(
+    mean, coef, rcond, grad, se_value, r_squared, residual_se = _fit_values(
         train,
         bandwidth,
         y,
@@ -283,6 +293,7 @@ def local_poly(
         chunk_eval=chunk_eval,
         chunk_train=chunk_train,
         p_con=p_con,
+        compare_to_y=at is None,
     )
 
     return LocalPolyFit(
@@ -297,6 +308,8 @@ def local_poly(
         kernels=kernels,
         spec=train.spec,
         n_train=train.n,
+        r_squared=r_squared,
+        residual_se=residual_se,
     )
 
 
@@ -502,7 +515,7 @@ def _fit_point(
 
 @partial(
     jax.jit,
-    static_argnames=("basis", "kernels", "gradient", "se", "chunk_eval", "chunk_train", "p_con"),
+    static_argnames=("basis", "kernels", "gradient", "se", "chunk_eval", "chunk_train", "p_con", "compare_to_y"),
 )
 def _fit_values(
     train: MixedData,
@@ -519,7 +532,8 @@ def _fit_values(
     chunk_eval: int | None,
     chunk_train: int | None,
     p_con: int,
-) -> tuple[Array, Array, Array, Array | None, Array | None]:
+    compare_to_y: bool,
+) -> tuple[Array, Array, Array, Array | None, Array | None, Array | None, Array | None]:
     """Fit every evaluation point.
 
     Parameters
@@ -550,22 +564,36 @@ def _fit_values(
         Training axis chunk size. Static.
     p_con : int
         Number of continuous columns. Static.
+    compare_to_y : bool
+        Whether the fit sits on its own training points, so fitted and
+        observed values line up and can be compared. Static.
 
     Returns
     -------
     tuple
         The fitted mean, the coefficients, the reciprocal condition
-        estimate, the derivative rows and the standard errors.
+        estimate, the derivative rows, the standard errors, the squared
+        correlation with the response and the root mean squared residual.
     """
     if chunk_eval is None:
         eval_idx = jnp.arange(evaluate.n)
-        return _fit_block(
+        mean, coef, rcond, grad, se_value = _fit_block(
             train, bandwidth, y, evaluate, eval_idx, basis, kernels, fold, gradient, se, penalty, chunk_train, p_con
         )
+    else:
+        mean, coef, rcond, grad, se_value = _fit_eval_chunks(
+            train, bandwidth, y, evaluate, basis, kernels, fold, gradient, se, penalty, chunk_eval, chunk_train, p_con
+        )
 
-    return _fit_eval_chunks(
-        train, bandwidth, y, evaluate, basis, kernels, fold, gradient, se, penalty, chunk_eval, chunk_train, p_con
-    )
+    if not compare_to_y:
+        return mean, coef, rcond, grad, se_value, None, None
+
+    centered = y - jnp.mean(y)
+    predicted = mean - jnp.mean(y)
+    covariance = jnp.sum(centered * predicted)
+    r_squared = covariance * covariance / (jnp.sum(centered**2) * jnp.sum(predicted**2))
+
+    return mean, coef, rcond, grad, se_value, r_squared, jnp.sqrt(jnp.mean((y - mean) ** 2))
 
 
 def _fit_block(

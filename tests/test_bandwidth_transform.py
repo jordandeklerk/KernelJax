@@ -113,10 +113,10 @@ def test_purely_continuous_spec_round_trips():
 
 def test_purely_categorical_spec_round_trips():
     data = MixedData.from_blocks(
-        uno=jnp.array([[i % 3] for i in range(9)]),
-        orde=jnp.array([[i % 2] for i in range(9)]),
-        uno_levels=(3,),
-        ord_levels=(2,),
+        unordered=jnp.array([[i % 3] for i in range(9)]),
+        ordered=jnp.array([[i % 2] for i in range(9)]),
+        unordered_levels=(3,),
+        ordered_levels=(2,),
     )
     tf = BandwidthTransform(spec=data.spec, kernels=KernelSet())
     bw = Bandwidth(h=jnp.zeros(0), lam_uno=jnp.array([0.4]), lam_ord=jnp.array([0.2]))

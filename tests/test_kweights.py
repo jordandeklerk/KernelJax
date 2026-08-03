@@ -41,11 +41,11 @@ def test_matches_an_explicit_three_factor_product(kweights_train, kweights_bandw
 @pytest.mark.parametrize("n_eval", [1, 3, 5])
 def test_rectangular_eval_gives_the_right_shape(kweights_train, kweights_bandwidth, n_eval):
     grid = MixedData.from_blocks(
-        con=jnp.zeros((n_eval, 1)),
-        uno=jnp.zeros((n_eval, 1), jnp.int32),
-        orde=jnp.zeros((n_eval, 1), jnp.int32),
-        uno_levels=(4,),
-        ord_levels=(3,),
+        continuous=jnp.zeros((n_eval, 1)),
+        unordered=jnp.zeros((n_eval, 1), jnp.int32),
+        ordered=jnp.zeros((n_eval, 1), jnp.int32),
+        unordered_levels=(4,),
+        ordered_levels=(3,),
     )
     weights = kweights(kweights_train, kweights_bandwidth, at=grid)
     assert weights.shape == (n_eval, 6)
@@ -164,11 +164,11 @@ def test_mismatched_kinds_raise_value_error(kweights_train, kweights_bandwidth):
 
 def test_mismatched_levels_raise_value_error(kweights_train, kweights_bandwidth):
     at = MixedData.from_blocks(
-        con=jnp.zeros((4, 1)),
-        uno=jnp.zeros((4, 1), jnp.int32),
-        orde=jnp.zeros((4, 1), jnp.int32),
-        uno_levels=(5,),
-        ord_levels=(3,),
+        continuous=jnp.zeros((4, 1)),
+        unordered=jnp.zeros((4, 1), jnp.int32),
+        ordered=jnp.zeros((4, 1), jnp.int32),
+        unordered_levels=(5,),
+        ordered_levels=(3,),
     )
     with pytest.raises(ValueError, match="kinds"):
         kweights(kweights_train, kweights_bandwidth, at=at)

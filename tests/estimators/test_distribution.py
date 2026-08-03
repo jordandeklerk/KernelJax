@@ -57,7 +57,7 @@ def test_unordered_columns_are_rejected(cv_mixed_data, cv_mixed_bandwidth):
 
 
 def test_ordered_columns_are_accepted(grid_sample):
-    data = MixedData.from_blocks(con=grid_sample.con, orde=grid_sample.orde, ord_levels=(4,))
+    data = MixedData.from_blocks(continuous=grid_sample.con, ordered=grid_sample.orde, ordered_levels=(4,))
     bw = Bandwidth(h=jnp.array([0.4, 0.4]), lam_uno=jnp.zeros(0), lam_ord=jnp.array([0.3]))
     fit = cdf(data, bw)
     assert jnp.all(jnp.isfinite(fit.value))

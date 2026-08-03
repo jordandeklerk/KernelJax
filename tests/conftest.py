@@ -118,11 +118,11 @@ def bandwidth():
 @pytest.fixture
 def mixed_bandwidth_data():
     return MixedData.from_blocks(
-        con=jnp.linspace(0.0, 1.0, 12).reshape(12, 1),
-        uno=jnp.array([[i % 4] for i in range(12)]),
-        orde=jnp.array([[i % 3] for i in range(12)]),
-        uno_levels=(4,),
-        ord_levels=(3,),
+        continuous=jnp.linspace(0.0, 1.0, 12).reshape(12, 1),
+        unordered=jnp.array([[i % 4] for i in range(12)]),
+        ordered=jnp.array([[i % 3] for i in range(12)]),
+        unordered_levels=(4,),
+        ordered_levels=(3,),
     )
 
 
@@ -135,11 +135,11 @@ def mixed_bandwidth_transform(mixed_bandwidth_data):
 def kweights_train():
     rng = np.random.default_rng(0)
     return MixedData.from_blocks(
-        con=jnp.asarray(rng.normal(size=(6, 1))),
-        uno=jnp.asarray(rng.integers(0, 4, size=(6, 1))),
-        orde=jnp.asarray(rng.integers(0, 3, size=(6, 1))),
-        uno_levels=(4,),
-        ord_levels=(3,),
+        continuous=jnp.asarray(rng.normal(size=(6, 1))),
+        unordered=jnp.asarray(rng.integers(0, 4, size=(6, 1))),
+        ordered=jnp.asarray(rng.integers(0, 3, size=(6, 1))),
+        unordered_levels=(4,),
+        ordered_levels=(3,),
     )
 
 
@@ -155,7 +155,7 @@ def continuous_only_bandwidth():
 
 @pytest.fixture
 def discrete_only_data():
-    return MixedData.from_blocks(uno=jnp.array([[0], [1], [2]]), uno_levels=(3,))
+    return MixedData.from_blocks(unordered=jnp.array([[0], [1], [2]]), unordered_levels=(3,))
 
 
 @pytest.fixture
@@ -166,8 +166,8 @@ def discrete_only_bandwidth():
 @pytest.fixture
 def two_unordered_data():
     return MixedData.from_blocks(
-        uno=jnp.array([[0, 0], [1, 1], [2, 0], [0, 1]]),
-        uno_levels=(3, 2),
+        unordered=jnp.array([[0, 0], [1, 1], [2, 0], [0, 1]]),
+        unordered_levels=(3, 2),
     )
 
 
@@ -179,9 +179,9 @@ def two_unordered_bandwidth():
 @pytest.fixture
 def ksum_data():
     return MixedData.from_blocks(
-        con=jnp.asarray(np.linspace(-1.0, 2.0, 6)).reshape(6, 1),
-        uno=jnp.array([[0], [1], [2], [3], [0], [1]]),
-        uno_levels=(4,),
+        continuous=jnp.asarray(np.linspace(-1.0, 2.0, 6)).reshape(6, 1),
+        unordered=jnp.array([[0], [1], [2], [3], [0], [1]]),
+        unordered_levels=(4,),
     )
 
 
@@ -211,11 +211,11 @@ def ksum_eval_indexed_bandwidth():
 def density_data():
     rng = np.random.default_rng(3)
     return MixedData.from_blocks(
-        con=jnp.asarray(rng.normal(size=(15, 1))),
-        uno=jnp.asarray(rng.integers(0, 3, size=(15, 1))),
-        orde=jnp.asarray(rng.integers(0, 4, size=(15, 1))),
-        uno_levels=(3,),
-        ord_levels=(4,),
+        continuous=jnp.asarray(rng.normal(size=(15, 1))),
+        unordered=jnp.asarray(rng.integers(0, 3, size=(15, 1))),
+        ordered=jnp.asarray(rng.integers(0, 4, size=(15, 1))),
+        unordered_levels=(3,),
+        ordered_levels=(4,),
     )
 
 
@@ -231,11 +231,11 @@ def cv_mixed_data():
     rng.shuffle(combos)
     con = jnp.asarray(rng.normal(size=(combos.shape[0], 1)))
     return MixedData.from_blocks(
-        con=con,
-        uno=jnp.asarray(combos[:, :1]),
-        orde=jnp.asarray(combos[:, 1:]),
-        uno_levels=(3,),
-        ord_levels=(3,),
+        continuous=con,
+        unordered=jnp.asarray(combos[:, :1]),
+        ordered=jnp.asarray(combos[:, 1:]),
+        unordered_levels=(3,),
+        ordered_levels=(3,),
     )
 
 
@@ -261,10 +261,10 @@ def cv_discrete_data():
     combos = np.array([(u, o) for u in range(3) for o in range(3)] * 2)
     rng.shuffle(combos)
     return MixedData.from_blocks(
-        uno=jnp.asarray(combos[:, :1]),
-        orde=jnp.asarray(combos[:, 1:]),
-        uno_levels=(3,),
-        ord_levels=(3,),
+        unordered=jnp.asarray(combos[:, :1]),
+        ordered=jnp.asarray(combos[:, 1:]),
+        unordered_levels=(3,),
+        ordered_levels=(3,),
     )
 
 
@@ -276,11 +276,11 @@ def cv_discrete_bandwidth():
 @pytest.fixture
 def public_api_data():
     return MixedData.from_blocks(
-        con=jnp.linspace(-1.0, 2.0, 8).reshape(8, 1),
-        uno=jnp.asarray([[i % 3] for i in range(8)]),
-        orde=jnp.asarray([[i % 2] for i in range(8)]),
-        uno_levels=(3,),
-        ord_levels=(2,),
+        continuous=jnp.linspace(-1.0, 2.0, 8).reshape(8, 1),
+        unordered=jnp.asarray([[i % 3] for i in range(8)]),
+        ordered=jnp.asarray([[i % 2] for i in range(8)]),
+        unordered_levels=(3,),
+        ordered_levels=(2,),
     )
 
 
@@ -338,7 +338,7 @@ def regression_reference_train(float64_enabled):
         ]
     )
     u = jnp.array([0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2])
-    return MixedData.from_blocks(con=x[:, None], uno=u[:, None], uno_levels=(3,))
+    return MixedData.from_blocks(continuous=x[:, None], unordered=u[:, None], unordered_levels=(3,))
 
 
 @pytest.fixture
@@ -402,11 +402,11 @@ def basis_bandwidth():
 def kweights_grad_mixed_train():
     rng = np.random.default_rng(31)
     return MixedData.from_blocks(
-        con=jnp.asarray(rng.normal(size=(5, 1))),
-        uno=jnp.asarray(rng.integers(0, 3, size=(5, 1))),
-        orde=jnp.asarray(rng.integers(0, 4, size=(5, 1))),
-        uno_levels=(3,),
-        ord_levels=(4,),
+        continuous=jnp.asarray(rng.normal(size=(5, 1))),
+        unordered=jnp.asarray(rng.integers(0, 3, size=(5, 1))),
+        ordered=jnp.asarray(rng.integers(0, 4, size=(5, 1))),
+        unordered_levels=(3,),
+        ordered_levels=(4,),
     )
 
 
@@ -414,11 +414,11 @@ def kweights_grad_mixed_train():
 def kweights_grad_mixed_at():
     rng = np.random.default_rng(32)
     return MixedData.from_blocks(
-        con=jnp.asarray(rng.normal(size=(4, 1))),
-        uno=jnp.asarray(rng.integers(0, 3, size=(4, 1))),
-        orde=jnp.asarray(rng.integers(0, 4, size=(4, 1))),
-        uno_levels=(3,),
-        ord_levels=(4,),
+        continuous=jnp.asarray(rng.normal(size=(4, 1))),
+        unordered=jnp.asarray(rng.integers(0, 3, size=(4, 1))),
+        ordered=jnp.asarray(rng.integers(0, 4, size=(4, 1))),
+        unordered_levels=(3,),
+        ordered_levels=(4,),
     )
 
 
@@ -431,9 +431,9 @@ def kweights_grad_mixed_bandwidth():
 def kweights_grad_two_con_train():
     rng = np.random.default_rng(33)
     return MixedData.from_blocks(
-        con=jnp.asarray(rng.normal(size=(5, 2))),
-        uno=jnp.asarray(rng.integers(0, 3, size=(5, 1))),
-        uno_levels=(3,),
+        continuous=jnp.asarray(rng.normal(size=(5, 2))),
+        unordered=jnp.asarray(rng.integers(0, 3, size=(5, 1))),
+        unordered_levels=(3,),
     )
 
 
@@ -441,9 +441,9 @@ def kweights_grad_two_con_train():
 def kweights_grad_two_con_at():
     rng = np.random.default_rng(34)
     return MixedData.from_blocks(
-        con=jnp.asarray(rng.normal(size=(4, 2))),
-        uno=jnp.asarray(rng.integers(0, 3, size=(4, 1))),
-        uno_levels=(3,),
+        continuous=jnp.asarray(rng.normal(size=(4, 2))),
+        unordered=jnp.asarray(rng.integers(0, 3, size=(4, 1))),
+        unordered_levels=(3,),
     )
 
 
@@ -490,11 +490,11 @@ def poly_response(poly_train):
 def poly_mixed_train():
     rng = np.random.default_rng(42)
     return MixedData.from_blocks(
-        con=jnp.asarray(rng.normal(size=(40, 1))),
-        uno=jnp.asarray(rng.integers(0, 3, size=(40, 1))),
-        orde=jnp.asarray(rng.integers(0, 4, size=(40, 1))),
-        uno_levels=(3,),
-        ord_levels=(4,),
+        continuous=jnp.asarray(rng.normal(size=(40, 1))),
+        unordered=jnp.asarray(rng.integers(0, 3, size=(40, 1))),
+        ordered=jnp.asarray(rng.integers(0, 4, size=(40, 1))),
+        unordered_levels=(3,),
+        ordered_levels=(4,),
     )
 
 
@@ -589,11 +589,11 @@ def criteria_bandwidth():
 def grid_sample():
     rng = np.random.default_rng(3)
     return MixedData.from_blocks(
-        con=jnp.asarray(rng.normal(size=(40, 2))),
-        uno=jnp.asarray(rng.integers(0, 3, size=(40, 1))),
-        orde=jnp.asarray(rng.integers(0, 4, size=(40, 1))),
-        uno_levels=(3,),
-        ord_levels=(4,),
+        continuous=jnp.asarray(rng.normal(size=(40, 2))),
+        unordered=jnp.asarray(rng.integers(0, 3, size=(40, 1))),
+        ordered=jnp.asarray(rng.integers(0, 4, size=(40, 1))),
+        unordered_levels=(3,),
+        ordered_levels=(4,),
     )
 
 
@@ -629,9 +629,9 @@ def memory_sample():
 def cdf_train():
     rng = np.random.default_rng(53)
     return MixedData.from_blocks(
-        con=jnp.asarray(rng.normal(size=(30, 1))),
-        orde=jnp.asarray(rng.integers(0, 4, size=(30, 1))),
-        ord_levels=(4,),
+        continuous=jnp.asarray(rng.normal(size=(30, 1))),
+        ordered=jnp.asarray(rng.integers(0, 4, size=(30, 1))),
+        ordered_levels=(4,),
     )
 
 
@@ -650,9 +650,9 @@ def categorical_relevance():
             0.04 * continuous - 0.0005 * continuous**2 + effect * category + rng.normal(0.0, 0.2, size=sample_size)
         )
         train = MixedData.from_blocks(
-            con=jnp.asarray(continuous, dtype=jnp.float32)[:, None],
-            uno=jnp.asarray(category)[:, None],
-            uno_levels=(3,),
+            continuous=jnp.asarray(continuous, dtype=jnp.float32)[:, None],
+            unordered=jnp.asarray(category)[:, None],
+            unordered_levels=(3,),
         )
         return train, jnp.asarray(response, dtype=jnp.float32)
 
@@ -769,7 +769,7 @@ def selection_reference_train(float64_enabled):
             0,
         ]
     )
-    return MixedData.from_blocks(con=x[:, None], uno=g[:, None], uno_levels=(3,))
+    return MixedData.from_blocks(continuous=x[:, None], unordered=g[:, None], unordered_levels=(3,))
 
 
 @pytest.fixture

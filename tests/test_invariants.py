@@ -170,19 +170,19 @@ def test_cv_ml_matches_leave_one_out_density(cv_mixed_data, cv_mixed_bandwidth, 
 def test_large_h_flattens_mixed_density():
     generator = np.random.default_rng(21)
     train = MixedData.from_blocks(
-        con=jnp.asarray(generator.normal(size=(40, 1))),
-        uno=jnp.asarray(generator.integers(0, 3, size=(40, 1))),
-        orde=jnp.asarray(generator.integers(0, 4, size=(40, 1))),
-        uno_levels=(3,),
-        ord_levels=(4,),
+        continuous=jnp.asarray(generator.normal(size=(40, 1))),
+        unordered=jnp.asarray(generator.integers(0, 3, size=(40, 1))),
+        ordered=jnp.asarray(generator.integers(0, 4, size=(40, 1))),
+        unordered_levels=(3,),
+        ordered_levels=(4,),
     )
     grid = jnp.asarray(np.linspace(-3.0, 3.0, 20)).reshape(-1, 1)
     evaluate_at = MixedData.from_blocks(
-        con=grid,
-        uno=jnp.zeros((20, 1), jnp.int32),
-        orde=jnp.zeros((20, 1), jnp.int32),
-        uno_levels=(3,),
-        ord_levels=(4,),
+        continuous=grid,
+        unordered=jnp.zeros((20, 1), jnp.int32),
+        ordered=jnp.zeros((20, 1), jnp.int32),
+        unordered_levels=(3,),
+        ordered_levels=(4,),
     )
     bandwidth = Bandwidth(h=jnp.array([80.0]), lam_uno=jnp.array([2.0 / 3.0]), lam_ord=jnp.array([0.999]))
 

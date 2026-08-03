@@ -170,3 +170,13 @@ def test_selection_matches_the_reference(selection_reference_train, selection_re
 
     assert float(result.bandwidth.h[0]) == pytest.approx(0.4391394172, rel=1e-4)
     assert float(result.bandwidth.lam_uno[0]) == pytest.approx(0.0467427679, rel=1e-4)
+
+
+def test_select_bandwidth_takes_a_raw_array():
+    x = jnp.linspace(-2.0, 2.0, 40)
+    y = jnp.sin(x)
+
+    result = select_bandwidth(x, RegressionCriterion(method="cv_ls", degree=1), y=y)
+
+    assert result.bandwidth.h.shape == (1,)
+    assert float(result.bandwidth.h[0]) > 0.0

@@ -24,7 +24,7 @@ def test_column_spec_is_hashable():
 
 
 def test_from_blocks_builds_signed_int32_codes():
-    data = MixedData.from_blocks(con=jnp.ones((5, 2)), uno=jnp.zeros((5, 1)), uno_levels=(3,))
+    data = MixedData.from_blocks(continuous=jnp.ones((5, 2)), unordered=jnp.zeros((5, 1)), unordered_levels=(3,))
     assert data.n == 5
     assert data.uno.dtype == jnp.int32
     assert jnp.issubdtype(data.uno.dtype, jnp.signedinteger)
@@ -68,7 +68,7 @@ def test_jit_does_not_retrace_on_value_change():
 
 def test_from_blocks_rejects_out_of_range_codes():
     with pytest.raises(ValueError, match="outside"):
-        MixedData.from_blocks(uno=jnp.array([[0], [9]]), uno_levels=(3,))
+        MixedData.from_blocks(unordered=jnp.array([[0], [9]]), unordered_levels=(3,))
 
 
 def test_frozen(continuous_data):
@@ -215,3 +215,34 @@ def test_quantile_grid_runs_under_jit(grid_sample):
 
 def test_quantile_grid_accepts_a_raw_array():
     assert quantile_grid(jnp.linspace(-1.0, 1.0, 12), n=4).con.shape == (4, 1)
+
+
+def test_from_blocks_promotes_one_dimension():
+    flat = MixedData.from_blocks(continuous=jnp.arange(4.0), unordered=jnp.array([0, 1, 1, 0]), unordered_levels=(2,))
+    shaped = MixedData.from_blocks(
+        continuous=jnp.arange(4.0)[:, None], unordered=jnp.array([0, 1, 1, 0])[:, None], unordered_levels=(2,)
+    )
+
+    assert flat.con.shape == (4, 1)
+    assert flat.uno.shape == (4, 1)
+    assert jnp.array_equal(flat.con, shaped.con)
+    assert jnp.array_equal(flat.uno, shaped.uno)
+    assert flat.spec == shaped.spec
+
+
+def test_from_blocks_infers_levels():
+    codes = jnp.array([0, 1, 2, 1, 0])
+
+    inferred = MixedData.from_blocks(unordered=codes, ordered=codes)
+    explicit = MixedData.from_blocks(unordered=codes, ordered=codes, unordered_levels=(3,), ordered_levels=(3,))
+
+    assert inferred.spec.n_levels == (3, 3)
+    assert inferred.spec == explicit.spec
+
+
+def test_explicit_levels_beat_inference():
+    codes = jnp.array([0, 1, 1, 0])
+
+    widened = MixedData.from_blocks(unordered=codes, unordered_levels=(4,))
+
+    assert widened.spec.n_levels == (4,)
