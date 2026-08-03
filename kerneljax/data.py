@@ -125,12 +125,12 @@ class MixedData:
     @classmethod
     def from_blocks(
         cls,
-        con: Array | None = None,
-        uno: Array | None = None,
-        orde: Array | None = None,
+        continuous: Array | None = None,
+        unordered: Array | None = None,
+        ordered: Array | None = None,
         *,
-        uno_levels: tuple[int, ...] = (),
-        ord_levels: tuple[int, ...] = (),
+        unordered_levels: tuple[int, ...] = (),
+        ordered_levels: tuple[int, ...] = (),
         names: tuple[str, ...] | None = None,
     ) -> MixedData:
         r"""Build a validated ``MixedData`` from per-kind blocks.
@@ -143,19 +143,26 @@ class MixedData:
         Parameters
         ----------
         con : Array, optional
-            Continuous columns, shape ``(n, p_con)``.
+            Continuous columns, shape ``(n, p_con)``. A 1-D array of shape
+            ``(n,)`` is read as a single column.
         uno : Array, optional
             Unordered categorical codes, shape ``(n, p_uno)``, codes in
-            ``[0, uno_levels[j])`` for column ``j``.
+            ``[0, unordered_levels[j])`` for column ``j``. A 1-D array is read as a
+            single column.
         orde : Array, optional
             Ordered categorical levels, shape ``(n, p_ord)``, codes in
-            ``[0, ord_levels[j])`` for column ``j``.
-        uno_levels : tuple of int, optional
+            ``[0, ordered_levels[j])`` for column ``j``. A 1-D array is read as a
+            single column.
+        unordered_levels : tuple of int, optional
             Level count of each unordered column, in block order, one entry
-            per column of ``uno``.
-        ord_levels : tuple of int, optional
+            per column of ``uno``. Defaults to the levels present in the
+            sample. Give it explicitly when a level exists but happens not to
+            appear here, since the count sets both the kernel and the range
+            its smoothing parameter is searched over.
+        ordered_levels : tuple of int, optional
             Level count of each ordered column, in block order, one entry
-            per column of ``orde``.
+            per column of ``orde``. Defaults to the levels present in the
+            sample, on the same terms as ``unordered_levels``.
         names : tuple of str, optional
             Column names, in block order (continuous, unordered, ordered).
 
@@ -164,27 +171,36 @@ class MixedData:
         MixedData
             The validated design matrix.
         """
-        blocks = [b for b in (con, uno, orde) if b is not None]
+        blocks = [b for b in (continuous, unordered, ordered) if b is not None]
         if not blocks:
-            raise ValueError("at least one of con, uno or orde must be given")
+            raise ValueError("at least one of continuous, unordered or ordered must be given")
         n = jnp.asarray(blocks[0]).shape[0]
 
-        con_a = jnp.zeros((n, 0)) if con is None else jnp.asarray(con)
+        con_a = jnp.zeros((n, 0)) if continuous is None else jnp.asarray(continuous)
         # Force a concrete dtype. An array built from a bare Python scalar
         # (e.g. `jnp.full(shape, 3.0)`) is "weakly typed" in JAX, and two
         # otherwise identical MixedData instances differing only in that
         # flag make jax.jit retrace instead of hitting the cache.
         con_a = con_a.astype(con_a.dtype)
-        uno_a = jnp.zeros((n, 0), jnp.int32) if uno is None else jnp.asarray(uno).astype(jnp.int32)
-        ord_a = jnp.zeros((n, 0), jnp.int32) if orde is None else jnp.asarray(orde).astype(jnp.int32)
+        uno_a = jnp.zeros((n, 0), jnp.int32) if unordered is None else jnp.asarray(unordered).astype(jnp.int32)
+        ord_a = jnp.zeros((n, 0), jnp.int32) if ordered is None else jnp.asarray(ordered).astype(jnp.int32)
+
+        con_a, uno_a, ord_a = (block[:, None] if block.ndim == 1 else block for block in (con_a, uno_a, ord_a))
 
         if con_a.ndim < 2 or uno_a.ndim < 2 or ord_a.ndim < 2:
             raise ValueError("all blocks must have at least two dimensions, shape (n, p_kind)")
-        if len(uno_levels) != uno_a.shape[1]:
-            raise ValueError(f"uno_levels has {len(uno_levels)} entries for {uno_a.shape[1]} unordered columns")
-        if len(ord_levels) != ord_a.shape[1]:
-            raise ValueError(f"ord_levels has {len(ord_levels)} entries for {ord_a.shape[1]} ordered columns")
-        for levels, block, label in ((uno_levels, uno_a, "unordered"), (ord_levels, ord_a, "ordered")):
+
+        if not unordered_levels and uno_a.shape[1]:
+            unordered_levels = tuple(int(uno_a[:, j].max()) + 1 for j in range(uno_a.shape[1]))
+        if not ordered_levels and ord_a.shape[1]:
+            ordered_levels = tuple(int(ord_a[:, j].max()) + 1 for j in range(ord_a.shape[1]))
+        if len(unordered_levels) != uno_a.shape[1]:
+            raise ValueError(
+                f"unordered_levels has {len(unordered_levels)} entries for {uno_a.shape[1]} unordered columns"
+            )
+        if len(ordered_levels) != ord_a.shape[1]:
+            raise ValueError(f"ordered_levels has {len(ordered_levels)} entries for {ord_a.shape[1]} ordered columns")
+        for levels, block, label in ((unordered_levels, uno_a, "unordered"), (ordered_levels, ord_a, "ordered")):
             for j, c in enumerate(levels):
                 if c < 2:
                     raise ValueError(f"{label} column {j} has {c} levels, need at least 2")
@@ -195,7 +211,7 @@ class MixedData:
         kinds = (
             (Kind.CONTINUOUS,) * con_a.shape[1] + (Kind.UNORDERED,) * uno_a.shape[1] + (Kind.ORDERED,) * ord_a.shape[1]
         )
-        n_levels = (0,) * con_a.shape[1] + tuple(uno_levels) + tuple(ord_levels)
+        n_levels = (0,) * con_a.shape[1] + tuple(unordered_levels) + tuple(ordered_levels)
         spec = ColumnSpec(kinds=kinds, n_levels=n_levels, names=names)
         return cls(con=con_a, uno=uno_a, orde=ord_a, spec=spec)
 
@@ -218,7 +234,7 @@ class MixedData:
         x_a = jnp.asarray(x)
         if x_a.ndim == 1:
             x_a = x_a[:, None]
-        return cls.from_blocks(con=x_a)
+        return cls.from_blocks(continuous=x_a)
 
     def replace(self, **changes: Any) -> MixedData:
         r"""Return a copy with the given fields replaced.

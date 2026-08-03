@@ -102,9 +102,9 @@ def test_chunking_matches_unchunked_with_explicit_v(ksum_data, ksum_bandwidth):
 
 def test_chunking_handles_a_rectangular_eval_grid(ksum_data, ksum_bandwidth):
     grid = MixedData.from_blocks(
-        con=jnp.zeros((5, 1)),
-        uno=jnp.zeros((5, 1), jnp.int32),
-        uno_levels=(4,),
+        continuous=jnp.zeros((5, 1)),
+        unordered=jnp.zeros((5, 1), jnp.int32),
+        unordered_levels=(4,),
     )
     ref = ksum(ksum_data, ksum_bandwidth, at=grid)
     got = ksum(ksum_data, ksum_bandwidth, at=grid, chunk=(2, 4))

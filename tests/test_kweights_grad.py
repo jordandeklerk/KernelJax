@@ -196,7 +196,7 @@ def test_finite_when_a_factor_underflows():
 
 @pytest.mark.parametrize("chunk", [None, 1, 2, (2, 2)])
 def test_no_continuous_columns_empty_axis(chunk):
-    data = MixedData.from_blocks(uno=jnp.array([[0], [1], [2], [0]]), uno_levels=(3,))
+    data = MixedData.from_blocks(unordered=jnp.array([[0], [1], [2], [0]]), unordered_levels=(3,))
     bandwidth = Bandwidth(h=jnp.zeros(0), lam_uno=jnp.array([0.3]), lam_ord=jnp.zeros(0))
 
     result = kweights_grad(data, bandwidth, chunk=chunk)

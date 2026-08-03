@@ -11,7 +11,7 @@ import jax.numpy as jnp
 from jaxtyping import Float
 
 from kerneljax.bandwidth import BandwidthTransform, SelectionResult, normal_reference
-from kerneljax.data import MixedData
+from kerneljax.data import MixedData, _as_points
 from kerneljax.kernels import KernelSet
 from kerneljax.typing import Array, ScalarFloat
 
@@ -20,7 +20,7 @@ __all__ = ["lbfgs", "select_bandwidth"]
 
 @partial(jax.jit, static_argnames=("criterion", "solver", "n_starts", "chunk"))
 def select_bandwidth(
-    train: MixedData,
+    train: MixedData | Array,
     criterion: Callable[..., ScalarFloat],
     *,
     y: Float[Array, " n"] | None = None,
@@ -54,8 +54,9 @@ def select_bandwidth(
 
     Parameters
     ----------
-    train : MixedData
-        Training sample defining the column spec optimized over.
+    train : MixedData or Array
+        Training sample defining the column spec optimized over. A raw array
+        is read as continuous columns.
     criterion : callable
         Cross-validation criterion, called as
         ``criterion(train, bandwidth, **criterion_kwargs, kernels=kernels, chunk=chunk)``
@@ -120,6 +121,7 @@ def select_bandwidth(
     """
     kernels = KernelSet() if kernels is None else kernels
     solver = lbfgs if solver is None else solver
+    train = _as_points(train)
     extra = {} if criterion_kwargs is None else dict(criterion_kwargs)
     if y is not None:
         extra["y"] = y
