@@ -86,7 +86,7 @@ print(refit.bandwidth.h[0])
 ```
 
 ```
-0.03601887822151184
+0.03601888
 ```
 
 ### Mixed Types
@@ -182,5 +182,3 @@ print("d/dlambda", grads.lam_uno)
 d/dh      [0.00796509]
 d/dlambda [-10.769775]
 ```
-
-`jit` and `vmap` compose too.
