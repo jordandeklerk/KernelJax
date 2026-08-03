@@ -638,3 +638,193 @@ def cdf_train():
 @pytest.fixture
 def cdf_bandwidth():
     return Bandwidth(h=jnp.array([0.35]), lam_uno=jnp.zeros(0), lam_ord=jnp.array([0.3]))
+
+
+@pytest.fixture
+def categorical_relevance():
+    def build(effect, sample_size=400, seed=1):
+        rng = np.random.default_rng(seed)
+        continuous = rng.uniform(0.0, 40.0, size=sample_size)
+        category = rng.integers(0, 3, size=sample_size)
+        response = (
+            0.04 * continuous - 0.0005 * continuous**2 + effect * category + rng.normal(0.0, 0.2, size=sample_size)
+        )
+        train = MixedData.from_blocks(
+            con=jnp.asarray(continuous, dtype=jnp.float32)[:, None],
+            uno=jnp.asarray(category)[:, None],
+            uno_levels=(3,),
+        )
+        return train, jnp.asarray(response, dtype=jnp.float32)
+
+    return build
+
+
+@pytest.fixture
+def selection_reference_train(float64_enabled):
+    x = jnp.array(
+        [
+            9.148060,
+            9.370754,
+            2.861395,
+            8.304476,
+            6.417455,
+            5.190959,
+            7.365883,
+            1.346666,
+            6.569923,
+            7.050648,
+            4.577418,
+            7.191123,
+            9.346722,
+            2.554288,
+            4.622928,
+            9.400145,
+            9.782264,
+            1.174874,
+            4.749971,
+            5.603327,
+            9.040314,
+            1.387102,
+            9.888917,
+            9.466682,
+            0.824376,
+            5.142118,
+            3.902035,
+            9.057381,
+            4.469696,
+            8.360043,
+            7.375956,
+            8.110551,
+            3.881083,
+            6.851697,
+            0.039483,
+            8.329161,
+            0.073341,
+            2.076590,
+            9.066014,
+            6.117786,
+            3.795592,
+            4.357716,
+            0.374310,
+            9.735399,
+            4.317512,
+            9.575766,
+            8.877549,
+            6.399788,
+            9.709666,
+            6.188382,
+        ]
+    )
+    g = jnp.array(
+        [
+            0,
+            1,
+            1,
+            2,
+            2,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            2,
+            1,
+            0,
+            1,
+            2,
+            1,
+            1,
+            1,
+            0,
+            0,
+            0,
+            2,
+            0,
+            1,
+            0,
+            0,
+            0,
+            2,
+            2,
+            0,
+            0,
+            1,
+            0,
+            1,
+            1,
+            1,
+            0,
+            1,
+            0,
+            1,
+            2,
+            0,
+            0,
+            2,
+            1,
+            1,
+            2,
+            0,
+        ]
+    )
+    return MixedData.from_blocks(con=x[:, None], uno=g[:, None], uno_levels=(3,))
+
+
+@pytest.fixture
+def selection_reference_y(float64_enabled):
+    return jnp.array(
+        [
+            0.358665,
+            0.343827,
+            0.732115,
+            1.874779,
+            1.353788,
+            -1.105842,
+            1.273989,
+            1.475742,
+            0.994376,
+            1.370530,
+            -0.374642,
+            0.875301,
+            0.850921,
+            1.141175,
+            -1.282058,
+            0.261782,
+            0.624379,
+            1.553095,
+            -0.460164,
+            -0.494416,
+            0.045128,
+            1.436988,
+            -0.370277,
+            0.784640,
+            0.697855,
+            -0.867377,
+            -0.505643,
+            0.294045,
+            -1.025521,
+            1.954664,
+            1.934437,
+            1.384901,
+            -0.816764,
+            1.133483,
+            0.456806,
+            0.955974,
+            0.215037,
+            0.935269,
+            -0.086647,
+            0.259349,
+            -0.412404,
+            -0.177470,
+            1.479056,
+            -0.606613,
+            -0.368499,
+            0.449553,
+            0.951977,
+            0.389662,
+            0.482245,
+            -0.038203,
+        ]
+    )

@@ -61,8 +61,8 @@ def test_normal_reference_positive_and_shaped(mixed_bandwidth_data):
     assert bw.h[0] > 0.0
     assert bw.lam_uno.shape == (1,)
     assert bw.lam_ord.shape == (1,)
-    assert bw.lam_uno[0] == 0.0
-    assert bw.lam_ord[0] == 0.0
+    assert bw.lam_uno[0] > 0.0
+    assert bw.lam_ord[0] > 0.0
     assert bw.h_axis == "shared"
 
 
@@ -131,10 +131,13 @@ def test_purely_categorical_spec_round_trips():
 
 
 @pytest.mark.parametrize("target", ["density", "distribution"])
-def test_normal_reference_starts_categoricals_at_zero(mixed_bandwidth_data, target):
-    bw = normal_reference(mixed_bandwidth_data, KernelSet(), target=target)
-    assert bw.lam_uno[0] == 0.0
-    assert bw.lam_ord[0] == 0.0
+def test_normal_reference_halves_the_bound(mixed_bandwidth_data, target):
+    kernels = KernelSet()
+    bw = normal_reference(mixed_bandwidth_data, kernels, target=target)
+    spec = mixed_bandwidth_data.spec
+
+    assert bw.lam_uno[0] == kernels.unordered.upper_bound(spec.uno_levels[0]) / 2.0
+    assert bw.lam_ord[0] == kernels.ordered.upper_bound(spec.ord_levels[0]) / 2.0
 
 
 def test_distribution_target_uses_its_own_rate(mixed_bandwidth_data):
@@ -173,3 +176,17 @@ def test_density_rate_does_depend_on_column_count():
     one = normal_reference(single, KernelSet()).h[0]
     two = normal_reference(double, KernelSet()).h[0]
     assert float(one) != pytest.approx(float(two), rel=1e-3)
+
+
+@pytest.mark.parametrize(
+    "sample",
+    ["mixed_bandwidth_data", "discrete_only_data", "two_unordered_data", "cv_continuous_data"],
+)
+def test_start_is_not_in_a_transform_tail(request, sample):
+    data = request.getfixturevalue(sample)
+    kernels = KernelSet()
+    transform = BandwidthTransform(spec=data.spec, kernels=kernels)
+
+    z = transform.to_unconstrained(normal_reference(data, kernels))
+
+    assert jnp.all(jnp.abs(z) < 10.0)

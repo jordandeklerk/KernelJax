@@ -10,6 +10,7 @@ from kerneljax.data import Kind, MixedData
 from kerneljax.estimators.density import density
 from kerneljax.estimators.regression import local_poly
 from kerneljax.kernels import KernelSet, Op
+from kerneljax.kernels.discrete import AitchisonAitken
 from kerneljax.ksum import ksum, kweights
 from kerneljax.tuning.objectives import cv_ls_density, cv_ml_density
 from kerneljax.tuning.optimize import select_bandwidth
@@ -303,3 +304,13 @@ def test_screening_no_worse_than_start(cv_mixed_data, criterion, n_starts):
 
     result = select_bandwidth(cv_mixed_data, criterion, solver=_echo_solver, n_starts=n_starts)
     assert float(result.value) <= float(start_value) + 1e-6
+
+
+@pytest.mark.parametrize("effect, smoothed_away", [(0.0, True), (0.5, False)])
+def test_lambda_follows_column_relevance(categorical_relevance, effect, smoothed_away):
+    train, response = categorical_relevance(effect)
+    upper = AitchisonAitken().upper_bound(3)
+
+    selected = float(local_poly(train, response, "cv_ls", degree=1).bandwidth.lam_uno[0])
+
+    assert (selected > 0.5 * upper) is smoothed_away

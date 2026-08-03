@@ -283,9 +283,11 @@ def normal_reference(
     Every continuous entry scales :math:`\sigma`, the smallest positive value
     among the standard deviation, the interquartile range divided by
     :math:`2 \, \Phi^{-1}(0.75)`, and the median absolute deviation scaled by
-    :math:`1.4826`, for that column. Categorical entries start at zero, which
-    makes a categorical column an exact match indicator until the search moves
-    it.
+    :math:`1.4826`, for that column. Categorical entries start halfway to their
+    upper bound, the middle of the admissible range, where the search has slope
+    to work with in either direction. Starting them at zero instead leaves the
+    search no gradient to follow, since zero is the far tail of the transform
+    that keeps them in range.
 
     A density and a cumulative distribution take different constants and
     different rates, and the distribution rate does not depend on how many
@@ -335,10 +337,13 @@ def normal_reference(
     else:
         h = jnp.zeros(0)
 
+    unordered_bounds = jnp.asarray([kernels.unordered.upper_bound(levels) for levels in spec.uno_levels])
+    ordered_bounds = jnp.asarray([kernels.ordered.upper_bound(levels) for levels in spec.ord_levels])
+
     return Bandwidth(
         h=h,
-        lam_uno=jnp.zeros(spec.p_uno),
-        lam_ord=jnp.zeros(spec.p_ord),
+        lam_uno=unordered_bounds / 2.0,
+        lam_ord=ordered_bounds / 2.0,
         h_axis="shared",
     )
 
