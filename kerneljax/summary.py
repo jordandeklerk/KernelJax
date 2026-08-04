@@ -165,9 +165,6 @@ def summary(fit: DensityFit | LocalPolyFit) -> Summary:
     ----------
     fit : DensityFit or LocalPolyFit
         A fitted estimator, evaluated at its training points.
-    y : Float[Array, " n"], optional
-        Response values the regression was fit to, one per training point.
-        Required for a regression and ignored for a density.
 
     Returns
     -------

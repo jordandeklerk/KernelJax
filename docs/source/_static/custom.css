@@ -1,0 +1,154 @@
+/* KernelJax documentation styling. */
+
+:root {
+  --kj-blue: #0b5cff;
+  --kj-blue-bright: #3d7cff;
+  --kj-blue-deep: #0a4ad6;
+  --kj-violet: #474b95;
+  --kj-crimson: #d81e3f;
+  --kj-crimson-bright: #f91f35;
+  --kj-sweep: linear-gradient(
+    90deg,
+    #3d8bff 0%,
+    #0b5cff 20%,
+    #2a56d8 38%,
+    #474b95 52%,
+    #d81e3f 76%,
+    #f91f35 100%
+  );
+}
+
+body[data-md-color-scheme="default"] {
+  --md-primary-fg-color: var(--kj-blue);
+  --md-primary-fg-color--light: var(--kj-blue-bright);
+  --md-primary-fg-color--dark: var(--kj-blue-deep);
+  --md-primary-bg-color: #ffffff;
+  --md-primary-bg-color--light: rgba(255, 255, 255, 0.7);
+
+  --md-accent-fg-color: var(--kj-crimson);
+  --md-accent-fg-color--transparent: rgba(216, 30, 63, 0.1);
+  --md-accent-bg-color: #ffffff;
+  --md-accent-bg-color--light: rgba(255, 255, 255, 0.7);
+
+  --md-typeset-a-color: var(--kj-blue);
+
+  --kj-banner: linear-gradient(
+    90deg,
+    #0b5cff 0%,
+    #1a58de 30%,
+    #3a5199 55%,
+    #b52953 82%,
+    #d81e3f 100%
+  );
+}
+
+body[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #0a4ad6;
+  --md-primary-fg-color--light: #3d7cff;
+  --md-primary-fg-color--dark: #0837a3;
+  --md-primary-bg-color: #ffffff;
+  --md-primary-bg-color--light: rgba(255, 255, 255, 0.7);
+
+  --md-accent-fg-color: #ff738a;
+  --md-accent-fg-color--transparent: rgba(255, 115, 138, 0.12);
+  --md-accent-bg-color: #1a1c24;
+  --md-accent-bg-color--light: rgba(26, 28, 36, 0.7);
+
+  --md-typeset-a-color: #7aa8ff;
+
+  --kj-banner: linear-gradient(
+    90deg,
+    #0a4ad6 0%,
+    #1747ba 30%,
+    #33407e 55%,
+    #942348 82%,
+    #b01b39 100%
+  );
+}
+
+/*
+The header carries the logo's blue to crimson sweep. Its stops are darker than
+--kj-sweep because white header text sits on them, and the lighter blues in the
+logo drop below 4.5:1 against white.
+*/
+.md-header {
+  background-image: var(--kj-banner);
+}
+
+/* The lighter sweep bookends the page where no text sits on it. */
+.md-footer {
+  position: relative;
+}
+
+.md-footer::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 2px;
+  background: var(--kj-sweep);
+}
+
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  height: 2.5rem;
+  width: auto;
+}
+
+.md-header__button.md-logo {
+  padding: 0.2rem;
+}
+
+/*
+Type scale, following GPJax. Material's default root size is 137.5%, which
+leaves headings large enough to break the rhythm of a page carrying this much
+math. Everything below is relative to the 130% root.
+*/
+html {
+  font-size: 130%;
+}
+
+.md-typeset h1 {
+  font-size: 1.7rem;
+}
+
+.md-typeset h2 {
+  font-size: 1.6rem;
+}
+
+.md-typeset h3 {
+  font-size: 1.4rem;
+}
+
+.md-typeset h4 {
+  font-size: 1.2rem;
+}
+
+.md-typeset h5 {
+  font-size: 1rem;
+}
+
+.md-typeset h6 {
+  font-size: 0.9rem;
+}
+
+.md-typeset .admonition {
+  font-size: 90%;
+}
+
+.md-typeset details {
+  font-size: 120%;
+}
+
+/*
+Long display equations scroll inside their own box rather than widening the page.
+Sphinx emits div.math and MathJax replaces it with an mjx-container, so both need
+the rule.
+*/
+.md-typeset div.math,
+.md-typeset mjx-container[display="true"] {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 0.2rem;
+}

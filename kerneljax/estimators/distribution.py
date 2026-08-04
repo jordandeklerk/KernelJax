@@ -29,7 +29,7 @@ __all__ = ["DistributionFit", "cdf"]
 class DistributionFit:
     """Result of a mixed-type cumulative distribution estimate.
 
-    Parameters
+    Attributes
     ----------
     value : Float[Array, " n_eval"]
         The distribution estimate at each evaluation point.
@@ -88,7 +88,8 @@ def cdf(
     with :math:`n` the training sample size whatever the evaluation points are.
 
     Only continuous and ordered columns are supported, since an unordered column
-    carries no order to accumulate along.
+    carries no order to accumulate along. Bandwidth selection for this estimator
+    follows [1]_.
 
     Parameters
     ----------

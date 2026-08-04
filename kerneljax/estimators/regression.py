@@ -43,7 +43,7 @@ class LocalPolyFit:
     with :math:`\beta_j` the coefficient of the first order term in column :math:`j` and
     :math:`h_j` its bandwidth.
 
-    Parameters
+    Attributes
     ----------
     mean : Float[Array, " n_eval"]
         The fitted regression value at every evaluation point.

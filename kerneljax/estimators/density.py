@@ -30,7 +30,7 @@ __all__ = ["DensityFit", "density"]
 class DensityFit:
     """Result of a mixed-type density estimate.
 
-    Parameters
+    Attributes
     ----------
     value : Float[Array, " n_eval"]
         The density estimate at each evaluation point.

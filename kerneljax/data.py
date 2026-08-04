@@ -98,7 +98,7 @@ class ColumnSpec:
 class MixedData:
     r"""A mixed-type design matrix held as three dense blocks.
 
-    Parameters
+    Attributes
     ----------
     con : Float[Array, "n p_con"]
         Continuous columns.
@@ -142,26 +142,26 @@ class MixedData:
 
         Parameters
         ----------
-        con : Array, optional
+        continuous : Array, optional
             Continuous columns, shape ``(n, p_con)``. A 1-D array of shape
             ``(n,)`` is read as a single column.
-        uno : Array, optional
+        unordered : Array, optional
             Unordered categorical codes, shape ``(n, p_uno)``, codes in
             ``[0, unordered_levels[j])`` for column ``j``. A 1-D array is read as a
             single column.
-        orde : Array, optional
+        ordered : Array, optional
             Ordered categorical levels, shape ``(n, p_ord)``, codes in
             ``[0, ordered_levels[j])`` for column ``j``. A 1-D array is read as a
             single column.
         unordered_levels : tuple of int, optional
             Level count of each unordered column, in block order, one entry
-            per column of ``uno``. Defaults to the levels present in the
+            per column of ``unordered``. Defaults to the levels present in the
             sample. Give it explicitly when a level exists but happens not to
             appear here, since the count sets both the kernel and the range
             its smoothing parameter is searched over.
         ordered_levels : tuple of int, optional
             Level count of each ordered column, in block order, one entry
-            per column of ``orde``. Defaults to the levels present in the
+            per column of ``ordered``. Defaults to the levels present in the
             sample, on the same terms as ``unordered_levels``.
         names : tuple of str, optional
             Column names, in block order (continuous, unordered, ordered).
