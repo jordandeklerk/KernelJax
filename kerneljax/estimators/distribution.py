@@ -132,22 +132,27 @@ def cdf(
 
     Examples
     --------
-    Estimate a distribution on a continuous sample.
+    Estimate a distribution with the bandwidth chosen by cross validation and read it
+    at three points. The estimate increases with the evaluation point, and the
+    standard error is largest near the median where the binomial variance peaks.
 
     .. ipython::
         :okwarning:
 
-        In [1]: import jax.numpy as jnp
+        In [1]: import numpy as np
            ...: import kerneljax as kj
            ...:
-           ...: x = jnp.linspace(-2.0, 2.0, 50).reshape(-1, 1)
-           ...: train = kj.MixedData.continuous(x)
-           ...: bw = kj.Bandwidth(h=jnp.array([0.3]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
-           ...: print(kj.cdf(train, bw).value[:5])
+           ...: rng = np.random.default_rng(0)
+           ...: z = np.concatenate([rng.normal(-2.0, 0.7, 100), rng.normal(2.0, 1.0, 100)])
+           ...: fit = kj.cdf(z, "cv_cdf", at=np.array([-2.0, 0.0, 2.0]))
+           ...: print(np.asarray(fit.value))
+           ...: print(np.asarray(fit.se))
 
     See Also
     --------
     density : Estimate a mixed-type probability density.
+    local_poly : Fit a local polynomial regression of mixed-type data.
+    select_bandwidth : Select a bandwidth by minimizing a cross-validation criterion.
 
     References
     ----------

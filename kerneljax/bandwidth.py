@@ -52,6 +52,27 @@ class Bandwidth:
         Which axis ``h`` is indexed by, static metadata. ``"shared"`` is a
         fixed bandwidth, ``"eval"`` varies with the evaluation point and
         ``"train"`` varies with the training point.
+
+    Examples
+    --------
+    Build one directly to hold a bandwidth fixed rather than selecting it. The
+    categorical arrays stay empty when every column is continuous, and the result
+    can be passed to any estimator in place of a selection rule.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import jax.numpy as jnp
+           ...: import numpy as np
+           ...: import kerneljax as kj
+           ...:
+           ...: fixed = kj.Bandwidth(h=jnp.array([0.25]),
+           ...:                      lam_uno=jnp.zeros(0),
+           ...:                      lam_ord=jnp.zeros(0))
+           ...: rng = np.random.default_rng(0)
+           ...: x = rng.uniform(size=60)
+           ...: y = np.sin(2 * np.pi * x)
+           ...: print(kj.local_poly(x, y, fixed, at=np.array([0.5])).mean)
     """
 
     h: FloatArray
@@ -313,6 +334,21 @@ def normal_reference(
     -------
     Bandwidth
         A starting bandwidth with ``h_axis="shared"``.
+
+    Examples
+    --------
+    The rule is closed form, so it needs no optimization and makes a fast starting
+    point or a fallback when cross validation is too costly.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import numpy as np
+           ...: import kerneljax as kj
+           ...:
+           ...: rng = np.random.default_rng(0)
+           ...: data = kj.MixedData.from_blocks(continuous=rng.normal(size=200))
+           ...: print(kj.normal_reference(data, kj.KernelSet()).h)
     """
     n = data.n
     spec = data.spec

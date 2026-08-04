@@ -47,31 +47,88 @@ This is the *Nadaraya-Watson* estimator. It is exactly the weighted average of r
 opening intuition suggested, and we did not postulate it; it fell out of substituting
 density estimates into the definition of a conditional expectation.
 
+That route assumes more than the estimator needs. Writing $m$ as a ratio of integrals
+requires a joint density for $(X, Y)$ and $\mathbb{E}|Y| < \infty$, while Nadaraya-Watson
+itself requires neither and applies perfectly well to a discrete response. Read the
+derivation as motivation for the form rather than as its most general justification.
+
 ## The bias of the local constant fit
 
-Deriving the bias of a ratio requires a little care, since $\mathbb{E}[A/B] \neq
-\mathbb{E}[A]/\mathbb{E}[B]$. Writing $\hat g(x) = \frac{1}{n}\sum_i k_h(x - X_i) Y_i$ for
-the numerator and $\hat f(x)$ for the denominator, a first-order expansion of the ratio
-about $(\mathbb{E}\hat g, \mathbb{E}\hat f)$ together with the expansions of the previous
-page gives, after some algebra,
+Having built the estimator we should ask what it costs, exactly as we did for the density.
+The calculation takes more care here, because $\hat m_{\mathrm{NW}}$ is a ratio of two
+random quantities rather than a single average, and the expectation of a ratio is not the
+ratio of the expectations. The care is repaid, because the answer contains a term that has
+no business being there and the rest of the page is about removing it.
+
+Write $\hat g(x) = \frac{1}{n}\sum_i k_h(x - X_i) Y_i$ for the numerator and $\hat f(x)$
+for the denominator, so that $\hat m_{\mathrm{NW}} = \hat g / \hat f$.
+
+Take the numerator first. Conditioning on $X$ and using
+$\mathbb{E}[Y \mid X] = m(X)$ replaces $Y_i$ by $m(X_i)$ inside the expectation, so
+$\hat g$ is estimating the *product* $\varphi = m f$ rather than $m$ itself,
+
+$$
+\begin{aligned}
+\mathbb{E}[\hat g(x)]
+ &= \int k_h(x - u)\, m(u) f(u)\, du
+  = \int k(v)\, \varphi(x + hv)\, dv \\[4pt]
+ &= \varphi(x) + \frac{h^2}{2}\mu_2(k)\, \varphi''(x) + o(h^2),
+\end{aligned}
+$$
+
+by exactly the substitution and Taylor expansion of the previous page. Differentiating the
+product twice gives $\varphi'' = m'' f + 2 m' f' + m f''$, and the denominator we already
+know,
+
+$$
+\mathbb{E}[\hat f(x)] = f(x) + \frac{h^2}{2}\mu_2(k)\, f''(x) + o(h^2).
+$$
+
+A ratio is not the ratio of the expectations, so we linearize. Subtracting $m(x)$ and
+putting the two over a common denominator,
+
+$$
+\hat m_{\mathrm{NW}}(x) - m(x) = \frac{\hat g(x) - m(x)\, \hat f(x)}{\hat f(x)},
+$$
+
+and replacing $\hat f$ in the denominator by $f$. Consistency alone does not license that
+step. It needs the rate $\hat f(x) - f(x) = O_p\bigl(h^2 + (nh)^{-1/2}\bigr)$ together with
+$n h^3 \to \infty$, which make the remainder $o_p(h^2)$. The numerator of that expression has
+expectation
+
+$$
+\begin{aligned}
+\mathbb{E}\bigl[\hat g - m(x)\, \hat f\bigr]
+ &= \frac{h^2}{2}\mu_2(k)\Bigl[\, m'' f + 2 m' f' + m f'' - m f'' \,\Bigr] + o(h^2) \\[4pt]
+ &= \frac{h^2}{2}\mu_2(k)\bigl[\, m'' f + 2 m' f' \,\bigr] + o(h^2),
+\end{aligned}
+$$
+
+where the two $m f''$ terms cancel. That cancellation is the whole point. The curvature of
+the design density drops out, but the interaction between the slope of $m$ and the slope of
+$f$ does not. Dividing by $f(x)$,
 
 $$
 \operatorname{Bias}\bigl[\hat m_{\mathrm{NW}}(x)\bigr]
  = h^2 \mu_2(k) \left\{ \frac{m''(x)}{2}
-   + \frac{m'(x) f'(x)}{f(x)} \right\} + o(h^2),
+   + \frac{m'(x) f'(x)}{f(x)} \right\} + o(h^2).
 $$
 
-while the variance is
+The variance follows from the same linearization. To leading order $\hat m_{\mathrm{NW}}$
+is a weighted average of the $Y_i$ with weights $k_h(x - X_i) / \sum_j k_h(x - X_j)$, and
+those weights are $O(1/nh)$ apiece, so
 
 $$
 \operatorname{Var}\bigl[\hat m_{\mathrm{NW}}(x)\bigr]
- = \frac{R(k)\, \sigma^2(x)}{n h f(x)} + o\!\left(\frac{1}{nh}\right).
+ = \frac{R(k)\, \sigma^2(x)}{n h f(x)} + o\!\left(\frac{1}{nh}\right),
 $$
 
-The variance is what we would expect: the noise level $\sigma^2(x)$ divided by the effective
+the $R(k)$ and the $nhf(x)$ arriving exactly as they did for the density.
+
+The variance is what we would expect, the noise level $\sigma^2(x)$ divided by the effective
 local sample size $nhf(x)$. The bias, however, contains two terms, and the second is
 troubling. The quantity $m'(x) f'(x) / f(x)$ has nothing to do with the curvature of $m$. It
-is a *design bias*: even where $m$ is perfectly straight, so that $m'' = 0$ and there is
+is a *design bias*. Even where $m$ is perfectly straight, so that $m'' = 0$ and there is
 nothing to smooth away, the estimator is biased whenever the covariates are unevenly
 distributed.
 
@@ -104,7 +161,7 @@ $$
 
 a weighted least squares problem fitting a *constant* near $x$. A constant cannot follow a
 tilted neighborhood, which is exactly the defect we diagnosed. So let us fit something that
-can:
+can,
 
 $$
 \min_{\beta \in \mathbb{R}^{p+1}} \sum_{i=1}^n k_h(x - X_i)
@@ -144,6 +201,10 @@ regression, is the usual default, and we can now say exactly why.
 
 ## Why local linear is the default
 
+Fitting a line rather than a level ought to help, but we have not yet shown that it does,
+nor that it costs nothing. Both follow from writing the degree-one fit out explicitly,
+because the weights it ends up applying have two properties the local constant weights lack.
+
 Write $s_j = \sum_i k_h(x - X_i)(X_i - x)^j$ for the weighted moments of the design. Solving
 the $2 \times 2$ system explicitly, the local linear estimate is
 
@@ -156,15 +217,33 @@ $$
 These $\ell_i(x)$ are the *equivalent kernel* weights. Unlike the Nadaraya-Watson weights,
 which are always positive, they may be negative, and it is exactly this that lets the fit
 tilt to accommodate an asymmetric window. Two identities follow directly from the formula
-and are worth stating, since they are the whole story:
+and are worth stating, since they are the whole story,
 
 $$
 \sum_{i=1}^n \ell_i(x) = 1, \qquad \sum_{i=1}^n \ell_i(x)\, (X_i - x) = 0 .
 $$
 
 The first says the weights reproduce constants; the second says they reproduce linear
-functions exactly. Any $m$ that is locally linear is therefore fitted without error,
-regardless of how the design is distributed. Carrying this through the expansion gives
+functions exactly. Any $m$ that is exactly linear across the window is therefore estimated
+without bias, conditional on the design and however the covariates are distributed. That is
+a statement about the conditional mean; the noise in the responses is untouched.
+
+The variance also follows directly. Because $\hat m_{\mathrm{LL}}$ is linear in the
+responses and the errors are conditionally uncorrelated, and since the weights depend on
+the design the equality below is a conditional one,
+
+$$
+\operatorname{Var}\bigl[\hat m_{\mathrm{LL}}(x) \,\big|\, X_1, \dots, X_n\bigr]
+ = \sum_{i=1}^n \ell_i(x)^2\, \sigma^2(X_i),
+$$
+
+and the same expansion that produced $R(k)$ for the density gives
+
+$$
+\sum_{i=1}^n \ell_i(x)^2 = \frac{R(k)}{n h f(x)} + o\!\left(\frac{1}{nh}\right).
+$$
+
+Carrying both through,
 
 $$
 \begin{aligned}
@@ -175,16 +254,21 @@ $$
 \end{aligned}
 $$
 
-Compare this with the local constant result. The variance is identical, so nothing has been
-paid. The bias has lost its $m'f'/f$ term entirely and depends only on the curvature of $m$,
+Compare this with the local constant result. The leading interior variance is identical, so
+the improvement costs nothing at that order, though finite-sample variances differ and the
+boundary constants differ as the previous paragraph describes. The bias has lost its $m'f'/f$ term entirely and depends only on the curvature of $m$,
 which is the irreducible cost of smoothing. Fan and Gijbels (1996) call this *design
-adaptivity*: the estimator's leading bias does not depend on the design density at all.
+adaptivity*, since the estimator's leading bias does not depend on the design density at all.
 
-The same argument repairs the boundary. Because the weights reproduce linear functions on
-whatever data lie inside the window, a one-sided window costs nothing to leading order, and
-the bias remains $O(h^2)$ right up to the edge with the same constant as in the interior. No
-explicit boundary correction is required, which is the practical case Hastie and Loader
-(1993) make for reaching for local linear by default.
+The same argument repairs the boundary, though it is worth being exact about what survives.
+Because the weights reproduce linear functions on whatever data lie inside the window, the
+bias stays $O(h^2)$ right up to the edge, where the local constant fit degrades to $O(h)$.
+The *order* is what carries over; the constant is not. At an edge the equivalent kernel is
+truncated to one side, so $\mu_2(k)$ is replaced by the second moment of that truncated
+kernel, which for a Gaussian at a left endpoint is about $-0.752$ rather than $1$. Local
+linear is boundary adaptive in rate, not in constant. That is still enough to make an
+explicit boundary correction unnecessary, which is the practical case Hastie and Loader
+(1993) make for reaching for it by default.
 
 Higher degrees continue the pattern. Odd $p$ is generally preferred to even, since moving
 from $p = 2j$ to $p = 2j+1$ removes a design-dependent bias term without inflating the
@@ -193,7 +277,7 @@ variance order, exactly as we saw moving from $p = 0$ to $p = 1$.
 ## The smoother matrix
 
 Since $\hat m(x)$ is linear in $\mathbf{y}$ for every $x$, stacking the fits at the
-observed covariates gives $\hat{\mathbf{m}} = H \mathbf{y}$, where the $i$th row of the
+observed covariates gives $\hat{\mathbf{m}} = H \mathbf{y}$ where the $i$th row of the
 *smoother matrix* $H$ is $\ell(X_i)^\top$. Explicitly,
 
 $$
@@ -202,12 +286,22 @@ H_{ij} = e_1^\top \bigl(\mathbf{X}_{X_i}^\top \mathbf{W}_{X_i} \mathbf{X}_{X_i}\
 $$
 
 The trace of $H$ plays the role that a parameter count plays in a parametric model, and we
-call it the *effective degrees of freedom*, $\nu = \operatorname{tr}(H)$. It decreases as
+call it the *effective degrees of freedom*, $\nu = \operatorname{tr}(H)$. It typically decreases as
 $h$ grows, running from roughly $n$ at $h \to 0$, where the fit interpolates, down toward
-$p+1$ as $h \to \infty$, where it becomes a global polynomial fit. The diagonal entries
-$H_{ii}$ are the leverages, and the residual variance is estimated by
-$\hat\sigma^2 = \mathrm{RSS} / (n - \nu)$. Both quantities reappear in
-[Bandwidth selection](selection.md).
+$p+1$ as $h \to \infty$, where it becomes a global polynomial fit, though strict monotonicity
+is not guaranteed for every design and kernel. The diagonal entries
+$H_{ii}$ are the leverages.
+
+Two conventions for the residual variance are in use. The plain one is
+$\hat\sigma^2 = \mathrm{RSS}/n$. The corrected one is usually written
+$\mathrm{RSS}/(n - \nu)$, but that denominator is exact only when $H$ is a symmetric
+idempotent projection, which a local polynomial smoother is not. In general
+$\mathbb{E}[\mathrm{RSS} \mid X] = \sigma^2 \operatorname{tr}\bigl[(I - H)^\top (I - H)\bigr]$,
+so the exact residual degrees of freedom are
+$n - 2\operatorname{tr}(H) + \operatorname{tr}(H^\top H)$. KernelJax takes the plain
+convention and reports $\sqrt{\mathrm{RSS}/n}$ as `residual_se`, which is also what the
+corrected Akaike criterion of the [next page](selection.md) is defined against. Both
+quantities reappear there.
 
 In KernelJax the moment matrices $\mathbf{X}_x^\top \mathbf{W}_x \mathbf{X}_x$ and
 $\mathbf{X}_x^\top \mathbf{W}_x \mathbf{y}$ are formed directly, without ever building

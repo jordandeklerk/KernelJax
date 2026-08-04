@@ -152,3 +152,81 @@ the rule.
   overflow-y: hidden;
   padding-bottom: 0.2rem;
 }
+
+/*
+The theme sticks the sidebar 2.4rem below the top, which is its own header
+height. Ours is taller because of the larger logo (2.5rem plus 0.2rem padding
+either side), so without matching the offset the foot of a long nav sits below
+the viewport and cannot be reached. The explicit scroll height is a belt-and-
+braces measure, since the theme otherwise sets it from JavaScript.
+*/
+.md-sidebar {
+  top: 2.9rem;
+}
+
+.md-sidebar--primary .md-sidebar__scrollwrap {
+  max-height: calc(100vh - 4.1rem);
+  overflow-y: auto;
+}
+
+/*
+autosummary writes one page per documented object, so the API reference carries
+37 leaves in the sidebar and the nav runs to roughly twice the viewport height.
+Every one of them is reachable from the grouped tables on the reference page
+itself, so hide the leaves here and keep the section headings above them.
+*/
+.md-sidebar--primary .md-nav__item:has(> .md-nav__link[href*="generated/kerneljax."]) {
+  display: none;
+}
+
+/*
+sphinx-copybutton keeps its button at opacity 0 until the block is hovered, which
+makes it easy to miss entirely. Show it dimmed at rest and bring it up on hover or
+focus, so a reader can see that examples are copyable.
+*/
+button.copybtn {
+  opacity: 0.4;
+}
+
+.highlight:hover button.copybtn,
+button.copybtn:hover,
+button.copybtn:focus,
+button.copybtn.success {
+  opacity: 1;
+}
+
+/*
+sphinx-copybutton hardcodes GitHub's light palette on the button, so on the dark
+scheme it renders as a near-white chip over a dark code block. Track the theme
+instead. The icon follows `color` because copybutton.css sets `stroke:
+currentColor` on the svg.
+*/
+[data-md-color-scheme="slate"] button.copybtn {
+  background-color: var(--md-code-bg-color);
+  border-color: var(--md-default-fg-color--lightest);
+  color: var(--md-default-fg-color--light);
+}
+
+/*
+The two tabs on the quickstart's first fit measure 659px and 636px in the browser,
+so they are close but not equal. Without a floor the page reflows a little every
+time the reader switches tab. Pin both to the taller, 659px at the 130% root being
+just under 32rem. Re-measure if either tab's content changes.
+*/
+.fit-tabs .sd-tab-content {
+  min-height: 32rem;
+}
+
+/*
+sphinx-design sizes its tab labels at --sd-fontsize-tabs-label: 1rem, which at
+our 130% root renders half again larger than the tabs on a mkdocs-material site.
+Match what Material uses for .tabbed-labels>label so the toggle reads as a
+control rather than as body text.
+*/
+:root {
+  --sd-fontsize-tabs-label: 0.64rem;
+}
+
+.sd-tab-set > label {
+  padding: 0.78125em 1.25em 0.625em;
+}

@@ -26,6 +26,21 @@ class KernelSet:
         Kernel family applied to every unordered categorical column.
     ordered : OrderedKernel
         Kernel family applied to every ordered categorical column.
+
+    Examples
+    --------
+    Defaults cover every column kind, so only the one being changed needs naming.
+    Pass the result to any estimator through ``kernels=``.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import kerneljax as kj
+           ...:
+           ...: kernels = kj.KernelSet(ordered=kj.WangVanRyzin())
+           ...: print(type(kernels.continuous).__name__,
+           ...:       type(kernels.unordered).__name__,
+           ...:       type(kernels.ordered).__name__)
     """
 
     continuous: ContinuousKernel = dataclasses.field(default_factory=Gaussian)

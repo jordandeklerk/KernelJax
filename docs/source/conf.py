@@ -24,6 +24,7 @@ templates_path = ["_templates"]
 html_theme = "sphinx_immaterial"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
+html_js_files = [("copybutton-shim.js", {"priority": 200})]
 html_title = "KernelJax"
 html_logo = "_static/logo.svg"
 html_favicon = "_static/favicon.ico"
@@ -33,15 +34,12 @@ html_theme_options = {
     "repo_name": "KernelJax",
     "icon": {"repo": "fontawesome/brands/github"},
     "features": [
-        "navigation.sections",
-        "navigation.expand",
         "navigation.instant",
         "navigation.top",
         "navigation.tracking",
         "search.highlight",
         "search.share",
         "toc.follow",
-        "content.code.copy",
     ],
     "palette": [
         {
@@ -60,6 +58,12 @@ html_theme_options = {
         },
     ],
 }
+
+# The copy button strips IPython prompts so an example pastes straight into a
+# notebook as runnable code. Output lines carry no prompt and are skipped; a block
+# with no prompts at all, such as a plain python block, is copied whole.
+copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
+copybutton_prompt_is_regexp = True
 
 autosummary_generate = True
 

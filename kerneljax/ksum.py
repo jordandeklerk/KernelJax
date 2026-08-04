@@ -40,8 +40,8 @@ def kweights(
         W_{ji} = \prod_{d} K_d(\mathrm{at}_{jd}, \mathrm{train}_{id}).
 
     The default kernel families are the Gaussian kernel for continuous columns, the
-    Aitchison and Aitken kernel for unordered columns [2]_, and the Wang and van
-    Ryzin kernel for ordered columns [3]_.
+    Aitchison and Aitken kernel for unordered columns [2]_, and the Li and Racine
+    kernel for ordered columns [3]_.
 
     Parameters
     ----------
@@ -96,8 +96,8 @@ def kweights(
            Multivariate Analysis, 86, 266-292.
     .. [2] Aitchison, J., & Aitken, C. G. G. (1976). "Multivariate binary
            discrimination by the kernel method." Biometrika, 63, 413-420.
-    .. [3] Wang, M. C., & van Ryzin, J. (1981). "A class of smooth estimators
-           for discrete distributions." Biometrika, 68, 301-309.
+    .. [3] Li, Q., & Racine, J. S. (2007). Nonparametric Econometrics: Theory
+           and Practice. Princeton University Press.
     """
     evaluate = train if at is None else at
     kernels = KernelSet() if kernels is None else kernels

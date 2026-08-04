@@ -137,13 +137,14 @@ def select_bandwidth(
     offsets = jnp.concatenate([jnp.zeros(1), perturbations])[:, None] * jnp.ones_like(z0)[None, :]
     candidates = z0[None, :] + offsets
     solved, values, iterations, flags = jax.lax.map(lambda start: solver(objective, start), candidates)
-    ranked = jnp.argmin(jnp.where(jnp.isfinite(values), values, jnp.inf))
+    usable = jnp.logical_and(jnp.isfinite(values), jnp.all(jnp.isfinite(solved), axis=1))
+    ranked = jnp.argmin(jnp.where(usable, values, jnp.inf))
 
     return SelectionResult(
         bandwidth=transform.from_unconstrained(solved[ranked]),
         value=values[ranked],
         n_iter=iterations[ranked],
-        converged=flags[ranked],
+        converged=jnp.logical_and(flags[ranked], usable[ranked]),
         criterion=criterion,
     )
 
@@ -246,9 +247,11 @@ def lbfgs(
         step_diffs = jnp.roll(step_diffs, -1, axis=0).at[history - 1].set(step_diff)
         grad_diffs = jnp.roll(grad_diffs, -1, axis=0).at[history - 1].set(grad_diff)
 
-        converged = jnp.logical_or(
+        stalled = jnp.logical_or(
             jnp.max(jnp.abs(grad_new)) < tol, jnp.abs(value_new - value) < tol * (1.0 + jnp.abs(value))
         )
+        usable = jnp.logical_and(jnp.isfinite(value_new), jnp.all(jnp.isfinite(grad_new)))
+        converged = jnp.logical_and(stalled, usable)
         return z_new, value_new, grad_new, step_diffs, grad_diffs, iteration + 1, converged
 
     value0, grad0 = value_and_grad_fn(z0)

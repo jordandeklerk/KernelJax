@@ -122,19 +122,27 @@ def density(
 
     Examples
     --------
-    Estimate a density from a sample of continuous data.
+    Estimate a bimodal density with the bandwidth chosen by likelihood cross
+    validation, then evaluate it at the two modes and at the trough between them.
+    The estimate is high at each mode and low in between.
 
     .. ipython::
         :okwarning:
 
-        In [1]: import jax.numpy as jnp
+        In [1]: import numpy as np
            ...: import kerneljax as kj
            ...:
-           ...: x = jnp.linspace(-2.0, 2.0, 50).reshape(-1, 1)
-           ...: train = kj.MixedData.continuous(x)
-           ...: bw = kj.Bandwidth(h=jnp.array([0.3]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
-           ...: fit = kj.density(train, bw)
-           ...: print(fit.value[:5])
+           ...: rng = np.random.default_rng(0)
+           ...: z = np.concatenate([rng.normal(-2.0, 0.7, 100), rng.normal(2.0, 1.0, 100)])
+           ...: fit = kj.density(z, "cv_ml", at=np.array([-2.0, 0.0, 2.0]))
+           ...: print(np.asarray(fit.value))
+
+    See Also
+    --------
+    local_poly : Fit a local polynomial regression of mixed-type data.
+    cdf : Estimate a mixed-type cumulative distribution.
+    summary : Measure how well a fitted estimator describes the sample it was fit on.
+    select_bandwidth : Select a bandwidth by minimizing a cross-validation criterion.
 
     References
     ----------

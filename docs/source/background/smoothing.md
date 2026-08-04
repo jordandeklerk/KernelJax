@@ -57,8 +57,10 @@ are worth naming carefully, because repairing them leads us directly to the kern
 estimator.
 
 The first defect is that a histogram is not smooth. It is constant within each bin and jumps
-at every boundary, so it can never represent a smooth density well, however much data we
-give it. The second is subtler and more troubling: the estimate at a point depends on where
+at every boundary, and no quantity of data removes those jumps. It does converge as the bins
+shrink, but more slowly than what we are about to build, because pinning bins to a fixed grid
+rather than to the evaluation point leaves a bias of order $h$ where the kernel estimator
+achieves $h^2$. The second is subtler and more troubling. The estimate at a point depends on where
 we happened to place the bins. Two analysts using the same bin width but different origins
 will report different values at the same $x$, which is an artifact of our grid rather than
 anything to do with the data.
@@ -80,16 +82,20 @@ It is still not smooth, though, and we can see exactly why. An observation contr
 nothing until it comes within distance $h$ of $x$, at which moment it abruptly contributes
 its full weight. If we want a smooth estimate, we should let that weight decay, so that
 observations close to $x$ count for more than distant ones and nothing enters or leaves the
-sum discontinuously. We therefore ask for a function $k$ satisfying
+sum discontinuously. We therefore ask for a function $k$ that is nonnegative and symmetric about zero, so that
+weight depends only on distance, and that satisfies
 
 $$
-\int k(u)\, du = 1, \qquad \int u\, k(u)\, du = 0, \qquad
-\mu_2(k) = \int u^2 k(u)\, du < \infty ,
+\int k(u)\, du = 1, \qquad
+\mu_2(k) = \int u^2 k(u)\, du < \infty, \qquad
+R(k) = \int k(u)^2\, du < \infty .
 $$
 
-the second condition holding automatically when $k$ is symmetric. A function meeting these
-three requirements with $\mu_2(k) \neq 0$ is called a *second-order kernel*, and the
-estimator it produces,
+Symmetry does two jobs below. It makes $\int u\, k(u)\, du = 0$, which kills the first-order
+term of the expansion, and it lets us replace $k(-v)$ by $k(v)$ after a change of variable.
+A function meeting these requirements with $\mu_2(k) \neq 0$ is a *second-order kernel*.
+Nonnegativity is what keeps $\hat f$ a density; higher-order kernels give it up to buy a
+faster rate, at the price of estimates that can dip below zero. The estimator $k$ produces,
 
 $$
 \hat f(x) = \frac{1}{nh} \sum_{i=1}^{n} k\!\left(\frac{x - X_i}{h}\right)
@@ -110,12 +116,32 @@ turn.
 
 ## The bias of the estimator
 
-The bandwidth governs everything, and it is worth deriving precisely why, because the
-argument dictates how we shall have to choose it. We assume throughout that $f$ is twice
-continuously differentiable, that $h \to 0$ and $nh \to \infty$ as $n$ grows.
+We now have an estimator and no way of choosing the one number it depends on. To choose it
+we need to know what it costs us, so we should ask in what ways an estimator can be wrong.
+
+There are two, and they are quite different. An estimator can be systematically off, sitting
+away from the truth on average however much data we collect, which we call its *bias*. Or it
+can be unstable, landing far from its own average on any particular sample, which we call
+its *variance*. Both matter, and the bandwidth turns out to move them in opposite
+directions, which is the whole reason choosing it is delicate. This section computes the
+bias and the next computes the variance.
+
+Three assumptions carry us through both. We take $f$ to be twice continuously
+differentiable, which is what makes the Taylor expansion below legitimate. We work at a
+point $x$ in the interior of the support, since at an edge the window is one-sided and the
+leading bias is larger, a problem we meet properly on the [next page](regression.md). And we
+let $h \to 0$ while $nh \to \infty$ as the sample grows. The first of that pair says the window closes in on
+the evaluation point, so the estimate becomes local. The second says it must not close so
+fast that the window empties, and the variance calculation will give that condition an exact reading.
+
+Two pieces of notation recur from here on. Writing $a_n = O(b_n)$ means $a_n / b_n$ stays
+bounded, so $a_n$ is at most of the size of $b_n$; writing $a_n = o(b_n)$ means
+$a_n / b_n \to 0$, so $a_n$ is negligible beside $b_n$. A term recorded as $o(h^2)$ is
+therefore one we may ignore once $h$ is small enough, and the expressions below are exact
+only to the order shown.
 
 Since the $X_i$ are identically distributed, the expectation of the sum is $n$ times the
-expectation of one term:
+expectation of one term,
 
 $$
 \mathbb{E}[\hat f(x)] = \mathbb{E}\!\left[k_h(x - X)\right]
@@ -144,11 +170,15 @@ $$
 
 Two features deserve comment. The bias is $O(h^2)$ and does not involve $n$ at all, so
 collecting more data does nothing to reduce it if $h$ is held fixed. And it is proportional
-to $f''(x)$, which tells us something intuitive: the estimate is pulled down at peaks, where
+to $f''(x)$, which tells us something intuitive. The estimate is pulled down at peaks, where
 $f'' < 0$, and pushed up in troughs. Smoothing flattens curvature, exactly as we should
 expect from averaging over a neighborhood.
 
 ## The variance of the estimator
+
+The bias tells us where the estimator sits on average. It says nothing about how far any
+one sample can land from that average, and since we only ever have one sample, that is the
+half of the cost we feel. It is also the half the bandwidth pushes the other way.
 
 Because the observations are independent, the variance of the average is $1/n$ times the
 variance of a single term,
@@ -162,10 +192,12 @@ $$
 The second moment succumbs to the same substitution as before,
 
 $$
+\begin{aligned}
 \mathbb{E}\!\left[k_h(x - X)^2\right]
- = \int \frac{1}{h^2} k\!\left(\frac{x-u}{h}\right)^{\!2} f(u)\, du
- = \frac{1}{h} \int k(v)^2 f(x + hv)\, dv
- = \frac{R(k) f(x)}{h} + O(1),
+ &= \int \frac{1}{h^2} k\!\left(\frac{x-u}{h}\right)^{\!2} f(u)\, du
+  = \frac{1}{h} \int k(v)^2 f(x + hv)\, dv \\[4pt]
+ &= \frac{R(k)\, f(x)}{h} + O(1),
+\end{aligned}
 $$
 
 writing $R(k) = \int k(v)^2 dv$. The squared first moment is $\bigl(f(x) + O(h^2)\bigr)^2 =
@@ -180,7 +212,7 @@ falling inside the effective window, so the variance behaves like that of an ave
 $nh$ points. This is the *effective local sample size*, and the requirement $nh \to \infty$
 is precisely the statement that it must grow.
 
-## The trade, and the optimal bandwidth
+## Trading bias against variance
 
 Our two expressions point in opposite directions. The bias grows with $h$ and the variance
 shrinks with it. Taking $h$ small leaves us nearly unbiased but wildly variable; taking $h$
@@ -197,8 +229,10 @@ asymptotic form
 
 $$
 \mathrm{AMISE}(h) = \frac{h^4}{4}\, \mu_2(k)^2\, R(f'') + \frac{R(k)}{nh},
-\qquad R(f'') = \int f''(x)^2 dx .
+\qquad R(f'') = \int f''(x)^2 dx ,
 $$
+
+taking $R(f'')$ to be finite, which is what lets the pointwise expansions be integrated.
 
 Differentiating with respect to $h$ and setting the result to zero,
 
@@ -218,16 +252,18 @@ $$
 
 It is worth being careful about which rate is which, since both appear in the literature.
 The *squared* error decays as $n^{-4/5}$, so the error itself, on the scale of $f$, decays
-as $n^{-2/5}$. It is the latter that we compare against the $n^{-1/2}$ of a correctly
-specified parametric model, and the gap between $n^{-2/5}$ and $n^{-1/2}$ is the price we
-pay for having declined to assume a shape.
+as $n^{-2/5}$. It is the latter we hold against the $n^{-1/2}$ of a correctly
+specified parametric model, though that comparison is a heuristic one, since a root
+integrated error and a pointwise parametric error are not the same loss. The gap between
+$n^{-2/5}$ and $n^{-1/2}$ is nonetheless the price we pay for having declined to assume a
+shape.
 
 The formula for $h_{\text{opt}}$ also carries a sting. It depends on $R(f'')$, a functional
 of the very density we are trying to estimate. We cannot simply look it up, and this is why
 bandwidth selection is a genuine statistical problem rather than a matter of convention. The
 [final page](selection.md) of this section is devoted to it.
 
-## Why the kernel matters far less than the bandwidth
+## Why the kernel hardly matters
 
 One consequence of the AMISE expression shapes how the library is built. The kernel enters
 the attainable error only through the factor
@@ -243,17 +279,23 @@ which minimizes $C$ over all second-order kernels, $\mu_2 = 1/5$ and $R = 3/5$, 
 $C \approx 0.3491$.
 
 Since $\mathrm{AMISE} \propto C(k)\, n^{-4/5}$, two kernels reach the same error when
-$C_1 n_1^{-4/5} = C_2 n_2^{-4/5}$, so the sample sizes required stand in the ratio
-$(C_1/C_2)^{5/4}$. For the Gaussian against the optimal Epanechnikov this is
-$0.9608^{5/4} \approx 0.951$: the Gaussian needs about 5 percent more data, a difference
+$C_1 n_1^{-4/5} = C_2 n_2^{-4/5}$, so the sample sizes stand in the ratio
+$n_1/n_2 = (C_1/C_2)^{5/4}$. Taking the Gaussian first and the Epanechnikov second,
+$C_{\mathrm{gau}}/C_{\mathrm{epa}} \approx 1.041$ and
+
+$$
+\frac{n_{\mathrm{gau}}}{n_{\mathrm{epa}}} \approx 1.041^{5/4} \approx 1.051 ,
+$$
+
+so the Gaussian needs about 5 percent more data to match the optimal kernel, a difference
 few analyses would ever notice. Changing the bandwidth by 5 percent, by contrast, is
 nothing at all, while changing it by a factor of two transforms the answer. Our effort is
 far better spent selecting $h$ well than agonizing over the shape of $k$.
 
-## Several covariates, and how fast we can hope to learn
+## Several covariates
 
 With $d$ continuous covariates we take a product of kernels, one per coordinate, each with
-its own bandwidth:
+its own bandwidth,
 
 $$
 \hat f(x) = \frac{1}{n \prod_{j=1}^d h_j} \sum_{i=1}^n
@@ -278,20 +320,46 @@ and it shrinks geometrically in $d$. Balancing squared bias against variance as 
 $h_j \propto n^{-1/(d+4)}$ and $\mathrm{AMISE} \propto n^{-4/(d+4)}$, so the error on the
 scale of $f$ decays at $n^{-2/(d+4)}$.
 
-This deterioration is not an artifact of our estimator. Stone (1980) established the best
-rate *any* estimator can achieve. Let $\Theta$ be the class of functions on
-$\mathbb{R}^d$ whose derivatives of order $p$ satisfy a Lipschitz condition. Stone's theorem
-states that the optimal rate of convergence for estimating the $m$th derivative of such a
-function is
+## How fast can we learn?
+
+The deterioration above is not an artifact of our estimator. Stone (1980) established the
+best rate *any* estimator can achieve, and the statement is worth giving as he gives it.
+
+Fix a nonnegative integer $k$ and a constant $p > k$, write $g_k$ for the degree-$k$ Taylor
+polynomial of $g$ about the point of interest, and let $\Theta$ collect the functions on
+$\mathbb{R}^d$ that are $k$ times continuously differentiable and satisfy
+
+$$
+\bigl| g(x) - g_k(x) \bigr| \le M \lVert x \rVert^{p}
+$$
+
+on a neighborhood of that point. The exponent $p$ therefore measures smoothness on a
+continuous scale rather than by counting whole derivatives. Stone notes that when $p$ is a
+positive integer and $k = p - 1$, this is implied by a boundedness condition on the $p$th
+derivative, which is the sense in which we may read it as "$p$ bounded derivatives".
+
+Let $m \le k$ and suppose the target is a derivative of order $m$, with $m = 0$ meaning the
+function itself. Assuming the design density and the conditional variance of the response
+are both bounded away from zero and infinity nearby, Stone's theorem states that
 
 $$
 n^{-r}, \qquad r = \frac{p - m}{2p + d},
 $$
 
-in the sense that this rate is both achievable and an upper bound on what any sequence of
-estimators can attain uniformly over $\Theta$. Estimating a twice differentiable function
-itself puts $p = 2$ and $m = 0$, giving $r = 2/(4+d)$, precisely the rate our estimator
-attains. Writing out a few values makes the situation vivid.
+is the optimal rate of convergence, meaning both that some estimator attains it and that no
+sequence of estimators attains a faster rate uniformly over $\Theta$. The theorem is proved
+for two models, an unknown regression function and an unknown density, and gives the same
+rate for both, which is why one statement covers everything on these pages.
+
+A twice differentiable function estimated directly puts $p = 2$, $k = 1$ and $m = 0$, giving
+$r = 2/(4+d)$, precisely the rate our estimator achieves. It is worth knowing what Stone
+uses to prove the rate achievable. For the regression model he fits, by least squares on a
+shrinking neighborhood of the evaluation point, a polynomial of degree $k$, which is exactly
+the local polynomial estimator of the [next page](regression.md). For the density model he
+uses a kernel estimator instead. Either way the rate is not merely a bound our estimators
+happen to meet; it is attained by them.
+
+Writing out a few values makes the situation vivid.
 
 | Covariates $d$ | Optimal rate | Sample matching $n = 100$ in one dimension |
 | --- | --- | --- |
@@ -301,9 +369,16 @@ attains. Writing out a few values makes the situation vivid.
 | 10 | $n^{-1/7}$ | 398,107 |
 
 The right-hand column solves $n_d^{-2/(4+d)} = 100^{-2/5}$ for $n_d$, giving
-$n_d = 100^{(4+d)/5}$: the sample we would need in $d$ dimensions to match the accuracy that
-100 observations give us in one. The growth is punishing, and we cannot engineer our way
-around it, since Stone's result is a lower bound.
+$n_d = 100^{(4+d)/5}$, the sample we would need in $d$ dimensions to match the accuracy that
+100 observations give us in one. The growth is punishing, and inside the smoothness
+class Stone assumes there is no way around it, since his result bounds every estimator
+rather than describing any one of them.
+
+What can be done is to leave that class. Assuming the function is additive across
+coordinates, or depends on only a few linear combinations of them, or on only a handful of
+the covariates, each restores a rate governed by a smaller effective dimension than $d$. The
+last of those is the one KernelJax gets without being asked, and
+[Bandwidth selection](selection.md) shows how.
 
 The intuition behind this *curse of dimensionality* is geometric. We estimate at $x$ using
 observations near $x$, but a cube capturing a fraction $q$ of a uniform sample in $d$

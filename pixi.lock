@@ -2766,7 +2766,7 @@ packages:
 - pypi: ./
   name: kerneljax
   version: 0.0.1
-  sha256: 3dacf2c421bc11e54889c8b96697432a31ec7dc50c8c1b35195d4f68cdb5a691
+  sha256: 44b1af6047d2207b872a9595fc42b90206f89543abe6305c1d475802cb9c8c79
   requires_dist:
   - jax>=0.5.0,<0.11
   - jaxlib>=0.5.0,<0.11
@@ -2776,12 +2776,11 @@ packages:
   - mypy ; extra == 'dev'
   - ty ; extra == 'dev'
   - sphinx ; extra == 'doc'
-  - sphinx-book-theme ; extra == 'doc'
+  - sphinx-immaterial ; extra == 'doc'
   - myst-parser[linkify] ; extra == 'doc'
   - myst-nb ; extra == 'doc'
   - sphinx-copybutton ; extra == 'doc'
   - sphinx-design ; extra == 'doc'
-  - numpydoc ; extra == 'doc'
   - ipython ; extra == 'doc'
   - jax[cuda12]>=0.5.0,<0.11 ; extra == 'gpu'
   - pytest ; extra == 'test'
