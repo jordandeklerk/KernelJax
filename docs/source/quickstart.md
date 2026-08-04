@@ -1,12 +1,7 @@
 # Quickstart
 
 This page walks through the main API. It assumes KernelJax is
-[installed](index.md#installation) and takes no position on the underlying statistics, which
-[Background](background/smoothing.md) covers from first principles.
-
-Every estimator follows the same shape. You hand it training data, a rule for choosing the
-smoothing parameters, and optionally the points to evaluate at, and you get back a fit
-object carrying the estimate, the selected bandwidth, and the selection diagnostics.
+[installed](index.md#installation) and working properly. Every estimator follows the same shape. You hand it training data, a rule for choosing the smoothing parameters, and optionally the points to evaluate at, and you get back a fit object carrying the estimate, the selected bandwidth, and the selection diagnostics.
 
 ## A first fit
 
@@ -198,8 +193,9 @@ print(np.asarray(pred.grad).ravel())
 Two shapes to note. `se` is one number per evaluation point, while `grad` carries one column
 per continuous covariate and so comes back as `(5, 1)` here rather than flat, which is why the
 example ravels it. And `se` describes the fitted mean only, not the gradient beside it. It
-follows the convention `np` uses, a one-pass variance taken about the constant basis row
-whatever the degree, so it is not the residual variance of the polynomial actually fitted.
+follows the convention [np](https://cran.r-project.org/package=np) uses, a one-pass variance
+taken about the constant basis row whatever the degree, so it is not the residual variance of
+the polynomial actually fitted.
 
 The derivative comes from the fitted polynomial coefficients rather than by differencing, so
 it requires `degree >= 1` and costs nothing beyond reading off a coefficient the fit already

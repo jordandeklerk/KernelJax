@@ -4,52 +4,32 @@ KernelJax is a low-level JAX library for nonparametric kernel smoothing with mix
 data, built for researchers developing new statistical methodology from composable,
 differentiable primitives.
 
-It provides density, cumulative distribution, and regression estimators over continuous,
-unordered categorical, and ordered categorical variables, choosing bandwidths and
-categorical smoothing parameters from the data rather than by hand. Everything runs
-natively on CPUs, GPUs, and TPUs through [JAX](https://docs.jax.dev/en/latest/) and
-[XLA](https://openxla.org/xla).
-
 ```{warning}
 KernelJax is under active development and has not yet been released on PyPI. The API may change without notice.
 ```
 
 ## Why KernelJax exists
 
-Nonparametric kernel smoothing of mixed continuous and categorical data is a staple of applied
-econometrics and statistics, and the software that made it practical deserves much of the
-credit. The R package [np](https://cran.r-project.org/package=np) is the reference
-implementation for the whole class, and
-[statsmodels](https://www.statsmodels.org/stable/nonparametric.html) brings a good part of
-that family to Python. Both are careful and well tested, and computational parity with np is
-the standard KernelJax holds its own numbers to.
+Kernel smoothing for mixed continuous and categorical data is well established in econometrics
+and statistics. R's [np](https://cran.r-project.org/package=np) package remains the reference
+implementation, while
+[statsmodels](https://www.statsmodels.org/stable/nonparametric.html) provides similar tools in
+Python. Both focus on high-level estimation workflows in which bandwidth selection and
+optimization happen internally. JAX has lacked an implementation designed for differentiation,
+compilation, and composition. KernelJax fills that gap while using numerical agreement with
+`np` as its benchmark.
 
-Both were also designed around a model of computation that has since moved. An estimator is a
-procedure you call, its bandwidth is settled by a derivative-free search sealed inside that
-call, and the pieces it is assembled from stay internal. No implementation of this class of
-estimators currently exists in the JAX ecosystem. KernelJax is written to close that gap.
+The core idea of KernelJax is that an estimator should be an ordinary JAX program rather than a
+procedure you call. Fits, bandwidths, and design matrices are pytrees, so {func}`jax.jit`,
+{func}`jax.grad`, and {func}`jax.vmap` work without special handling. Cross-validation criteria
+are ordinary differentiable functions, allowing smoothing parameters to be optimized within
+larger models rather than selected in a separate step.
 
-KernelJax is built to compose rather than to be called. The mixed-type design matrix, the
-bandwidth and every fit object are registered pytrees, so {func}`jax.jit`, {func}`jax.grad`
-and {func}`jax.vmap` apply to any of them without special handling. The cross-validation
-criteria are ordinary functions of the data and a bandwidth, which means they can be minimized
-by the built-in L-BFGS, handed to any optimizer in the JAX ecosystem, or added as one term to
-a larger loss so that a smoothing parameter is trained alongside a neural network rather than
-fixed before it starts. Everything lowers through XLA and runs on whichever hardware JAX
-targets, from a laptop core to an accelerator, with no change to the calling code.
-
-The parts are open on purpose. A kernel, a selection criterion and the optimizer that
-minimizes it are each supplied as an argument against a published contract, covered in
-[Custom kernels](user-guide/custom-kernels.md) and
-[custom criteria](user-guide/custom-criteria.md), and the primitives the shipped estimators
-are built from, {func}`~kerneljax.kweights`, {func}`~kerneljax.ksum` and
-{func}`~kerneljax.wls`, are exported rather than hidden. A method nobody has written yet can
-be assembled from the same pieces the shipped ones use.
-
-The closeness between the code and the mathematics is meant to be useful in its own right.
-[Background](background/smoothing.md) derives these estimators from first principles, and the
-primitives carry the names of the objects in those derivations, so a reader can hold a
-textbook open beside the code they are writing.
+The same principle applies to the parts. Kernels, criteria, solvers, and low-level primitives
+such as {func}`~kerneljax.kweights`, {func}`~kerneljax.ksum`, and {func}`~kerneljax.wls` remain
+accessible through public interfaces. Everything lowers through XLA, runs on hardware supported
+by JAX, and is derived from first principles in the [Background](background/smoothing.md)
+documentation using the same concepts exposed by the API.
 
 ## Installation
 
