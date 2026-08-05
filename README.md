@@ -103,9 +103,9 @@ Local polynomial regression
 
 ## Custom kernels
 
-KernelJax is built on JAX primitives, so a new kernel is ordinary JAX rather than a compiled
-extension. Subclass the base class for the column kind, implement `value`, and the bandwidth
-below is selected through the kernel you wrote.
+A kernel sets how observations are weighted. Subclass [`ContinuousKernel`][kernels] or the
+categorical base for that column kind, implement `value`, and pass the result through
+[`KernelSet`][kernelset]. Bandwidth selection then runs through the kernel you wrote.
 
 ```python
 import dataclasses
@@ -128,11 +128,13 @@ Epanechnikov  h=0.084645  r2=0.947231
 Gaussian      h=0.036019  r2=0.947953
 ```
 
-## Custom criteria
+## Custom selection criteria
 
-The shipped selection rules are ordinary JAX functions, and so is anything you write in their
-place. Implement `__call__`, hand it to the same selector they go through, and the bandwidth
-below is found by differentiating the loss you wrote.
+Bandwidth selection minimizes a scalar criterion. The built-in rules
+([`cv_ls`][objectives], [corrected AIC][objectives]) are ordinary JAX callables, and so is
+anything you write in their place. Implement `__call__`, pass it to
+[`select_bandwidth`][select_bandwidth], and the optimizer finds `h` by differentiating the
+loss you wrote.
 
 ```python
 @dataclasses.dataclass(frozen=True)
@@ -161,6 +163,8 @@ absolute deviation  h = 0.0348
 [regression]: https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/estimators/regression.py
 [bandwidth]: https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/bandwidth.py
 [objectives]: https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/selection/objectives.py
+[select_bandwidth]: https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/selection/optimize.py
 [selection]: https://github.com/jordandeklerk/KernelJax/tree/main/kerneljax/selection
 [ksum]: https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/ksum.py
 [kernels]: https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/kernels/base.py
+[kernelset]: https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/kernels/sets.py
