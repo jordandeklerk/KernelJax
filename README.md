@@ -102,7 +102,7 @@ Local polynomial regression
   Converged                           True
 ```
 
-## Custom kernels
+### Custom kernels
 
 A kernel sets how observations are weighted. Subclass [`ContinuousKernel`][kernels] or the
 categorical base for that column kind, implement `value`, and pass the result through
@@ -129,7 +129,7 @@ Epanechnikov  h=0.084645  r2=0.947231
 Gaussian      h=0.036019  r2=0.947953
 ```
 
-## Custom selection criteria
+### Custom selection criteria
 
 Bandwidth selection minimizes a scalar criterion. The built-in rules
 ([`cv_ls`][cv_ls], [corrected AIC][aic]) are ordinary JAX callables, and so is anything you
