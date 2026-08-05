@@ -13,6 +13,7 @@
   <a href="https://kerneljax.readthedocs.io/en/latest/" target="_blank"><strong>Docs</strong></a> ·
   <a href="https://kerneljax.readthedocs.io/en/latest/quickstart.html" target="_blank"><strong>Quickstart</strong></a> ·
   <a href="https://kerneljax.readthedocs.io/en/latest/user-guide/custom-kernels.html" target="_blank"><strong>Custom Kernels</strong></a> ·
+  <a href="https://kerneljax.readthedocs.io/en/latest/user-guide/custom-criteria.html" target="_blank"><strong>Custom Criteria</strong></a> ·
   <a href="https://kerneljax.readthedocs.io/en/latest/background/smoothing.html" target="_blank"><strong>Background</strong></a> ·
   <a href="https://kerneljax.readthedocs.io/en/latest/api.html" target="_blank"><strong>API Reference</strong></a>
 </p>
@@ -76,4 +77,80 @@ y = np.sin(2 * np.pi * x) + rng.normal(0, 0.2, 200)
 
 fit = kj.local_poly(x, y, "cv_ls", degree=1)
 print(kj.summary(fit))
+```
+
+```text
+Local polynomial regression
+
+  Observations                         200
+  Continuous variables                   1
+  Estimator                   local linear
+  Bandwidth type                    shared
+
+  Variable      Kind             Bandwidth
+  x1            continuous        0.036019
+
+  Continuous kernel         Gaussian, order 2
+
+  Residual standard error         0.174543
+  R-squared                       0.947953
+
+  Selection                          cv_ls
+  Criterion value                 0.034301
+  Converged                           True
+```
+
+## Custom kernels
+
+KernelJax is built on JAX primitives, so a new kernel is ordinary JAX rather than a compiled
+extension. Subclass the base class for the column kind, implement `value`, and the bandwidth
+below is selected through the kernel you wrote.
+
+```python
+import dataclasses
+import jax.numpy as jnp
+
+@dataclasses.dataclass(frozen=True)
+class Epanechnikov(kj.ContinuousKernel):
+    def value(self, x, y, h):
+        u = (x - y) / h
+        return jnp.where(jnp.abs(u) <= 1.0, 0.75 * (1.0 - u * u), 0.0)
+
+epan = kj.local_poly(x, y, "cv_ls", degree=1, kernels=kj.KernelSet(continuous=Epanechnikov()))
+
+print(f"Epanechnikov  h={epan.bandwidth.h[0]:.6f}  r2={epan.r_squared:.6f}")
+print(f"Gaussian      h={fit.bandwidth.h[0]:.6f}  r2={fit.r_squared:.6f}")
+```
+
+```text
+Epanechnikov  h=0.084645  r2=0.947231
+Gaussian      h=0.036019  r2=0.947953
+```
+
+## Custom criteria
+
+The shipped selection rules are ordinary JAX functions, and so is anything you write in their
+place. Implement `__call__`, hand it to the same selector they go through, and the bandwidth
+below is found by differentiating the loss you wrote.
+
+```python
+@dataclasses.dataclass(frozen=True)
+class AbsoluteDeviation:
+    degree: int = 1
+
+    def __call__(self, train, bandwidth, *, y, kernels=None, chunk=None):
+        fit = kj.local_poly(train, y, bandwidth, kernels=kernels, chunk=chunk,
+                            degree=self.degree, fold=jnp.arange(train.n))
+        return jnp.mean(jnp.abs(y - fit.mean))
+
+squared = kj.select_bandwidth(x, kj.RegressionCriterion(method="cv_ls", degree=1), y=y)
+absolute = kj.select_bandwidth(x, AbsoluteDeviation(degree=1), y=y)
+
+print(f"squared error       h = {squared.bandwidth.h[0]:.4f}")
+print(f"absolute deviation  h = {absolute.bandwidth.h[0]:.4f}")
+```
+
+```text
+squared error       h = 0.0360
+absolute deviation  h = 0.0348
 ```
