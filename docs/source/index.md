@@ -10,17 +10,7 @@ KernelJax is under active development and has not yet been released on PyPI. The
 
 ## Why KernelJax exists
 
-Kernel smoothing for mixed continuous and categorical data is well established in econometrics
-and statistics. R's [np](https://cran.r-project.org/package=np) package remains the reference
-implementation, while
-[statsmodels](https://www.statsmodels.org/stable/nonparametric.html) provides similar tools in
-Python. Both focus on high-level estimation workflows in which bandwidth selection and
-optimization happen internally. JAX has lacked an implementation designed for differentiation,
-compilation, and composition. KernelJax fills that gap while using numerical agreement with
-`np` as its benchmark.
-
-The core idea of KernelJax is that an estimator should be an ordinary JAX program rather than a
-procedure you call. Fits, bandwidths, and design matrices are pytrees, so {func}`jax.jit`,
+The core idea of KernelJax is that an estimator should be an ordinary JAX program rather than a procedure you call. Fits, bandwidths, and design matrices are pytrees, so {func}`jax.jit`,
 {func}`jax.grad`, and {func}`jax.vmap` work without special handling. Cross-validation criteria
 are ordinary differentiable functions, allowing smoothing parameters to be optimized within
 larger models rather than selected in a separate step.

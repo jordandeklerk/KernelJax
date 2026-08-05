@@ -28,6 +28,40 @@ HAxis = Literal["shared", "eval", "train"]
 
 @partial(
     jax.tree_util.register_dataclass,
+    data_fields=["bandwidth", "value", "n_iter", "converged"],
+    meta_fields=["criterion"],
+)
+@dataclasses.dataclass(frozen=True)
+class SelectionResult:
+    """Outcome of a bandwidth selection.
+
+    Parameters
+    ----------
+    bandwidth : Bandwidth
+        The selected bandwidth, in natural, constrained scale.
+    value : ScalarFloat
+        Criterion value at ``bandwidth``.
+    n_iter : Array
+        Number of solver iterations used by the full solve.
+    criterion : callable, optional
+        The criterion that was minimized, carried so a later fit can read
+        back the settings it was selected under. Static.
+    converged : Array
+        Whether the solver stopped because its progress stalled, either
+        the gradient or the objective value stopped moving, rather than
+        because it ran out of its iteration budget. ``True`` does not by
+        itself mean the gradient tolerance was the one that was met.
+    """
+
+    bandwidth: Bandwidth
+    value: ScalarFloat
+    n_iter: Array
+    converged: Array
+    criterion: Any = None
+
+
+@partial(
+    jax.tree_util.register_dataclass,
     data_fields=["h", "lam_uno", "lam_ord"],
     meta_fields=["h_axis"],
 )
@@ -220,40 +254,6 @@ class BandwidthTransform:
         )
 
         return lower, upper
-
-
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=["bandwidth", "value", "n_iter", "converged"],
-    meta_fields=["criterion"],
-)
-@dataclasses.dataclass(frozen=True)
-class SelectionResult:
-    """Outcome of a bandwidth selection.
-
-    Parameters
-    ----------
-    bandwidth : Bandwidth
-        The selected bandwidth, in natural, constrained scale.
-    value : ScalarFloat
-        Criterion value at ``bandwidth``.
-    n_iter : Array
-        Number of solver iterations used by the full solve.
-    criterion : callable, optional
-        The criterion that was minimized, carried so a later fit can read
-        back the settings it was selected under. Static.
-    converged : Array
-        Whether the solver stopped because its progress stalled, either
-        the gradient or the objective value stopped moving, rather than
-        because it ran out of its iteration budget. ``True`` does not by
-        itself mean the gradient tolerance was the one that was met.
-    """
-
-    bandwidth: Bandwidth
-    value: ScalarFloat
-    n_iter: Array
-    converged: Array
-    criterion: Any = None
 
 
 def broadcast_h(bw: Bandwidth, p_con: int) -> Float[Array, "n_eval n_train p_con"]:

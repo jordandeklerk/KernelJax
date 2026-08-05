@@ -123,8 +123,10 @@ def select_bandwidth(
     solver = lbfgs if solver is None else solver
     train = _as_points(train)
     extra = {} if criterion_kwargs is None else dict(criterion_kwargs)
+
     if y is not None:
         extra["y"] = y
+
     transform = BandwidthTransform(spec=train.spec, kernels=kernels)
     start = normal_reference(train, kernels)
     z0 = transform.to_unconstrained(start)
