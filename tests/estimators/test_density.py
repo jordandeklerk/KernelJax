@@ -11,8 +11,8 @@ from kerneljax.estimators.density import DensityFit, density
 from kerneljax.estimators.regression import local_poly
 from kerneljax.kernels import KernelSet
 from kerneljax.ksum import kweights
-from kerneljax.tuning.criteria import DensityCriterion
-from kerneljax.tuning.optimize import select_bandwidth
+from kerneljax.selection.criteria import DensityCriterion
+from kerneljax.selection.optimize import select_bandwidth
 
 
 def test_returns_a_record_not_a_bare_array(density_data, density_bandwidth):

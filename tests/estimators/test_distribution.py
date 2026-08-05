@@ -10,8 +10,8 @@ from kerneljax.data import MixedData
 from kerneljax.estimators.density import density
 from kerneljax.estimators.distribution import DistributionFit, _cdf_values, cdf
 from kerneljax.kernels import KernelSet
-from kerneljax.tuning.criteria import DistributionCriterion
-from kerneljax.tuning.optimize import select_bandwidth
+from kerneljax.selection.criteria import DistributionCriterion
+from kerneljax.selection.optimize import select_bandwidth
 
 
 def test_estimate_is_monotone_and_in_the_unit(criteria_train, criteria_bandwidth):

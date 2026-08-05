@@ -14,8 +14,8 @@ from kerneljax.bandwidth import Bandwidth, SelectionResult, normal_reference
 from kerneljax.data import ColumnSpec, MixedData, _as_points
 from kerneljax.kernels import KernelSet
 from kerneljax.ksum import ksum
-from kerneljax.tuning.criteria import DensityCriterion
-from kerneljax.tuning.optimize import select_bandwidth
+from kerneljax.selection.criteria import DensityCriterion
+from kerneljax.selection.optimize import select_bandwidth
 from kerneljax.typing import Array
 
 __all__ = ["DensityFit", "density"]

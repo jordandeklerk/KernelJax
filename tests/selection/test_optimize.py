@@ -6,9 +6,9 @@ import pytest
 
 from kerneljax.bandwidth import BandwidthTransform, normal_reference
 from kerneljax.kernels import KernelSet
-from kerneljax.tuning.criteria import DensityCriterion, RegressionCriterion
-from kerneljax.tuning.objectives import cv_ls_density, cv_ls_regression, cv_ml_density
-from kerneljax.tuning.optimize import SelectionResult, lbfgs, select_bandwidth
+from kerneljax.selection.criteria import DensityCriterion, RegressionCriterion
+from kerneljax.selection.objectives import cv_ls_density, cv_ls_regression, cv_ml_density
+from kerneljax.selection.optimize import SelectionResult, lbfgs, select_bandwidth
 
 
 def test_lbfgs_minimizes_a_quadratic():

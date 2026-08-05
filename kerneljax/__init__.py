@@ -22,8 +22,7 @@ from kerneljax.kernels import (
 )
 from kerneljax.ksum import ksum, kweights
 from kerneljax.linalg import WLS, hat_diagonal, wls
-from kerneljax.summary import Summary, summary
-from kerneljax.tuning import (
+from kerneljax.selection import (
     DensityCriterion,
     DistributionCriterion,
     RegressionCriterion,
@@ -35,6 +34,7 @@ from kerneljax.tuning import (
     lbfgs,
     select_bandwidth,
 )
+from kerneljax.summary import Summary, summary
 
 __version__ = "0.0.1"
 

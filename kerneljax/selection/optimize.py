@@ -60,8 +60,8 @@ def select_bandwidth(
     criterion : callable
         Cross-validation criterion, called as
         ``criterion(train, bandwidth, **criterion_kwargs, kernels=kernels, chunk=chunk)``
-        and minimized. Every criterion in :mod:`kerneljax.tuning.criteria`
-        and :mod:`kerneljax.tuning.objectives` matches this signature. Static,
+        and minimized. Every criterion in :mod:`kerneljax.selection.criteria`
+        and :mod:`kerneljax.selection.objectives` matches this signature. Static,
         and a :func:`functools.partial` built fresh on each call is never equal
         to an earlier one, so prefer a criterion object or a module level
         function.

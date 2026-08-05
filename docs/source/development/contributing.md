@@ -35,11 +35,34 @@ uv pip install -e ".[test,dev]"
 
 **2. Develop your contribution.**
 
-Create a branch with a descriptive name, make your changes with tests for anything new, and
-commit as you go.
+Branch from the upstream main rather than from whatever your fork happens to be at, so you
+start from current work. Make your changes with tests for anything new, and commit as you go.
 
 ```bash
-git checkout -b fix-aic-penalty-barrier
+git fetch upstream
+git checkout -b fix-aic-penalty-barrier upstream/main
+```
+
+Commit messages start with a capitalized prefix saying what kind of change it is, then a
+short description in the imperative. KernelJax uses three. `FEAT` marks new behavior, `REF`
+refactoring and maintenance, and `DOC` documentation. Pull request titles take the same
+prefix.
+
+```text
+FEAT: add standard errors to local polynomial regression
+REF: fold the smoother diagonal into the Cholesky pass
+DOC: derive the boundary constant on the regression page
+```
+
+A message should be understandable without the diff, so say what changed and why rather than
+"fix another one". Reference an issue with `Closes #123` in the body.
+
+If upstream moves while you work, rebase rather than merging, which keeps the branch a clean
+sequence of your own commits.
+
+```bash
+git fetch upstream
+git rebase upstream/main
 ```
 
 **3. Validate your changes.**
@@ -60,17 +83,32 @@ and why.
 git push origin fix-aic-penalty-barrier
 ```
 
+If the change alters behavior a user can see, say so in the pull request description. Those
+notes are what the [release notes](../release-notes.md) are assembled from, so a change that
+goes unmentioned there tends to go unmentioned at release.
+
 **5. Review.**
 
-Reviewers will give feedback on the pull request. Update it by committing and pushing to the
-same branch, and the pull request updates itself. CI must pass before a merge.
+Reviewers leave inline and general comments. Every change gets reviewed, including a
+maintainer's own, and the aim is the quality of the result rather than a judgment of the
+author. Update the pull request by committing and pushing to the same branch, and it updates
+itself. CI has to pass and a maintainer has to approve before a merge. If a week goes by with
+no response, a comment on the pull request is a fair nudge.
+
+## Reporting an issue
+
+Open a [bug report](https://github.com/jordandeklerk/KernelJax/issues/new/choose) with a
+snippet that reproduces the problem from a fresh interpreter. For a numerical library, three
+details decide whether a report is actionable. Include the JAX and KernelJax versions, whether
+`jax_enable_x64` was set, and what you expected the number to be and why. A reproducer that
+depends on private data or on a fifty-line pipeline is usually not one anybody can act on.
 
 ## Guidelines
 
-Every code change should come with tests that verify the new behavior, and those tests should
-assert on behavior a caller can observe rather than on the shape of the implementation. A
-bandwidth that is never updated will still satisfy a test that only checks the returned
-array's shape, so assert on the number that came back.
+Every code change should come with tests, and the useful standard is that they fail before
+your change and pass after it. Write them to assert on behavior a caller can observe rather
+than on the shape of the implementation. A bandwidth that is never updated will still satisfy
+a test that only checks the returned array's shape, so assert on the number that came back.
 
 Public functions and classes carry numpydoc docstrings, which is what the API reference is
 generated from. Include an `Examples` section wherever a caller would benefit from seeing the
@@ -121,21 +159,49 @@ conflicts and large files.
 
 ## JAX conventions
 
-KernelJax is a JAX library, and a few conventions follow from that rather than from taste.
+KernelJax is a JAX library, and a few conventions follow from that.
 
-Anything handed to the compiler as a static argument has to be hashable. Kernels and criteria
-travel that way, so they are frozen dataclasses. A mutable dataclass fails with
-`Non-hashable static arguments are not supported`, and the failure can surface far from the
-change that caused it.
+Three rules bind anything you write here, and the user guides already work them through with
+running examples rather than assertions. Anything handed to the compiler as a static argument
+has to be hashable, so kernels and criteria are frozen dataclasses. Code that will be
+differentiated has to be differentiable on every branch it traces, not only the one that runs,
+which is why `jnp.where` needs its denominator guarded and not just its branch. And a setting
+that fixes the shape of a computation has to stay concrete rather than arrive as array data.
+[Custom kernels](../user-guide/custom-kernels.md#what-a-kernel-must-satisfy) demonstrates the
+first two, [Custom criteria](../user-guide/custom-criteria.md#where-settings-live) the third.
 
-Code that will be differentiated has to be differentiable everywhere it is traced, not only on
-the branch that runs. `jnp.where` evaluates and differentiates *both* branches, so an unguarded
-expression in the untaken branch poisons the gradient while leaving the value correct. Guard
-the denominator rather than only the branch, and test the gradient rather than only the value,
-since a forward-only check will not catch it.
+When you register a container as a pytree, a field is either data or metadata, and putting a
+static setting in `data_fields` makes it a tracer the moment the container crosses a `jit`
+boundary. It then fails wherever that value is used as a shape, far from the registration that
+caused it.
 
-Prefer `jnp.where` to Python control flow on traced values, and keep static settings such as a
-polynomial degree on the object rather than passing them through as array data.
+```python
+@partial(jax.tree_util.register_dataclass, data_fields=["values", "degree"], meta_fields=[])
+@dataclasses.dataclass(frozen=True)
+class Wrong:
+    values: jax.Array
+    degree: int
+```
+
+```text
+TypeError: Shapes must be 1D sequences of concrete values of integer type
+```
+
+`degree` belongs in `meta_fields`, which is where `MixedData` keeps its `ColumnSpec` and
+`Bandwidth` its `h_axis`. The quick check is that `jax.tree_util.tree_leaves` should return
+only arrays.
+
+An array built from a Python scalar is weakly typed, and two otherwise identical values
+differing only in that flag are different cache keys, so a function retraces when it should
+have hit the cache.
+
+```python
+weak = jnp.full((3,), 3.0)        # from a Python float, weak_type=True
+strong = weak.astype(weak.dtype)  # same values, concrete dtype
+```
+
+That single `astype` is why `from_blocks` normalizes its continuous block, and it is worth
+doing wherever user input reaches a cached call.
 
 ## Test coverage
 
@@ -174,39 +240,30 @@ printed output moved.
 
 ## Continuous integration
 
-Every pull request and push to `main` triggers GitHub Actions.
+Every pull request and push to `main` runs `test` across Python 3.11 to 3.14 on Ubuntu,
+uploading coverage from the 3.12 job, and `codeql` for static analysis, which also runs on
+Monday. Both block a merge, and `test` is the one to check first when a pull request fails.
 
-The `test` workflow runs the suite across Python 3.11, 3.12, 3.13 and 3.14 on Ubuntu, and
-uploads coverage to Codecov from the 3.12 job. This is the job to check first when a pull
-request fails.
+Three more run on their own schedule. `nightly` runs on Sunday against nightly
+scientific-python wheels, and a failure there flags upcoming upstream breakage rather than
+anything wrong with your change. `publish` uploads to PyPI through Trusted Publishing on a
+`v*` tag, and `post-release` regenerates the changelog once a release is published.
 
-The `nightly` workflow runs on Sunday at 03:00 UTC against nightly scientific-python wheels.
-Failures there are informational, flagging upcoming upstream breakage rather than blocking a
-pull request.
-
-The `codeql` workflow runs static analysis weekly and on pushes to `main`, `publish` builds
-and uploads to PyPI on a `v*` tag through Trusted Publishing, and `post-release` regenerates
-the changelog after a release.
-
-CI runs on Ubuntu while you may be developing on macOS, and floating point behavior differs
-slightly between platforms. JAX also defaults to 32-bit floats, which is usually the reason a
-comparison that passes locally fails on a tighter tolerance. Enable double precision with
-`jax.config.update("jax_enable_x64", True)` before importing when you are comparing numbers
-rather than exploring.
+Two differences from your machine account for most failures that reproduce nowhere else. CI
+runs on Ubuntu while you are likely on macOS, and floating point differs slightly between
+platforms. JAX also defaults to 32-bit floats, which is the usual reason a comparison passes
+locally and fails on a tighter tolerance, so set
+`jax.config.update("jax_enable_x64", True)` before importing when you are comparing numbers.
 
 ## Dependency management
 
-The core dependencies are `jax`, `jaxlib` and `jaxtyping`, pinned to minimum versions in
-`pyproject.toml`. Keep that set small. KernelJax is a low-level library, and every dependency
-added to the core is one that every user carries.
+The core is `jax`, `jaxlib` and `jaxtyping`, pinned to minimum versions in `pyproject.toml`.
+Every addition there is one that every user carries, so anything needed only for the tests, the
+documentation or the linters goes in an extra instead.
 
-Optional dependencies are grouped as extras in `pyproject.toml` and mirrored as features in
-`pixi.toml`. Anything needed only for the tests, the documentation or the linters belongs in
-one of those groups rather than in the core.
+Those extras are declared twice. `pixi.toml` is what `pixi run docs` resolves, as a conda
+dependency or under `pypi-dependencies` when the package is not on conda-forge, and
+`pyproject.toml` is what Read the Docs installs. A dependency added to one and not the other
+builds in one place and fails in the other.
 
-A documentation dependency has to be added in **both** places, `pixi.toml` for the local build
-and `pyproject.toml` for Read the Docs, which installs the `doc` extra. Adding it to only one
-gives you a build that works in one place and fails in the other.
-
-KernelJax supports Python 3.11 and above. Do not use language features that require a newer
-version without gating them behind a check.
+KernelJax supports Python 3.11 and above, so a feature newer than that needs a version gate.

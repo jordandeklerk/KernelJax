@@ -74,8 +74,9 @@ The bend and the education bands are obvious, and neither is something we want t
 
 ## A first fit
 
-One call does the whole thing. Every observation gets a weight built from one factor per column,
-close observations counting for more than distant ones,
+So we want the average wage at a given experience, education and region, without committing to
+the shape that bend takes. One call does it, and what it does is weight every observation by how
+close it sits to the point being estimated, one factor per column,
 
 $$
 K_{h,\lambda}(x, X_i) = \prod_{d} K_d(x_d, X_{id}),

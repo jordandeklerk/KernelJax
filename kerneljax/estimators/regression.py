@@ -16,8 +16,8 @@ from kerneljax.data import ColumnSpec, MixedData, _as_points
 from kerneljax.kernels import KernelSet
 from kerneljax.ksum import _pad_index, _pad_rows, kweights
 from kerneljax.linalg import wls
-from kerneljax.tuning.criteria import RegressionCriterion
-from kerneljax.tuning.optimize import select_bandwidth
+from kerneljax.selection.criteria import RegressionCriterion
+from kerneljax.selection.optimize import select_bandwidth
 from kerneljax.typing import Array, FloatArray, ScalarFloat
 
 __all__ = ["LocalPolyFit", "local_poly"]

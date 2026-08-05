@@ -1,12 +1,12 @@
 """Cross-validation criteria and bandwidth selection."""
 
-from kerneljax.tuning.criteria import (
+from kerneljax.selection.criteria import (
     Criterion,
     DensityCriterion,
     DistributionCriterion,
     RegressionCriterion,
 )
-from kerneljax.tuning.objectives import (
+from kerneljax.selection.objectives import (
     aic_c_regression,
     cv_cdf_distribution,
     cv_ls_density,
@@ -14,7 +14,7 @@ from kerneljax.tuning.objectives import (
     cv_ml_density,
 )
 from kerneljax.bandwidth import SelectionResult
-from kerneljax.tuning.optimize import lbfgs, select_bandwidth
+from kerneljax.selection.optimize import lbfgs, select_bandwidth
 
 __all__ = [
     "Criterion",

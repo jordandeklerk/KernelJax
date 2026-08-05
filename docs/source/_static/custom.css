@@ -252,3 +252,15 @@ are distinguishable without any notebook machinery.
 .md-typeset div.highlight-text {
   border-left-color: var(--md-default-fg-color--lighter);
 }
+
+/*
+The example figures are committed SVGs whose intrinsic size comes from the
+matplotlib figsize that produced them, so they render narrower than the code
+blocks above them and the column looks ragged. A standalone image is one that is
+the only thing in its paragraph, which is what a markdown figure produces. SVG is
+vector, so widening costs nothing.
+*/
+.md-typeset p > img:only-child {
+  width: 100%;
+  height: auto;
+}

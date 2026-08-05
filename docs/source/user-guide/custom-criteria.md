@@ -6,7 +6,7 @@ library is aiming for when it picks a bandwidth. The two are independent, and bo
 {func}`~kerneljax.select_bandwidth` takes the criterion as an argument and minimizes whatever
 it returns, so the shipped rules have no privileged status. `cv_ls` and `aic` are two functions
 passed to the same entry point you can pass your own to, and
-{class}`~kerneljax.tuning.criteria.Criterion` is a `Protocol` rather than a base class you are
+{class}`~kerneljax.selection.criteria.Criterion` is a `Protocol` rather than a base class you are
 required to inherit from. This page covers the contract and the places it bites. The
 [Custom kernels](custom-kernels.md) page covers the other extension point, and
 [Bandwidth selection](../background/selection.md) covers what the shipped criteria are doing

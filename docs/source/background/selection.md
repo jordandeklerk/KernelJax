@@ -1,7 +1,8 @@
 # Bandwidth selection
 
-Everything we have derived depends on $h$ and $\lambda$. On the [first page](smoothing.md)
-we found the optimal bandwidth in closed form,
+Everything we have derived depends on $h$ and $\lambda$. On the
+[first page](smoothing.md#trading-bias-against-variance) we found the optimal bandwidth in
+closed form,
 
 $$
 h_{\text{opt}} = \left(\frac{R(k)}{\mu_2(k)^2 R(f'')\, n}\right)^{1/5},

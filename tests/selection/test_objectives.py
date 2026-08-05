@@ -10,7 +10,7 @@ from kerneljax.data import MixedData, quantile_grid
 from kerneljax.estimators.density import density
 from kerneljax.kernels import KernelSet, Op
 from kerneljax.ksum import kweights
-from kerneljax.tuning.objectives import (
+from kerneljax.selection.objectives import (
     _aic_c_penalty,
     aic_c_regression,
     cv_cdf_distribution,
@@ -18,7 +18,7 @@ from kerneljax.tuning.objectives import (
     cv_ls_regression,
     cv_ml_density,
 )
-from kerneljax.tuning.optimize import select_bandwidth
+from kerneljax.selection.optimize import select_bandwidth
 
 
 @pytest.mark.parametrize("criterion", [cv_ml_density, cv_ls_density])

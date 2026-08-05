@@ -13,9 +13,9 @@ from kerneljax.data import MixedData
 from kerneljax.estimators.regression import LocalPolyFit, _fit_values, local_poly
 from kerneljax.kernels import KernelSet
 from kerneljax.ksum import kweights
-from kerneljax.tuning.criteria import DensityCriterion, RegressionCriterion
-from kerneljax.tuning.objectives import cv_ls_regression
-from kerneljax.tuning.optimize import select_bandwidth
+from kerneljax.selection.criteria import DensityCriterion, RegressionCriterion
+from kerneljax.selection.objectives import cv_ls_regression
+from kerneljax.selection.optimize import select_bandwidth
 
 
 def test_degree_zero_matches_nadaraya_watson(poly_train, poly_at, poly_bandwidth, poly_response):
