@@ -49,12 +49,13 @@ naturally into the wider JAX ecosystem.
   ordered categorical columns.
 - [Bandwidths][bandwidth] and categorical smoothing parameters selected jointly from the
   data by [least squares or likelihood cross validation, a corrected AIC][objectives], or
-  a [closed-form plug-in rule][bandwidth].
+  a [closed-form plug-in rule][normal_reference].
 - [Cross-validation criteria][selection] are ordinary JAX functions that compose with
   `jax.grad`, `jax.jit`, and `jax.vmap`, so a bandwidth can be learned inside a larger
   model rather than fixed by a derivative-free search.
-- Composable primitives ([`kweights`, `ksum`][ksum], the [kernel base classes][kernels])
-  are public, so estimators the high-level interface does not ship can be built directly.
+- Composable primitives ([`kweights`][kweights], [`ksum`][ksum], the [kernel base
+  classes][kernels]) are public, so estimators the high-level interface does not ship can
+  be built directly.
 
 ## Installation
 
@@ -131,8 +132,8 @@ Gaussian      h=0.036019  r2=0.947953
 ## Custom selection criteria
 
 Bandwidth selection minimizes a scalar criterion. The built-in rules
-([`cv_ls`][objectives], [corrected AIC][objectives]) are ordinary JAX callables, and so is
-anything you write in their place. Implement `__call__`, pass it to
+([`cv_ls`][cv_ls], [corrected AIC][aic]) are ordinary JAX callables, and so is anything you
+write in their place. Implement `__call__`, pass it to
 [`select_bandwidth`][select_bandwidth], and the optimizer finds `h` by differentiating the
 loss you wrote.
 
@@ -158,13 +159,17 @@ squared error       h = 0.0360
 absolute deviation  h = 0.0348
 ```
 
-[density]: kerneljax/estimators/density.py
-[distribution]: kerneljax/estimators/distribution.py
-[regression]: kerneljax/estimators/regression.py
-[bandwidth]: kerneljax/bandwidth.py
+[density]: kerneljax/estimators/density.py#L58
+[distribution]: kerneljax/estimators/distribution.py#L60
+[regression]: kerneljax/estimators/regression.py#L99
+[bandwidth]: kerneljax/bandwidth.py#L69
+[normal_reference]: kerneljax/bandwidth.py#L296
 [objectives]: kerneljax/selection/objectives.py
-[select_bandwidth]: kerneljax/selection/optimize.py
+[cv_ls]: kerneljax/selection/objectives.py#L173
+[aic]: kerneljax/selection/objectives.py#L385
+[select_bandwidth]: kerneljax/selection/optimize.py#L22
 [selection]: kerneljax/selection
-[ksum]: kerneljax/ksum.py
-[kernels]: kerneljax/kernels/base.py
-[kernelset]: kerneljax/kernels/sets.py
+[kweights]: kerneljax/ksum.py#L23
+[ksum]: kerneljax/ksum.py#L232
+[kernels]: kerneljax/kernels/base.py#L21
+[kernelset]: kerneljax/kernels/sets.py#L18
