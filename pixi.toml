@@ -34,7 +34,7 @@ sphinx-immaterial = ">=0.12"
 
 [feature.docs.tasks]
 docs = "sphinx-build -E -a -W --keep-going -d docs/_doctree docs/source docs/_build/html --color -bhtml"
-docs-open = { cmd = "python -c \"import pathlib, webbrowser; webbrowser.open(pathlib.Path('docs/_build/html/index.html').resolve().as_uri())\"", depends-on = [
+docs-open = { cmd = "python -c \"import pathlib, subprocess, sys; p = str(pathlib.Path('docs/_build/html/index.html').resolve()); subprocess.run(['open', p] if sys.platform == 'darwin' else ['xdg-open', p])\"", depends-on = [
   "docs",
 ] }
 docs-serve = { cmd = "python -m http.server 8765 --directory docs/_build/html --bind 127.0.0.1", depends-on = [

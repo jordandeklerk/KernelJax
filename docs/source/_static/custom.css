@@ -230,3 +230,25 @@ control rather than as body text.
 .sd-tab-set > label {
   padding: 0.78125em 1.25em 0.625em;
 }
+
+/*
+On an example page the code and the output it produced render identically, so the
+two run together as one column. Mark the input with the theme's link accent, which
+is already tuned for both schemes, and leave the output a neutral grey so it reads
+as secondary. Sphinx tags a fenced block with its language, so ```python and ```text
+are distinguishable without any notebook machinery.
+*/
+.md-typeset div.highlight-python,
+.md-typeset div.highlight-text {
+  border-left: 0.15rem solid transparent;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.md-typeset div.highlight-python {
+  border-left-color: var(--md-typeset-a-color);
+}
+
+.md-typeset div.highlight-text {
+  border-left-color: var(--md-default-fg-color--lighter);
+}

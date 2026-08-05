@@ -69,6 +69,9 @@ docs/source/generated/
 /statsmodels/
 
 /.superpowers/
+# runnable copies of the docs examples, for local use only
+docs/notebooks/
+
 *.ipynb
 .ipynb_checkpoints/
 

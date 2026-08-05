@@ -20,6 +20,7 @@ Here is the Epanechnikov kernel, which is optimal in the sense described in
 
 ```python
 import dataclasses
+import jax
 import jax.numpy as jnp
 import numpy as np
 import kerneljax as kj
@@ -35,10 +36,18 @@ class Epanechnikov(kj.ContinuousKernel):
         return jnp.where(jnp.abs(u) <= 1.0, 0.75 * (1.0 - u * u), 0.0)
 
 kernels = kj.KernelSet(continuous=Epanechnikov())
-fit = kj.local_poly(x, y, "cv_ls", degree=1, kernels=kernels)
+epan = kj.local_poly(x, y, "cv_ls", degree=1, kernels=kernels)
+gauss = kj.local_poly(x, y, "cv_ls", degree=1)
 
-print(f"{float(fit.bandwidth.h[0]):.6f}")   # 0.084645
-print(f"{float(fit.r_squared):.6f}")        # 0.947231
+for name, fit in [("Epanechnikov", epan), ("Gaussian", gauss)]:
+    print(f"{name:13s} h={fit.bandwidth.h[0]:.6f}  r2={fit.r_squared:.6f}")
+print(f"ratio of bandwidths {epan.bandwidth.h[0] / gauss.bandwidth.h[0]:.3f}")
+```
+
+```text
+Epanechnikov  h=0.084645  r2=0.947231
+Gaussian      h=0.036019  r2=0.947953
+ratio of bandwidths 2.350
 ```
 
 The selected bandwidth is larger than the Gaussian default gives on the same data, 0.084645
@@ -99,8 +108,6 @@ $u = 0$ occurs on the diagonal of any fit evaluated at its own training points, 
 branch is always reached.
 
 ```python
-import jax
-
 def unsafe(u):
     return jnp.where(u == 0.0, 1.0, jnp.sin(u) / u)
 
@@ -109,14 +116,13 @@ def safe(u):
     return jnp.where(u == 0.0, 1.0, jnp.sin(nonzero) / nonzero)
 
 for name, f in [("unsafe", unsafe), ("safe", safe)]:
-    value = float(f(jnp.float32(0.0)))
-    grad = float(jax.grad(f)(jnp.float32(0.0)))
-    print(f"{name:7s} value={value:.4f}  d/du={grad}")
+    value, grad = jax.value_and_grad(f)(0.0)
+    print(f"{name:7s} value={value:.4f}  d/du={grad:.4f}")
 ```
 
 ```text
 unsafe  value=1.0000  d/du=nan
-safe    value=1.0000  d/du=0.0
+safe    value=1.0000  d/du=0.0000
 ```
 
 The two agree on the value and disagree on the gradient, so a forward-only check will not
@@ -133,11 +139,12 @@ class Sinc(kj.ContinuousKernel):
 
 result = kj.select_bandwidth(x, kj.cv_ls_regression, y=y,
                              kernels=kj.KernelSet(continuous=Sinc()), n_starts=1)
-print(result.bandwidth.h, result.n_iter, result.converged)
+print(f"h={result.bandwidth.h[0]:.6f}  n_iter={result.n_iter:d}  "
+      f"converged={result.converged}")
 ```
 
 ```text
-[nan] 200 False
+h=nan  n_iter=200  converged=False
 ```
 
 Reading `converged` is the habit that catches this. A run that exhausts its iteration budget
@@ -156,8 +163,6 @@ derives, while the unnormalized variant, which is $1$ on a match and $\lambda$ o
 reaches it at $\lambda = 1$.
 
 ```python
-from kerneljax import MixedData
-
 @dataclasses.dataclass(frozen=True)
 class Plain(kj.UnorderedKernel):
     """The unnormalized variant, 1 on a match and lam otherwise."""
@@ -175,21 +180,21 @@ exper = rng.uniform(0, 30, 200)
 region = rng.integers(0, 4, 200)
 wage = 2.0 + 0.1 * exper + region + rng.normal(0, 0.5, 200)
 
-data = MixedData.from_blocks(continuous=exper, unordered=region,
-                             unordered_levels=(4,), names=("exper", "region"))
+data = kj.MixedData.from_blocks(continuous=exper, unordered=region,
+                                unordered_levels=(4,), names=("exper", "region"))
 
 custom = kj.local_poly(data, wage, "cv_ls", degree=1,
                        kernels=kj.KernelSet(unordered=Plain()))
 shipped = kj.local_poly(data, wage, "cv_ls", degree=1)
 
-for name, fit in [("Plain", custom), ("AitchisonAitken", shipped)]:
-    print(f"{name:16s} lam={float(fit.bandwidth.lam_uno[0]):.6f} "
-          f"r2={float(fit.r_squared):.6f}")
+for kernel, fit in [(Plain(), custom), (kj.AitchisonAitken(), shipped)]:
+    print(f"{type(kernel).__name__:16s} lam={fit.bandwidth.lam_uno[0]:.6f}  "
+          f"bound={kernel.upper_bound(4):.2f}  r2={fit.r_squared:.6f}")
 ```
 
 ```text
-Plain            lam=0.001238 r2=0.897111
-AitchisonAitken  lam=0.003699 r2=0.897111
+Plain            lam=0.001238  bound=1.00  r2=0.897111
+AitchisonAitken  lam=0.003699  bound=0.75  r2=0.897111
 ```
 
 The two fits agree to six digits, because the normalization the shipped kernel carries is a

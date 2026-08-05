@@ -38,39 +38,40 @@ writing it is the whole exercise.
 
 ```python
 import dataclasses
+import jax
 import jax.numpy as jnp
 import numpy as np
 import kerneljax as kj
+
+rng = np.random.default_rng(1)
+x = rng.uniform(size=150)
+y = np.sin(2 * np.pi * x) + rng.normal(0, 0.2, 150)
+y[rng.choice(150, 8, replace=False)] += 6.0
+train = kj.MixedData.continuous(x)
 
 @dataclasses.dataclass(frozen=True)
 class AbsoluteDeviation:
     degree: int = 1
 
     def __call__(self, train, bw, *, y, kernels=None, chunk=None):
-        kernels = kj.KernelSet() if kernels is None else kernels
-        held_out = jnp.arange(train.n)
         fit = kj.local_poly(train, y, bw, kernels=kernels, degree=self.degree,
-                            fold=held_out, chunk=chunk)
+                            fold=jnp.arange(train.n), chunk=chunk)
         return jnp.mean(jnp.abs(y - fit.mean))
 ```
 
 Passing it to the selector is the same call the shipped criteria go through.
 
 ```python
-rng = np.random.default_rng(1)
-x = rng.uniform(size=150)
-y = np.sin(2 * np.pi * x) + rng.normal(0, 0.2, 150)
-y[rng.choice(150, 8, replace=False)] += 6.0
+lad = kj.select_bandwidth(train, AbsoluteDeviation(degree=1), y=y)
+squared = kj.select_bandwidth(train, kj.RegressionCriterion(method="cv_ls", degree=1), y=y)
 
-train = kj.MixedData.continuous(jnp.asarray(x)[:, None])
-yj = jnp.asarray(y)
+print(f"squared error       h = {float(squared.bandwidth.h[0]):.4f}")
+print(f"absolute deviation  h = {float(lad.bandwidth.h[0]):.4f}")
+```
 
-lad = kj.select_bandwidth(train, AbsoluteDeviation(degree=1), y=yj, n_starts=3)
-squared = kj.select_bandwidth(train, kj.RegressionCriterion(method="cv_ls", degree=1),
-                              y=yj, n_starts=3)
-
-print(f"{float(squared.bandwidth.h[0]):.6f}")   # 0.032335
-print(f"{float(lad.bandwidth.h[0]):.6f}")       # 0.062795
+```text
+squared error       h = 0.0323
+absolute deviation  h = 0.0628
 ```
 
 The two disagree by a factor of two on data carrying eight gross outliers, which is the point
@@ -121,8 +122,12 @@ reuses the settings it was selected under, and `local_poly` finds the degree by 
 the criterion the result carries.
 
 ```python
-fit = kj.local_poly(train, yj, lad)
-print(fit.degree)      # 1
+fit = kj.local_poly(train, y, lad)
+print(f"degree read off the criterion: {fit.degree}")
+```
+
+```text
+degree read off the criterion: 1
 ```
 
 A criterion written as a plain function has no such attribute, so the same call silently falls
@@ -150,10 +155,21 @@ def gradient_descent(fun, z0, *, steps=300, rate=0.05):
         value, grad = jax.value_and_grad(fun)(z)
         return z - rate * grad, value
 
-    z, _ = jax.lax.scan(step, z0, jnp.arange(steps))
+    z, _ = jax.lax.scan(step, z0, length=steps)
     return z, fun(z), jnp.asarray(steps), jnp.all(jnp.isfinite(z))
 
-result = kj.select_bandwidth(train, criterion, y=yj, solver=gradient_descent, n_starts=1)
+criterion = kj.RegressionCriterion(method="cv_ls", degree=1)
+descent = kj.select_bandwidth(train, criterion, y=y, solver=gradient_descent, n_starts=1)
+lbfgs = kj.select_bandwidth(train, criterion, y=y, n_starts=1)
+
+for name, result in [("gradient descent", descent), ("L-BFGS", lbfgs)]:
+    print(f"{name:16s} value = {float(result.value):.4f}  "
+          f"h = {float(result.bandwidth.h[0]):.4f}  steps = {int(result.n_iter)}")
+```
+
+```text
+gradient descent value = 1.9194  h = 0.1336  steps = 300
+L-BFGS           value = 1.9185  h = 0.1606  steps = 6
 ```
 
 This runs, and it is also a fair demonstration of why the default is not plain gradient
