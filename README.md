@@ -44,16 +44,17 @@ naturally into the wider JAX ecosystem.
 
 ## Features
 
-- Density, cumulative distribution, and local polynomial regression over samples mixing
-  continuous, unordered categorical, and ordered categorical columns.
-- Bandwidths and categorical smoothing parameters selected jointly from the data by
-  least squares or likelihood cross validation, a corrected AIC, or a closed-form
-  plug-in rule.
-- Cross-validation criteria are ordinary JAX functions that compose with `jax.grad`,
-  `jax.jit`, and `jax.vmap`, so a bandwidth can be learned inside a larger model rather
-  than fixed by a derivative-free search.
-- Composable primitives (`kweights`, `ksum`, the kernel base classes) are public, so
-  estimators the high-level interface does not ship can be built directly.
+- [Density][density], [cumulative distribution][distribution], and [local polynomial
+  regression][regression] over samples mixing continuous, unordered categorical, and
+  ordered categorical columns.
+- [Bandwidths][bandwidth] and categorical smoothing parameters selected jointly from the
+  data by [least squares or likelihood cross validation, a corrected AIC][objectives], or
+  a [closed-form plug-in rule][bandwidth].
+- [Cross-validation criteria][selection] are ordinary JAX functions that compose with
+  `jax.grad`, `jax.jit`, and `jax.vmap`, so a bandwidth can be learned inside a larger
+  model rather than fixed by a derivative-free search.
+- Composable primitives ([`kweights`, `ksum`][ksum], the [kernel base classes][kernels])
+  are public, so estimators the high-level interface does not ship can be built directly.
 
 ## Installation
 
@@ -154,3 +155,12 @@ print(f"absolute deviation  h = {absolute.bandwidth.h[0]:.4f}")
 squared error       h = 0.0360
 absolute deviation  h = 0.0348
 ```
+
+[density]: https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/estimators/density.py
+[distribution]: https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/estimators/distribution.py
+[regression]: https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/estimators/regression.py
+[bandwidth]: https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/bandwidth.py
+[objectives]: https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/selection/objectives.py
+[selection]: https://github.com/jordandeklerk/KernelJax/tree/main/kerneljax/selection
+[ksum]: https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/ksum.py
+[kernels]: https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/kernels/base.py
