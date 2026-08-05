@@ -158,13 +158,13 @@ squared error       h = 0.0360
 absolute deviation  h = 0.0348
 ```
 
-[density]: https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/estimators/density.py
-[distribution]: https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/estimators/distribution.py
-[regression]: https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/estimators/regression.py
-[bandwidth]: https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/bandwidth.py
-[objectives]: https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/selection/objectives.py
-[select_bandwidth]: https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/selection/optimize.py
-[selection]: https://github.com/jordandeklerk/KernelJax/tree/main/kerneljax/selection
-[ksum]: https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/ksum.py
-[kernels]: https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/kernels/base.py
-[kernelset]: https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/kernels/sets.py
+[density]: kerneljax/estimators/density.py
+[distribution]: kerneljax/estimators/distribution.py
+[regression]: kerneljax/estimators/regression.py
+[bandwidth]: kerneljax/bandwidth.py
+[objectives]: kerneljax/selection/objectives.py
+[select_bandwidth]: kerneljax/selection/optimize.py
+[selection]: kerneljax/selection
+[ksum]: kerneljax/ksum.py
+[kernels]: kerneljax/kernels/base.py
+[kernelset]: kerneljax/kernels/sets.py
