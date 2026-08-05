@@ -1,8 +1,7 @@
 # Custom criteria
 
-Writing a kernel changes how observations are weighted. Writing a criterion changes something
-else, which is what the library is trying to achieve when it picks a bandwidth. Those are
-independent, and both are open.
+Writing a kernel changes how observations are weighted. Writing a criterion changes what the
+library is aiming for when it picks a bandwidth. The two are independent, and both are open.
 
 {func}`~kerneljax.select_bandwidth` takes the criterion as an argument and minimizes whatever
 it returns, so the shipped rules have no privileged status. `cv_ls` and `aic` are two functions
@@ -27,8 +26,8 @@ def objective(z):
 A criterion is therefore any callable taking a `MixedData`, a `Bandwidth`, whatever you passed
 through `y=` or `criterion_kwargs=`, and the keywords `kernels` and `chunk`, returning one
 number. The optimizer differentiates that number with respect to the bandwidth through an
-unconstrained reparameterization, so the only real requirement is that the whole thing is
-ordinary JAX.
+unconstrained reparameterization, so beyond that signature the requirement is that the whole
+thing be ordinary JAX.
 
 ## Writing one
 
@@ -43,30 +42,33 @@ import jax.numpy as jnp
 import numpy as np
 import kerneljax as kj
 
+n = 150
 rng = np.random.default_rng(1)
-x = rng.uniform(size=150)
-y = np.sin(2 * np.pi * x) + rng.normal(0, 0.2, 150)
-y[rng.choice(150, 8, replace=False)] += 6.0
+x = rng.uniform(size=n)
+y = np.sin(2 * np.pi * x) + rng.normal(0, 0.2, n)
+outliers = rng.choice(n, 8, replace=False)
+y[outliers] += 6.0
 train = kj.MixedData.continuous(x)
 
 @dataclasses.dataclass(frozen=True)
 class AbsoluteDeviation:
     degree: int = 1
 
-    def __call__(self, train, bw, *, y, kernels=None, chunk=None):
-        fit = kj.local_poly(train, y, bw, kernels=kernels, degree=self.degree,
-                            fold=jnp.arange(train.n), chunk=chunk)
+    def __call__(self, train, bandwidth, *, y, kernels=None, chunk=None):
+        leave_one_out = jnp.arange(train.n)
+        fit = kj.local_poly(train, y, bandwidth, kernels=kernels, chunk=chunk,
+                            degree=self.degree, fold=leave_one_out)
         return jnp.mean(jnp.abs(y - fit.mean))
 ```
 
 Passing it to the selector is the same call the shipped criteria go through.
 
 ```python
-lad = kj.select_bandwidth(train, AbsoluteDeviation(degree=1), y=y)
 squared = kj.select_bandwidth(train, kj.RegressionCriterion(method="cv_ls", degree=1), y=y)
+absolute = kj.select_bandwidth(train, AbsoluteDeviation(degree=1), y=y)
 
-print(f"squared error       h = {float(squared.bandwidth.h[0]):.4f}")
-print(f"absolute deviation  h = {float(lad.bandwidth.h[0]):.4f}")
+print(f"squared error       h = {squared.bandwidth.h[0]:.4f}")
+print(f"absolute deviation  h = {absolute.bandwidth.h[0]:.4f}")
 ```
 
 ```text
@@ -122,7 +124,7 @@ reuses the settings it was selected under, and `local_poly` finds the degree by 
 the criterion the result carries.
 
 ```python
-fit = kj.local_poly(train, y, lad)
+fit = kj.local_poly(train, y, absolute)
 print(f"degree read off the criterion: {fit.degree}")
 ```
 
@@ -139,9 +141,9 @@ state worth naming.
 
 Leave-one-out is not a flag. Both {func}`~kerneljax.ksum` and {func}`~kerneljax.local_poly`
 take a `fold` array giving each observation a label, and drop a pair wherever the evaluation
-and training labels agree, so `jnp.arange(n)` gives leave-one-out and any other labeling gives
-k-fold. That is the mechanism the shipped criteria use, and it is why a criterion can be
-written without a Python loop over held-out points.
+and training labels agree, so `jnp.arange(n)` gives leave-one-out, which is what the criterion
+above passes, and any other labeling gives k-fold. That is the mechanism the shipped criteria
+use, and it is why a criterion needs no Python loop over held-out points.
 
 ## Swapping the solver
 
@@ -150,21 +152,21 @@ built-in {func}`~kerneljax.lbfgs`, and calls it as `solver(objective, start)`, e
 solved coordinates, the value there, an iteration count and a convergence flag.
 
 ```python
-def gradient_descent(fun, z0, *, steps=300, rate=0.05):
+def gradient_descent(objective, start, *, steps=300, rate=0.05):
     def step(z, _):
-        value, grad = jax.value_and_grad(fun)(z)
-        return z - rate * grad, value
+        return z - rate * jax.grad(objective)(z), None
 
-    z, _ = jax.lax.scan(step, z0, length=steps)
-    return z, fun(z), jnp.asarray(steps), jnp.all(jnp.isfinite(z))
+    z, _ = jax.lax.scan(step, start, length=steps)
+    converged = jnp.all(jnp.isfinite(z))
+    return z, objective(z), jnp.asarray(steps), converged
 
 criterion = kj.RegressionCriterion(method="cv_ls", degree=1)
 descent = kj.select_bandwidth(train, criterion, y=y, solver=gradient_descent, n_starts=1)
 lbfgs = kj.select_bandwidth(train, criterion, y=y, n_starts=1)
 
 for name, result in [("gradient descent", descent), ("L-BFGS", lbfgs)]:
-    print(f"{name:16s} value = {float(result.value):.4f}  "
-          f"h = {float(result.bandwidth.h[0]):.4f}  steps = {int(result.n_iter)}")
+    print(f"{name:16s} value = {result.value:.4f}  h = {result.bandwidth.h[0]:.4f}  "
+          f"steps = {result.n_iter:d}")
 ```
 
 ```text
@@ -172,9 +174,9 @@ gradient descent value = 1.9194  h = 0.1336  steps = 300
 L-BFGS           value = 1.9185  h = 0.1606  steps = 6
 ```
 
-This runs, and it is also a fair demonstration of why the default is not plain gradient
-descent. On the data above it spends 300 steps to reach a criterion value of $1.9194$ at
-$h = 0.1336$, while L-BFGS reaches $1.9185$ at $h = 0.1606$ in six iterations. Note also that
-the flag it returns is simply whatever the solver says, so a solver that reports
-`converged=True` for any finite iterate, as this one does, makes `result.converged`
-meaningless. The field is a message from the solver, not a verdict from the library.
+It runs, and it also shows why the default is not plain gradient descent. Six L-BFGS
+iterations beat three hundred fixed-rate steps by five hundredths of a percent on the
+criterion, and that margin separates bandwidths a fifth apart. The valley is that shallow, and
+a solver carrying no curvature information has correspondingly little gradient to work with.
+The flag it returns is whatever the solver says, so `result.converged` here reports only that
+the iterate is finite. It is a message from the solver, not a verdict from the library.

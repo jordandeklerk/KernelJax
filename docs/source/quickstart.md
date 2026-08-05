@@ -17,7 +17,6 @@ this.
 
 ```python
 import jax
-import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -34,11 +33,11 @@ data = kj.MixedData.from_blocks(
     continuous=exper,
     unordered=region,
     ordered=educ,
-    unordered_levels=(4,),
-    ordered_levels=(4,),
+    unordered_levels=4,
+    ordered_levels=4,
     names=("exper", "region", "educ"),
 )
-for name, kind in zip(data.spec.names, data.spec.kinds, strict=True):
+for name, kind in zip(data.spec.names, data.spec.kinds):
     print(f"{name:8s} {kind.value}")
 ```
 
@@ -54,15 +53,13 @@ levels apart two values are, and an unordered one only by whether the levels mat
 back in block order, continuous then unordered then ordered, whatever order you passed them, and
 every bandwidth vector follows that layout.
 
-The bend and the education bands are obvious, and neither is something we want to have to assume.
-
 ```python
-fig, ax = plt.subplots()
-colors = plt.get_cmap("viridis")(np.linspace(0.1, 0.9, 4))
+colors = ["#482475", "#2d708e", "#2ab07f", "#bddf26"]
 
-for level in range(4):
+fig, ax = plt.subplots()
+for level, color in enumerate(colors):
     mask = educ == level
-    ax.scatter(exper[mask], wage[mask], color=colors[level], s=18, alpha=0.85,
+    ax.scatter(exper[mask], wage[mask], color=color, s=18, alpha=0.85,
                label=f"educ {level}")
 ax.set_xlabel("experience (years)")
 ax.set_ylabel("wage")
@@ -72,6 +69,8 @@ plt.show()
 ```
 
 ![Synthetic wage data](_static/figures/quickstart-0.svg)
+
+The bend and the education bands are obvious, and neither is something we want to have to assume.
 
 ## A first fit
 
@@ -91,7 +90,7 @@ $$
 $$
 
 The estimate is that polynomial's intercept, $\hat m(x) = e_1^\top \hat\beta(x)$, and its
-remaining coefficients are the derivatives, which is why they come free.
+remaining coefficients are the derivatives up to a factorial, which is why they come free.
 
 None of that says how wide the weights should be. They are chosen by holding each observation out
 and asking which values predict it best,
@@ -101,10 +100,10 @@ $$
   \bigl(Y_i - \hat m_{-i}(X_i)\bigr)^2 ,
 $$
 
-which is the line `"cv_ls"` names. The third argument is where that choice goes. A string runs a
-selection rule now, while a `Bandwidth`, a `SelectionResult` or an earlier fit reuses a value
-already chosen. `degree` is 0 unless you say otherwise, the Nadaraya-Watson estimator, and degree
-1 is local linear, which keeps the boundary bias at the same order as the interior.
+which is the line `"cv_ls"` names, and the third argument is where that choice goes. A string
+selects now, while a `Bandwidth`, a `SelectionResult` or an earlier fit reuses a value already
+chosen. `degree` defaults to 0, the Nadaraya-Watson estimator, and we ask for 1, local linear,
+which keeps the boundary bias at the same order as the interior.
 
 ```python
 fit = kj.local_poly(data, wage, "cv_ls", degree=1)
@@ -143,8 +142,8 @@ three numbers are the entire fitted model. Everything below them is diagnostics.
 
 For a categorical column the smoothing parameter runs between two extremes. At zero, only
 observations sharing the level count, which is the same as splitting the sample into cells and
-throwing the rest away. At its upper bound every level is weighted identically and the column has
-effectively been deleted from the model.
+throwing the rest away. At its upper bound every level is weighted identically, a constant factor
+that cancels from the ratio and leaves the column out of the model.
 
 So the selected value is a verdict on the variable.
 
@@ -176,7 +175,7 @@ fail, and it fails quietly rather than by raising.
 
 ```python
 print(jax.tree.map(lambda a: a.shape, fit.bandwidth))
-print(f"converged={fit.selection.converged}  n_iter={fit.selection.n_iter:d}  "
+print(f"converged={fit.selection.converged}  n_iter={fit.selection.n_iter}  "
       f"criterion={fit.selection.value:.6f}")
 print(f"degree={fit.degree}  r_squared={fit.r_squared:.4f}  "
       f"residual_se={fit.residual_se:.4f}")
@@ -196,27 +195,26 @@ criteria later.
 
 ## Predicting on a grid
 
-A fitted surface over three covariates cannot be drawn, so the usual move is to vary one and hold
-the others somewhere representative. The curve you get is conditional on where the others were
-pinned. {func}`~kerneljax.grid` pins a continuous column at a quantile, an unordered one at its
-most common level, and an ordered one at the level reaching that quantile, and it carries the
-training spec forward so the result drops straight into `at`.
+A fitted surface over three covariates cannot be drawn, so we vary one and hold the others
+somewhere representative. The curve you get is conditional on where the others were pinned.
+{func}`~kerneljax.grid` pins a continuous column at a quantile, an unordered one at its most
+common level, and an ordered one at the level reaching that quantile, and it carries the training
+spec forward so the result drops straight into `at`.
 
 ```python
-at = kj.grid(data, vary="exper", n=200)
-pred = kj.local_poly(data, wage, fit, at=at, se=True)
+points = kj.grid(data, vary="exper", n=200)
+pred = kj.local_poly(data, wage, fit, at=points, se=True)
+exper_grid = points.con[:, 0]
 
-xs = np.asarray(at.con[:, 0])
-mean = np.asarray(pred.mean)
-se = np.asarray(pred.se)
-print(f"exper varies over {xs.size} points from {xs[0]:.2f} to {xs[-1]:.2f}")
-print(f"region pinned at {at.uno[0, 0]:d}, educ pinned at {at.orde[0, 0]:d}")
+print(f"exper varies over {exper_grid.size} points "
+      f"from {exper_grid[0]:.2f} to {exper_grid[-1]:.2f}")
+print(f"region pinned at {points.uno[0, 0]}, educ pinned at {points.orde[0, 0]}")
 
 fig, ax = plt.subplots()
 ax.scatter(exper, wage, s=14, alpha=0.30, color="#8a8f98", label="observations")
-ax.fill_between(xs, mean - 2 * se, mean + 2 * se, alpha=0.25,
-                color="#4c78a8", linewidth=0, label="±2 se")
-ax.plot(xs, mean, color="#4c78a8", lw=2.2, label="local linear fit")
+ax.fill_between(exper_grid, pred.mean - 2 * pred.se, pred.mean + 2 * pred.se,
+                alpha=0.25, color="#4c78a8", linewidth=0, label="±2 se")
+ax.plot(exper_grid, pred.mean, color="#4c78a8", lw=2.2, label="local linear fit")
 ax.set_xlabel("experience (years)")
 ax.set_ylabel("wage")
 ax.set_title("Fit at the modal region and median education")
@@ -231,29 +229,29 @@ region pinned at 2, educ pinned at 2
 
 ![Fit at the modal region and median education](_static/figures/quickstart-1.svg)
 
-Passing the fit as the bandwidth reuses what it selected, so no second selection runs. The curve
-recovers the concave shape without ever having been told to look for one, and the band widens
-where the data thin out.
+The curve recovers the concave shape without ever having been told to look for one, and the band
+widens where the data thin out.
 
 ## Derivatives
 
 In a parametric wage model the return to experience is a coefficient. Here it is a function, and
-reading it off is where a local linear fit earns the extra degree over a local constant one.
-Fitting a line rather than a level at each point means the slope is already the derivative
-estimate, a coefficient the fit has computed anyway.
+reading it off is where local linear earns its extra degree over local constant. Fitting a line
+rather than a level at each point makes the slope a derivative estimate the fit has already
+computed.
 
 ```python
-slope = kj.local_poly(data, wage, fit, at=at, gradient=True)
+slope = kj.local_poly(data, wage, fit, at=points, gradient=True)
+estimated = slope.grad[:, 0]
+truth = 0.35 - 2 * 0.008 * exper_grid
 
 fig, ax = plt.subplots()
-ax.plot(xs, np.asarray(slope.grad)[:, 0], color="#e45756", lw=2.2,
-        label="estimated")
-ax.plot(xs, 0.35 - 2 * 0.008 * xs, ls="--", lw=1.6, color="#8a8f98",
-        label="truth")
+ax.plot(exper_grid, estimated, color="#e45756", lw=2.2, label="estimated")
+ax.plot(exper_grid, truth, ls="--", lw=1.6, color="#8a8f98", label="truth")
 ax.axhline(0, lw=0.8, color="#8a8f98", alpha=0.5)
 ax.set_xlabel("experience (years)")
 ax.set_ylabel("d wage / d experience")
 ax.set_title("Estimated marginal effect against the truth")
+ax.legend()
 plt.show()
 ```
 
@@ -270,22 +268,23 @@ same machinery, since a density is the same kernel weights contracted against a 
 instead of a response.
 
 ```python
-w = kj.MixedData.continuous(wage[:, None])
-at_w = kj.MixedData.continuous(np.linspace(wage.min(), wage.max(), 200)[:, None])
-dens = kj.density(w, "cv_ml", at=at_w)
-dist = kj.cdf(w, "cv_cdf", at=at_w)
+wage_data = kj.MixedData.continuous(wage)
+wage_grid = np.linspace(wage.min(), wage.max(), 200)
+wage_points = kj.MixedData.continuous(wage_grid)
+
+dens = kj.density(wage_data, "cv_ml", at=wage_points)
+dist = kj.cdf(wage_data, "cv_cdf", at=wage_points)
 print(f"density       h={dens.bandwidth.h[0]:.6f}")
 print(f"distribution  h={dist.bandwidth.h[0]:.6f}")
 
-ws = np.asarray(at_w.con[:, 0])
-fig, (a1, a2) = plt.subplots(1, 2, figsize=(9.6, 3.6))
-a1.hist(wage, bins=30, density=True, color="#8a8f98", alpha=0.35)
-a1.plot(ws, np.asarray(dens.value), color="#4c78a8", lw=2.2)
-a1.set_title("density")
-a1.set_xlabel("wage")
-a2.plot(ws, np.asarray(dist.value), color="#54a24b", lw=2.2)
-a2.set_title("distribution")
-a2.set_xlabel("wage")
+fig, (left, right) = plt.subplots(1, 2, figsize=(9.6, 3.6))
+left.hist(wage, bins=30, density=True, color="#8a8f98", alpha=0.35)
+left.plot(wage_grid, dens.value, color="#4c78a8", lw=2.2)
+left.set_title("density")
+left.set_xlabel("wage")
+right.plot(wage_grid, dist.value, color="#54a24b", lw=2.2)
+right.set_title("distribution")
+right.set_xlabel("wage")
 fig.tight_layout()
 plt.show()
 ```
@@ -299,8 +298,8 @@ distribution  h=0.443713
 
 ## Choosing the selection rule
 
-Everything above used `"cv_ls"` without comment. Which criterion you minimize is a modelling
-decision rather than a setting.
+Those two calls named `"cv_ml"` and `"cv_cdf"` where the regression named `"cv_ls"`. Which
+criterion you minimize is a modelling decision rather than a setting.
 
 | Estimator | Accepted strings |
 | --- | --- |
@@ -309,8 +308,8 @@ decision rather than a setting.
 | {func}`~kerneljax.cdf` | `"cv_cdf"`, `"normal_reference"` |
 
 `"normal_reference"` is the cheap one, a closed-form rule that assumes roughly normal data and
-runs no optimization. It is a good way to get a fit in front of you quickly, and on this sample it
-lands in the same neighborhood as the cross validated answer.
+runs no optimization. It is the quickest way to get a fit in front of you, and here it lands near
+the cross validated answer.
 
 ```python
 quick = kj.local_poly(data, wage, "normal_reference", degree=1)
@@ -328,15 +327,15 @@ criteria are not convex, and while the restarts usually agree, when they disagre
 completely.
 
 ```python
-rng2 = np.random.default_rng(9)
-xn = rng2.uniform(size=150)
-yn = rng2.normal(0, 1, 150)
+noise_rng = np.random.default_rng(9)
+x_noise = noise_rng.uniform(size=150)
+y_noise = noise_rng.normal(0, 1, 150)
 
-crit = kj.RegressionCriterion(method="cv_ls", degree=1)
-one = kj.select_bandwidth(xn, crit, y=yn, n_starts=1)
-three = kj.select_bandwidth(xn, crit, y=yn, n_starts=3)
-print(f"1 start   h={one.bandwidth.h[0]:8.4f}  criterion={one.value:.6f}")
-print(f"3 starts  h={three.bandwidth.h[0]:8.4f}  criterion={three.value:.6f}")
+criterion = kj.RegressionCriterion(method="cv_ls", degree=1)
+one_start = kj.select_bandwidth(x_noise, criterion, y=y_noise, n_starts=1)
+three_starts = kj.select_bandwidth(x_noise, criterion, y=y_noise, n_starts=3)
+print(f"1 start   h={one_start.bandwidth.h[0]:8.4f}  criterion={one_start.value:.6f}")
+print(f"3 starts  h={three_starts.bandwidth.h[0]:8.4f}  criterion={three_starts.value:.6f}")
 ```
 
 ```text
@@ -344,45 +343,49 @@ print(f"3 starts  h={three.bandwidth.h[0]:8.4f}  criterion={three.value:.6f}")
 3 starts  h= 41.8218  criterion=0.984698
 ```
 
-On that draw `yn` is unrelated to `xn`, so the honest answer is a very large bandwidth, the
-continuous analogue of what happened to region. A single start settles two orders of magnitude
+On that draw `y_noise` is unrelated to `x_noise`, so the honest answer is a very large bandwidth,
+the continuous analogue of what happened to region. A single start settles two orders of magnitude
 short of it, at a worse criterion value, and reports success. This is why `converged` alone is not
 enough, and why one start is rarely worth the time it saves.
 
 ## Under the hood
 
 Underneath every estimator is a single operation, contracting kernel weights against a vector, and
-it is exported. The Nadaraya-Watson estimator is a ratio of two of them, the response over the
-numerator and a column of ones over the denominator, which is how you would build a method the
+it is exported. The Nadaraya-Watson estimator is a ratio of two of them, the response in the
+numerator and a column of ones in the denominator, which is how you would build a method the
 library does not ship.
 
 ```python
-num = kj.ksum(data, fit.bandwidth, wage[:, None], at=at)
-den = kj.ksum(data, fit.bandwidth, at=at)
-nw = (num / den).ravel()
+numerator = kj.ksum(data, fit.bandwidth, wage[:, None], at=points)
+denominator = kj.ksum(data, fit.bandwidth, at=points)
+nadaraya_watson = (numerator / denominator).ravel()
 
-local_constant = kj.local_poly(data, wage, fit.bandwidth, at=at)
-print(f"largest gap to local_poly={jnp.abs(nw - local_constant.mean).max():.3e}")
+local_constant = kj.local_poly(data, wage, fit.bandwidth, at=points)
+gap = abs(nadaraya_watson - local_constant.mean).max()
+print(f"largest gap to local_poly={gap:.3e}")
 ```
 
 ```text
 largest gap to local_poly=1.526e-05
 ```
 
+The two are the same estimator, so the gap is float32 arithmetic.
+
 The criteria are open in the same way, and they are differentiable. A bandwidth chosen by a
 derivative-free search has to be settled before anything else happens, whereas a criterion with a
 gradient can sit inside a larger objective and be learned along with everything else in it.
 
 ```python
-def criterion(bw):
-    return kj.cv_ls_regression(data, bw, y=wage, degree=1)
+def cv_ls(bandwidth):
+    return kj.cv_ls_regression(data, bandwidth, y=wage, degree=1)
 
 
-away = jax.grad(criterion)(quick.bandwidth)
-at_optimum = jax.grad(criterion)(fit.bandwidth)
-for label, g in [("plug-in", away), ("selected", at_optimum)]:
-    print(f"{label:9s} d/dh={g.h[0]:+.3e}  d/dlam_uno={g.lam_uno[0]:+.3e}  "
-          f"d/dlam_ord={g.lam_ord[0]:+.3e}")
+at_plug_in = jax.grad(cv_ls)(quick.bandwidth)
+at_selected = jax.grad(cv_ls)(fit.bandwidth)
+
+for label, grad in [("plug-in", at_plug_in), ("selected", at_selected)]:
+    print(f"{label:9s} d/dh={grad.h[0]:+.3e}  d/dlam_uno={grad.lam_uno[0]:+.3e}  "
+          f"d/dlam_ord={grad.lam_ord[0]:+.3e}")
 ```
 
 ```text
