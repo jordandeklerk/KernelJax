@@ -29,7 +29,7 @@ HAxis = Literal["shared", "eval", "train"]
 @partial(
     jax.tree_util.register_dataclass,
     data_fields=["bandwidth", "value", "n_iter", "converged"],
-    meta_fields=["criterion"],
+    meta_fields=["criterion", "kernels"],
 )
 @dataclasses.dataclass(frozen=True)
 class SelectionResult:
@@ -46,6 +46,11 @@ class SelectionResult:
     criterion : callable, optional
         The criterion that was minimized, carried so a later fit can read
         back the settings it was selected under. Static.
+    kernels : KernelSet, optional
+        The kernels the bandwidth was selected under, carried for the same
+        reason. A bandwidth is only meaningful alongside the kernel that
+        produced it, so an estimator handed this result reuses them rather
+        than falling back to the defaults. Static.
     converged : Array
         Whether the solver stopped because its progress stalled, either
         the gradient or the objective value stopped moving, rather than
@@ -58,6 +63,7 @@ class SelectionResult:
     n_iter: Array
     converged: Array
     criterion: Any = None
+    kernels: KernelSet | None = None
 
 
 @partial(

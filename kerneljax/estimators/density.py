@@ -13,6 +13,7 @@ from jaxtyping import Float
 from kerneljax.bandwidth import Bandwidth, SelectionResult, normal_reference
 from kerneljax.data import ColumnSpec, MixedData, _as_points
 from kerneljax.kernels import KernelSet
+from kerneljax.kernels.sets import _resolve_kernels
 from kerneljax.ksum import ksum
 from kerneljax.selection.criteria import DensityCriterion
 from kerneljax.selection.optimize import select_bandwidth
@@ -150,7 +151,7 @@ def density(
            distributions with categorical and continuous data." Journal of
            Multivariate Analysis, 86, 266-292.
     """
-    kernels = KernelSet() if kernels is None else kernels
+    kernels = _resolve_kernels(kernels, getattr(bw, "kernels", None))
     train = _as_points(train)
     bandwidth, selection = _resolve_bandwidth(train, bw, kernels, n_starts, chunk)
 

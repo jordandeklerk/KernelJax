@@ -14,6 +14,7 @@ from kerneljax.bandwidth import Bandwidth, SelectionResult, broadcast_h, normal_
 from kerneljax.basis import LocalPolyBasis
 from kerneljax.data import ColumnSpec, MixedData, _as_points
 from kerneljax.kernels import KernelSet
+from kerneljax.kernels.sets import _resolve_kernels
 from kerneljax.ksum import _pad_index, _pad_rows, kweights
 from kerneljax.linalg import wls
 from kerneljax.selection.criteria import RegressionCriterion
@@ -268,7 +269,7 @@ def local_poly(
     .. [2] Li, Q., & Racine, J. S. (2007). Nonparametric Econometrics: Theory
            and Practice. Princeton University Press.
     """
-    kernels = KernelSet() if kernels is None else kernels
+    kernels = _resolve_kernels(kernels, getattr(bw, "kernels", None))
     train = _as_points(train)
     bandwidth, selection, degree = _resolve_bandwidth(train, y, bw, degree, kernels, n_starts, chunk)
 

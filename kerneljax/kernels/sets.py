@@ -46,3 +46,14 @@ class KernelSet:
     continuous: ContinuousKernel = dataclasses.field(default_factory=Gaussian)
     unordered: UnorderedKernel = dataclasses.field(default_factory=AitchisonAitken)
     ordered: OrderedKernel = dataclasses.field(default_factory=LiRacine)
+
+
+def _resolve_kernels(explicit: KernelSet | None, carried: KernelSet | None) -> KernelSet:
+    """Settle on one kernel set."""
+    if explicit is None:
+        return KernelSet() if carried is None else carried
+
+    if carried is not None and explicit != carried:
+        raise ValueError("kernels= contradicts the kernels that bw was selected under")
+
+    return explicit

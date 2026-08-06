@@ -148,6 +148,7 @@ def select_bandwidth(
         n_iter=iterations[ranked],
         converged=jnp.logical_and(flags[ranked], usable[ranked]),
         criterion=criterion,
+        kernels=kernels,
     )
 
 

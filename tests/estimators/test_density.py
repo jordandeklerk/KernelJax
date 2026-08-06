@@ -229,3 +229,13 @@ def test_wrong_family_fit_is_rejected(criteria_train, criteria_response):
     fit = local_poly(criteria_train, criteria_response, "cv_ls")
     with pytest.raises(TypeError, match="bw must be"):
         density(criteria_train, fit)
+
+
+def test_reusing_a_selection_reuses_its_kernels(density_data, epanechnikov_kernels):
+    result = select_bandwidth(density_data, DensityCriterion(method="cv_ml"), kernels=epanechnikov_kernels)
+
+    carried = density(density_data, result)
+    spelled_out = density(density_data, result, kernels=epanechnikov_kernels)
+
+    assert carried.kernels == epanechnikov_kernels
+    assert jnp.array_equal(carried.value, spelled_out.value)

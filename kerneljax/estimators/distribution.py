@@ -12,6 +12,7 @@ from jaxtyping import Float
 from kerneljax.bandwidth import Bandwidth, SelectionResult, normal_reference
 from kerneljax.data import ColumnSpec, MixedData, _as_points
 from kerneljax.kernels import KernelSet, Op
+from kerneljax.kernels.sets import _resolve_kernels
 from kerneljax.ksum import ksum
 from kerneljax.selection.criteria import DistributionCriterion
 from kerneljax.selection.optimize import select_bandwidth
@@ -160,7 +161,7 @@ def cdf(
            for nonparametric conditional distribution and quantile functions."
            Journal of Business and Economic Statistics, 35, 57-65.
     """
-    kernels = KernelSet() if kernels is None else kernels
+    kernels = _resolve_kernels(kernels, getattr(bw, "kernels", None))
     train = _as_points(train)
 
     if train.spec.p_uno:
