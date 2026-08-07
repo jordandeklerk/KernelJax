@@ -433,7 +433,7 @@ slopes gently outward, the boundary verdict on region showing up once more.
 ## Where to go next
 
 - [Custom kernels](user-guide/custom-kernels.md) and
-  [Custom criteria](user-guide/custom-criteria.md) cover replacing the weighting scheme and
+  [Custom bandwidth selection](user-guide/custom-criteria.md) cover replacing the weighting scheme and
   the rule that picks the bandwidth.
 - [Background](background/smoothing.md) derives all of it from first principles.
 - The [API reference](api.md) documents every exported object.

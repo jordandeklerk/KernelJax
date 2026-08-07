@@ -168,7 +168,7 @@ differentiated has to be differentiable on every branch it traces, not only the 
 which is why `jnp.where` needs its denominator guarded and not just its branch. And a setting
 that fixes the shape of a computation has to stay concrete rather than arrive as array data.
 [Custom kernels](../user-guide/custom-kernels.md#the-requirements-at-a-glance) demonstrates the
-first two, [Custom criteria](../user-guide/custom-criteria.md#where-settings-live) the third.
+first two, [Custom bandwidth selection](../user-guide/custom-criteria.md#where-settings-live) the third.
 
 When you register a container as a pytree, a field is either data or metadata, and putting a
 static setting in `data_fields` makes it a tracer the moment the container crosses a `jit`

@@ -64,7 +64,7 @@ jax.config.update("jax_enable_x64", True)
 - [Quickstart](quickstart.md) walks through the main API, from a first fit to building
   estimators out of the exported primitives.
 - [Custom kernels](user-guide/custom-kernels.md) covers writing your own kernel and the four
-  requirements it has to meet, and [Custom criteria](user-guide/custom-criteria.md) does the
+  requirements it has to meet, and [Custom bandwidth selection](user-guide/custom-criteria.md) does the
   same for the rule that picks the bandwidth.
 - [Background](background/smoothing.md) is a four-part introduction to kernel smoothing,
   running from densities through regression, mixed-type data, and bandwidth selection.

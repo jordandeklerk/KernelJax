@@ -1,4 +1,4 @@
-# Custom criteria
+# Custom bandwidth selection
 
 Writing a kernel changes how observations are weighted. Writing a criterion changes what the
 library is aiming for when it picks a bandwidth. The two are independent, and both are open.
