@@ -360,9 +360,11 @@ pooling into a region where a *matching* level receives less weight than a non-m
 reporting `converged=True` throughout. Return zero and the search box collapses,
 {func}`~kerneljax.select_bandwidth` returns `nan`, and an estimator refuses to fit at it.
 
-The bound also fixes where selection begins and where it moves, since `normal_reference`
-starts every categorical parameter at half of it and the search box runs from zero to the
-bound. Two kernels with different bounds are therefore reporting the same smoothing in
+The bound also fixes where selection begins and where it moves, since a search starts every
+categorical parameter at half of it and the box runs from zero to the bound. The rule of thumb
+{func}`~kerneljax.normal_reference` returns for a categorical column is zero, matching np, but
+zero sits in the flat tail of the transform where a gradient cannot move, so the search starts
+inside the box instead. Two kernels with different bounds are therefore reporting the same smoothing in
 different units, the reading that
 [Bandwidth selection](../background/selection.md#what-cross-validation-buys) sets out.
 

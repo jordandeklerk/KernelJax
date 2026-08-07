@@ -10,7 +10,7 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Float
 
-from kerneljax.bandwidth import BandwidthTransform, SelectionResult, normal_reference
+from kerneljax.bandwidth import BandwidthTransform, SelectionResult, _search_start
 from kerneljax.data import MixedData, _as_points
 from kerneljax.kernels import KernelSet
 from kerneljax.typing import Array, ScalarFloat
@@ -128,7 +128,7 @@ def select_bandwidth(
         extra["y"] = y
 
     transform = BandwidthTransform(spec=train.spec, kernels=kernels)
-    start = normal_reference(train, kernels)
+    start = _search_start(train, kernels)
     z0 = transform.to_unconstrained(start)
 
     def objective(z: Array) -> ScalarFloat:

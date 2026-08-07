@@ -325,8 +325,10 @@ no `fold` to look for.
 ## Where the search starts
 
 Selection does not run once. `select_bandwidth` takes `n_starts`, defaulting to `3`, and the
-first candidate is the {func}`~kerneljax.normal_reference` rule of thumb while the rest are that
-same point shifted by a constant offset in every unconstrained coordinate. Each candidate gets a
+first candidate is the {func}`~kerneljax.normal_reference` rule of thumb for the continuous
+columns, with each categorical parameter placed at half its bound rather than at the zero the
+rule returns, since zero has no gradient to follow. The rest are that same point shifted by a
+constant offset in every unconstrained coordinate. Each candidate gets a
 full solve, and the best finite one wins, so `bandwidth`, `value`, `n_iter` and `converged` all
 describe the winning start and none of them describe the others.
 
