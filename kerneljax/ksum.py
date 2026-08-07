@@ -106,18 +106,12 @@ def kweights(
     if evaluate.spec.kinds != spec.kinds or evaluate.spec.n_levels != spec.n_levels:
         raise ValueError("train and at must share the same column kinds and level counts")
 
-    op_con, uno_ops, ord_ops = _resolve_ops(spec, op)
+    con_ops, uno_ops, ord_ops = _resolve_ops(spec, op)
     weights = jnp.ones((evaluate.n, train.n), dtype=train.con.dtype)
 
     if spec.p_con:
         bandwidth = broadcast_h(bw, spec.p_con)
-        factors_con = _elementwise(
-            getattr(kernels.continuous, op_con)(evaluate.con[:, None, :], train.con[None, :, :], bandwidth),
-            (evaluate.n, train.n, spec.p_con),
-            kernels.continuous,
-            op_con,
-        )
-        weights = weights * jnp.prod(factors_con, axis=-1)
+        weights = weights * _continuous_product(kernels.continuous, con_ops, evaluate, train, bandwidth)
 
     for column, levels in enumerate(spec.uno_levels):
         factor_uno = _elementwise(
@@ -332,6 +326,7 @@ def ksum(
     evaluate = train if at is None else at
     kernels = KernelSet() if kernels is None else kernels
     p_con = train.spec.p_con
+    con_ops, _, _ = _resolve_ops(train.spec, op)
 
     if v is None:
         v = jnp.ones((train.n, 1), dtype=train.con.dtype)
@@ -339,7 +334,7 @@ def ksum(
         v = v * sample_weight[:, None]
 
     if weight_scale == "per_train" and p_con:
-        divisor = _h_divisor(bw, p_con)
+        divisor = _h_divisor(bw, con_ops)
         v = v / divisor[:, None] if divisor.ndim else v / divisor
 
     if chunk is None:
@@ -356,7 +351,7 @@ def ksum(
         out = _sum_over_eval_chunks(train, bw, v, evaluate, fold, kernels, op, power, chunk_eval, chunk_train)
 
     if weight_scale == "per_eval" and p_con:
-        divisor = _h_divisor(bw, p_con)
+        divisor = _h_divisor(bw, con_ops)
         out = out / divisor[:, None] if divisor.ndim else out / divisor
 
     return out
@@ -538,14 +533,14 @@ def _elementwise(factor: Array, want: tuple[int, ...], kernel: object, op: str) 
     return factor
 
 
-def _resolve_ops(spec: ColumnSpec, op: OpSpec) -> tuple[str, tuple[str, ...], tuple[str, ...]]:
+def _resolve_ops(spec: ColumnSpec, op: OpSpec) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
     """Normalize an operator specification to a method name per column."""
     if isinstance(op, str):
-        return op, (op,) * spec.p_uno, (op,) * spec.p_ord
+        return (op,) * spec.p_con, (op,) * spec.p_uno, (op,) * spec.p_ord
 
     if isinstance(op, Mapping):
         return (
-            op.get(Kind.CONTINUOUS, Op.VALUE),
+            (op.get(Kind.CONTINUOUS, Op.VALUE),) * spec.p_con,
             (op.get(Kind.UNORDERED, Op.VALUE),) * spec.p_uno,
             (op.get(Kind.ORDERED, Op.VALUE),) * spec.p_ord,
         )
@@ -559,16 +554,62 @@ def _resolve_ops(spec: ColumnSpec, op: OpSpec) -> tuple[str, tuple[str, ...], tu
     uno_ops = tuple(entry for entry, kind in zip(op, spec.kinds, strict=True) if kind is Kind.UNORDERED)
     ord_ops = tuple(entry for entry, kind in zip(op, spec.kinds, strict=True) if kind is Kind.ORDERED)
 
-    return con_ops[0] if con_ops else Op.VALUE, uno_ops, ord_ops
+    return con_ops, uno_ops, ord_ops
 
 
-def _h_divisor(bw: Bandwidth, p_con: int) -> Array:
-    """Return the product of the continuous bandwidths, per row when train indexed."""
-    if p_con == 0:
+def _continuous_product(
+    kernel: object, ops: tuple[str, ...], evaluate: MixedData, train: MixedData, bandwidth: Array
+) -> Array:
+    """Multiply the continuous factors."""
+    distinct = tuple(dict.fromkeys(ops))
+
+    if len(distinct) == 1:
+        factors = _elementwise(
+            getattr(kernel, distinct[0])(evaluate.con[:, None, :], train.con[None, :, :], bandwidth),
+            (evaluate.n, train.n, len(ops)),
+            kernel,
+            distinct[0],
+        )
+        return jnp.prod(factors, axis=-1)
+
+    product = jnp.ones((evaluate.n, train.n), dtype=train.con.dtype)
+    for name in distinct:
+        columns = [index for index, entry in enumerate(ops) if entry == name]
+        factors = _elementwise(
+            getattr(kernel, name)(
+                evaluate.con[:, columns][:, None, :],
+                train.con[:, columns][None, :, :],
+                bandwidth[..., columns],
+            ),
+            (evaluate.n, train.n, len(columns)),
+            kernel,
+            name,
+        )
+        product = product * jnp.prod(factors, axis=-1)
+
+    return product
+
+
+def _divisor_exponent(op: str) -> int:
+    """Give the power of h a column contributes to the divisor."""
+    if op == Op.DERIV:
+        return 2
+    if op == Op.CDF:
+        return 0
+    return 1
+
+
+def _h_divisor(bw: Bandwidth, ops: tuple[str, ...]) -> Array:
+    """Return the bandwidth product."""
+    if not ops:
         return jnp.asarray(1.0)
+
+    exponents = jnp.asarray([_divisor_exponent(name) for name in ops], dtype=bw.h.dtype)
+    powers = bw.h**exponents
+
     if bw.h_axis == "shared":
-        return jnp.prod(bw.h)
-    return jnp.prod(bw.h, axis=-1)
+        return jnp.prod(powers)
+    return jnp.prod(powers, axis=-1)
 
 
 def _pad_rows(x: Array, chunk: int) -> Array:

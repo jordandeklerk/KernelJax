@@ -840,3 +840,36 @@ def selection_reference_y(float64_enabled):
             -0.038203,
         ]
     )
+
+
+@pytest.fixture
+def two_continuous():
+    rng = np.random.default_rng(0)
+    columns = np.column_stack([rng.normal(size=12), rng.uniform(size=12)])
+    data = MixedData.continuous(columns)
+    bw = Bandwidth(h=jnp.array([0.5, 0.4]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+    return data, bw
+
+
+@pytest.fixture
+def divisor_case():
+    rng = np.random.default_rng(1)
+    columns = np.column_stack([rng.normal(size=10), rng.uniform(size=10)])
+    data = MixedData.continuous(columns)
+    bw = Bandwidth(h=jnp.array([0.5, 0.4]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+    return data, bw
+
+
+@pytest.fixture
+def probe_x():
+    return np.linspace(0.05, 0.95, 40)
+
+
+@pytest.fixture
+def probe_y(probe_x):
+    return np.sin(2.0 * np.pi * probe_x)
+
+
+@pytest.fixture
+def probe_bw():
+    return Bandwidth(h=jnp.array([0.3]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))

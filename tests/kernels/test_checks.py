@@ -7,7 +7,6 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from kerneljax.bandwidth import Bandwidth
 from kerneljax.estimators.density import density
 from kerneljax.estimators.distribution import cdf
 from kerneljax.estimators.regression import local_poly
@@ -74,21 +73,6 @@ class CdfOverH(ContinuousKernel):
         from jax.scipy.special import ndtr
 
         return ndtr((x - y) / h) / h
-
-
-@pytest.fixture
-def probe_x():
-    return np.linspace(0.05, 0.95, 40)
-
-
-@pytest.fixture
-def probe_y(probe_x):
-    return np.sin(2.0 * np.pi * probe_x)
-
-
-@pytest.fixture
-def probe_bw():
-    return Bandwidth(h=jnp.array([0.3]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
 
 
 def test_half_mass_is_refused_by_density(probe_x, probe_bw):
