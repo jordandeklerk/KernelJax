@@ -10,14 +10,16 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Float
 
-from kerneljax.bandwidth import Bandwidth, SelectionResult, broadcast_h, normal_reference
+from kerneljax.bandwidth import Bandwidth, SelectionResult, _require_usable, broadcast_h, normal_reference
 from kerneljax.basis import LocalPolyBasis
 from kerneljax.data import ColumnSpec, MixedData, _as_points
 from kerneljax.kernels import KernelSet
+from kerneljax.kernels._checks import _check_conv_at_zero, _check_grad_diagonal
+from kerneljax.kernels.sets import _resolve_kernels
 from kerneljax.ksum import _pad_index, _pad_rows, kweights
 from kerneljax.linalg import wls
-from kerneljax.tuning.criteria import RegressionCriterion
-from kerneljax.tuning.optimize import select_bandwidth
+from kerneljax.selection.criteria import RegressionCriterion
+from kerneljax.selection.optimize import select_bandwidth
 from kerneljax.typing import Array, FloatArray, ScalarFloat
 
 __all__ = ["LocalPolyFit", "local_poly"]
@@ -43,7 +45,7 @@ class LocalPolyFit:
     with :math:`\beta_j` the coefficient of the first order term in column :math:`j` and
     :math:`h_j` its bandwidth.
 
-    Parameters
+    Attributes
     ----------
     mean : Float[Array, " n_eval"]
         The fitted regression value at every evaluation point.
@@ -225,20 +227,41 @@ def local_poly(
 
     Examples
     --------
-    Fit a local linear regression to an exact line.
+    Fit a local linear regression, letting least squares cross validation choose the
+    bandwidth. The fit carries the selected bandwidth and the goodness of fit
+    alongside the fitted values.
 
     .. ipython::
         :okwarning:
 
-        In [1]: import jax.numpy as jnp
+        In [1]: import numpy as np
            ...: import kerneljax as kj
            ...:
-           ...: x = jnp.linspace(-2.0, 2.0, 50).reshape(-1, 1)
-           ...: y = 3.0 + 2.0 * x[:, 0]
-           ...: train = kj.MixedData.continuous(x)
-           ...: bw = kj.Bandwidth(h=jnp.array([0.3]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
-           ...: fit = kj.local_poly(train, y, bw, degree=1)
-           ...: print(fit.mean[:5])
+           ...: rng = np.random.default_rng(0)
+           ...: x = rng.uniform(0.0, 1.0, 150)
+           ...: y = np.sin(2 * np.pi * x) + rng.normal(0.0, 0.2, 150)
+           ...: fit = kj.local_poly(x, y, "cv_ls", degree=1)
+           ...: print(f"bandwidth {float(fit.bandwidth.h[0]):.4f}   R^2 {float(fit.r_squared):.4f}")
+
+    A categorical column joins through :meth:`~kerneljax.MixedData.from_blocks`, and
+    its smoothing parameter is selected jointly with the continuous bandwidth. A value
+    near zero says the criterion is declining to pool across categories, so the
+    variable matters.
+
+    .. ipython::
+        :okwarning:
+
+        In [2]: region = rng.integers(0, 3, 150)
+           ...: data = kj.MixedData.from_blocks(continuous=x, unordered=region)
+           ...: mixed = kj.local_poly(data, y + 0.5 * region, "cv_ls", degree=1)
+           ...: print(f"h {float(mixed.bandwidth.h[0]):.4f}   lambda {float(mixed.bandwidth.lam_uno[0]):.4f}")
+
+    See Also
+    --------
+    density : Estimate a mixed-type probability density.
+    cdf : Estimate a mixed-type cumulative distribution.
+    summary : Measure how well a fitted estimator describes the sample it was fit on.
+    select_bandwidth : Select a bandwidth by minimizing a cross-validation criterion.
 
     References
     ----------
@@ -247,9 +270,16 @@ def local_poly(
     .. [2] Li, Q., & Racine, J. S. (2007). Nonparametric Econometrics: Theory
            and Practice. Princeton University Press.
     """
-    kernels = KernelSet() if kernels is None else kernels
+    kernels = _resolve_kernels(kernels, getattr(bw, "kernels", None))
     train = _as_points(train)
+    if train.spec.p_con:
+        if isinstance(bw, str) and bw != "normal_reference":
+            _check_grad_diagonal(kernels.continuous, "value")
+        if se:
+            _check_conv_at_zero(kernels.continuous)
+
     bandwidth, selection, degree = _resolve_bandwidth(train, y, bw, degree, kernels, n_starts, chunk)
+    _require_usable(bandwidth)
 
     if gradient and degree == 0:
         raise ValueError("gradient requires degree >= 1, a constant fit carries no slope information")

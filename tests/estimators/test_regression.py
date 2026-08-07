@@ -13,9 +13,9 @@ from kerneljax.data import MixedData
 from kerneljax.estimators.regression import LocalPolyFit, _fit_values, local_poly
 from kerneljax.kernels import KernelSet
 from kerneljax.ksum import kweights
-from kerneljax.tuning.criteria import DensityCriterion, RegressionCriterion
-from kerneljax.tuning.objectives import cv_ls_regression
-from kerneljax.tuning.optimize import select_bandwidth
+from kerneljax.selection.criteria import DensityCriterion, RegressionCriterion
+from kerneljax.selection.objectives import cv_ls_regression
+from kerneljax.selection.optimize import select_bandwidth
 
 
 def test_degree_zero_matches_nadaraya_watson(poly_train, poly_at, poly_bandwidth, poly_response):
@@ -458,6 +458,42 @@ def test_contradicting_degree_raises(criteria_train, criteria_response):
     first = local_poly(criteria_train, criteria_response, "cv_ls", degree=0)
     with pytest.raises(ValueError, match="contradicts"):
         local_poly(criteria_train, criteria_response, first, degree=2)
+
+
+def test_selection_carries_the_kernels_it_used(criteria_train, criteria_response, epanechnikov_kernels):
+    criterion = RegressionCriterion(method="cv_ls", degree=1)
+    result = select_bandwidth(criteria_train, criterion, y=criteria_response, kernels=epanechnikov_kernels)
+    assert result.kernels == epanechnikov_kernels
+
+
+def test_reusing_a_selection_reuses_its_kernels(criteria_train, criteria_response, epanechnikov_kernels):
+    criterion = RegressionCriterion(method="cv_ls", degree=1)
+    result = select_bandwidth(criteria_train, criterion, y=criteria_response, kernels=epanechnikov_kernels)
+
+    carried = local_poly(criteria_train, criteria_response, result)
+    spelled_out = local_poly(criteria_train, criteria_response, result, kernels=epanechnikov_kernels)
+
+    assert carried.kernels == epanechnikov_kernels
+    assert jnp.array_equal(carried.mean, spelled_out.mean)
+
+
+def test_reusing_a_fit_reuses_its_kernels(criteria_train, criteria_response, epanechnikov_kernels):
+    first = local_poly(criteria_train, criteria_response, "cv_ls", degree=1, kernels=epanechnikov_kernels)
+    again = local_poly(criteria_train, criteria_response, first)
+    assert again.kernels == epanechnikov_kernels
+    assert jnp.array_equal(again.mean, first.mean)
+
+
+def test_agreeing_kernels_are_accepted(criteria_train, criteria_response, epanechnikov_kernels):
+    first = local_poly(criteria_train, criteria_response, "cv_ls", degree=1, kernels=epanechnikov_kernels)
+    again = local_poly(criteria_train, criteria_response, first, kernels=dataclasses.replace(epanechnikov_kernels))
+    assert jnp.array_equal(again.mean, first.mean)
+
+
+def test_contradicting_kernels_raises(criteria_train, criteria_response, epanechnikov_kernels):
+    first = local_poly(criteria_train, criteria_response, "cv_ls", degree=1, kernels=epanechnikov_kernels)
+    with pytest.raises(ValueError, match="contradicts"):
+        local_poly(criteria_train, criteria_response, first, kernels=KernelSet())
 
 
 @pytest.mark.parametrize("bad", [0.4, None, ("cv_ls",), jnp.array([0.4]), np.array([0.4, 0.5])])

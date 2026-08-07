@@ -10,12 +10,14 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Float
 
-from kerneljax.bandwidth import Bandwidth, SelectionResult, normal_reference
+from kerneljax.bandwidth import Bandwidth, SelectionResult, _require_usable, normal_reference
 from kerneljax.data import ColumnSpec, MixedData, _as_points
 from kerneljax.kernels import KernelSet
+from kerneljax.kernels._checks import _check_conv_matches, _check_grad_diagonal, _check_value_mass
+from kerneljax.kernels.sets import _resolve_kernels
 from kerneljax.ksum import ksum
-from kerneljax.tuning.criteria import DensityCriterion
-from kerneljax.tuning.optimize import select_bandwidth
+from kerneljax.selection.criteria import DensityCriterion
+from kerneljax.selection.optimize import select_bandwidth
 from kerneljax.typing import Array
 
 __all__ = ["DensityFit", "density"]
@@ -30,7 +32,7 @@ __all__ = ["DensityFit", "density"]
 class DensityFit:
     """Result of a mixed-type density estimate.
 
-    Parameters
+    Attributes
     ----------
     value : Float[Array, " n_eval"]
         The density estimate at each evaluation point.
@@ -122,19 +124,27 @@ def density(
 
     Examples
     --------
-    Estimate a density from a sample of continuous data.
+    Estimate a bimodal density with the bandwidth chosen by likelihood cross
+    validation, then evaluate it at the two modes and at the trough between them.
+    The estimate is high at each mode and low in between.
 
     .. ipython::
         :okwarning:
 
-        In [1]: import jax.numpy as jnp
+        In [1]: import numpy as np
            ...: import kerneljax as kj
            ...:
-           ...: x = jnp.linspace(-2.0, 2.0, 50).reshape(-1, 1)
-           ...: train = kj.MixedData.continuous(x)
-           ...: bw = kj.Bandwidth(h=jnp.array([0.3]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
-           ...: fit = kj.density(train, bw)
-           ...: print(fit.value[:5])
+           ...: rng = np.random.default_rng(0)
+           ...: z = np.concatenate([rng.normal(-2.0, 0.7, 100), rng.normal(2.0, 1.0, 100)])
+           ...: fit = kj.density(z, "cv_ml", at=np.array([-2.0, 0.0, 2.0]))
+           ...: print(np.asarray(fit.value))
+
+    See Also
+    --------
+    local_poly : Fit a local polynomial regression of mixed-type data.
+    cdf : Estimate a mixed-type cumulative distribution.
+    summary : Measure how well a fitted estimator describes the sample it was fit on.
+    select_bandwidth : Select a bandwidth by minimizing a cross-validation criterion.
 
     References
     ----------
@@ -142,9 +152,18 @@ def density(
            distributions with categorical and continuous data." Journal of
            Multivariate Analysis, 86, 266-292.
     """
-    kernels = KernelSet() if kernels is None else kernels
+    kernels = _resolve_kernels(kernels, getattr(bw, "kernels", None))
     train = _as_points(train)
+
+    if train.spec.p_con:
+        _check_value_mass(kernels.continuous)
+        if isinstance(bw, str) and bw != "normal_reference":
+            _check_grad_diagonal(kernels.continuous, "value")
+        if bw == "cv_ls":
+            _check_conv_matches(kernels.continuous)
+
     bandwidth, selection = _resolve_bandwidth(train, bw, kernels, n_starts, chunk)
+    _require_usable(bandwidth)
 
     evaluate = None if at is None else _as_points(at, train.spec)
     if at is not None and isinstance(bw, SelectionResult | DensityFit) and bandwidth.h_axis != "shared":

@@ -246,3 +246,50 @@ def test_explicit_levels_beat_inference():
     widened = MixedData.from_blocks(unordered=codes, unordered_levels=(4,))
 
     assert widened.spec.n_levels == (4,)
+
+
+def test_integer_levels_match_single_entry_tuple():
+    codes = jnp.array([0, 1, 1, 0])
+
+    integer = MixedData.from_blocks(unordered=codes, ordered=codes, unordered_levels=4, ordered_levels=4)
+    tupled = MixedData.from_blocks(unordered=codes, ordered=codes, unordered_levels=(4,), ordered_levels=(4,))
+
+    assert integer.spec == tupled.spec
+
+
+def test_integer_levels_broadcast_across_a_block():
+    codes = jnp.array([[0, 1], [1, 2], [2, 0]])
+
+    data = MixedData.from_blocks(unordered=codes, unordered_levels=3)
+
+    assert data.spec.n_levels == (3, 3)
+
+
+def test_integer_levels_over_declaring_a_multi_column_block_are_rejected():
+    codes = jnp.array([[0, 0], [1, 1], [2, 2], [0, 5]])
+
+    with pytest.raises(ValueError, match=r"over-declares unordered column 0"):
+        MixedData.from_blocks(unordered=codes, unordered_levels=6)
+
+
+def test_tuple_levels_may_over_declare_a_multi_column_block():
+    codes = jnp.array([[0, 0], [1, 1], [2, 2], [0, 5]])
+
+    data = MixedData.from_blocks(unordered=codes, unordered_levels=(6, 6))
+
+    assert data.spec.n_levels == (6, 6)
+
+
+def test_integer_levels_may_over_declare_a_single_column():
+    codes = jnp.array([0, 1, 1, 0])
+
+    data = MixedData.from_blocks(unordered=codes, unordered_levels=6)
+
+    assert data.spec.n_levels == (6,)
+
+
+def test_integer_levels_too_small_for_a_column_are_rejected():
+    codes = jnp.array([[0, 4], [1, 2], [2, 0]])
+
+    with pytest.raises(ValueError, match=r"unordered column 1 has codes outside \[0, 3\)"):
+        MixedData.from_blocks(unordered=codes, unordered_levels=3)

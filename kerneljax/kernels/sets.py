@@ -26,8 +26,51 @@ class KernelSet:
         Kernel family applied to every unordered categorical column.
     ordered : OrderedKernel
         Kernel family applied to every ordered categorical column.
+
+    Examples
+    --------
+    Defaults cover every column kind, so only the one being changed needs naming.
+    Pass the result to any estimator through ``kernels=``.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import kerneljax as kj
+           ...:
+           ...: kernels = kj.KernelSet(ordered=kj.WangVanRyzin())
+           ...: print(type(kernels.continuous).__name__,
+           ...:       type(kernels.unordered).__name__,
+           ...:       type(kernels.ordered).__name__)
     """
 
     continuous: ContinuousKernel = dataclasses.field(default_factory=Gaussian)
     unordered: UnorderedKernel = dataclasses.field(default_factory=AitchisonAitken)
     ordered: OrderedKernel = dataclasses.field(default_factory=LiRacine)
+
+    def __post_init__(self) -> None:
+        """Reject unhashable kernels."""
+        for kind in ("continuous", "unordered", "ordered"):
+            _require_hashable(getattr(self, kind), f"{kind} kernel")
+
+
+def _require_hashable(obj: object, role: str) -> None:
+    """Reject an unhashable kernel."""
+    try:
+        hash(obj)
+    except TypeError as exc:
+        raise TypeError(
+            f"{role} {type(obj).__name__} is not hashable, so it cannot be a static argument. "
+            "Decorate it with @dataclasses.dataclass(frozen=True), and hold any array field as a "
+            "tuple of floats rather than as a jax.Array."
+        ) from exc
+
+
+def _resolve_kernels(explicit: KernelSet | None, carried: KernelSet | None) -> KernelSet:
+    """Settle on one kernel set."""
+    if explicit is None:
+        return KernelSet() if carried is None else carried
+
+    if carried is not None and explicit != carried:
+        raise ValueError("kernels= contradicts the kernels that bw was selected under")
+
+    return explicit

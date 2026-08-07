@@ -98,7 +98,7 @@ class ColumnSpec:
 class MixedData:
     r"""A mixed-type design matrix held as three dense blocks.
 
-    Parameters
+    Attributes
     ----------
     con : Float[Array, "n p_con"]
         Continuous columns.
@@ -129,8 +129,8 @@ class MixedData:
         unordered: Array | None = None,
         ordered: Array | None = None,
         *,
-        unordered_levels: tuple[int, ...] = (),
-        ordered_levels: tuple[int, ...] = (),
+        unordered_levels: int | tuple[int, ...] = (),
+        ordered_levels: int | tuple[int, ...] = (),
         names: tuple[str, ...] | None = None,
     ) -> MixedData:
         r"""Build a validated ``MixedData`` from per-kind blocks.
@@ -142,27 +142,30 @@ class MixedData:
 
         Parameters
         ----------
-        con : Array, optional
+        continuous : Array, optional
             Continuous columns, shape ``(n, p_con)``. A 1-D array of shape
             ``(n,)`` is read as a single column.
-        uno : Array, optional
+        unordered : Array, optional
             Unordered categorical codes, shape ``(n, p_uno)``, codes in
             ``[0, unordered_levels[j])`` for column ``j``. A 1-D array is read as a
             single column.
-        orde : Array, optional
+        ordered : Array, optional
             Ordered categorical levels, shape ``(n, p_ord)``, codes in
             ``[0, ordered_levels[j])`` for column ``j``. A 1-D array is read as a
             single column.
-        unordered_levels : tuple of int, optional
-            Level count of each unordered column, in block order, one entry
-            per column of ``uno``. Defaults to the levels present in the
-            sample. Give it explicitly when a level exists but happens not to
-            appear here, since the count sets both the kernel and the range
-            its smoothing parameter is searched over.
-        ordered_levels : tuple of int, optional
-            Level count of each ordered column, in block order, one entry
-            per column of ``orde``. Defaults to the levels present in the
-            sample, on the same terms as ``unordered_levels``.
+        unordered_levels : int or tuple of int, optional
+            Level count of each unordered column, in block order. A single
+            integer applies to every column of ``unordered``, and a tuple gives
+            one entry per column when they differ. Defaults to the levels
+            present in the sample. Give it explicitly when a level exists but
+            happens not to appear here, since the count sets both the kernel and
+            the range its smoothing parameter is searched over. An integer
+            spread across several columns may not exceed the levels observed in
+            any of them, because one number cannot over-declare columns that
+            disagree; use a tuple for that.
+        ordered_levels : int or tuple of int, optional
+            Level count of each ordered column, in block order, on the same
+            terms as ``unordered_levels``.
         names : tuple of str, optional
             Column names, in block order (continuous, unordered, ordered).
 
@@ -189,6 +192,13 @@ class MixedData:
 
         if con_a.ndim < 2 or uno_a.ndim < 2 or ord_a.ndim < 2:
             raise ValueError("all blocks must have at least two dimensions, shape (n, p_kind)")
+        for value, block, label in ((unordered_levels, uno_a, "unordered"), (ordered_levels, ord_a, "ordered")):
+            if isinstance(value, int) and block.shape[1] > 1:
+                _reject_overwide_broadcast(value, block, label)
+        if isinstance(unordered_levels, int):
+            unordered_levels = (unordered_levels,) * uno_a.shape[1]
+        if isinstance(ordered_levels, int):
+            ordered_levels = (ordered_levels,) * ord_a.shape[1]
 
         if not unordered_levels and uno_a.shape[1]:
             unordered_levels = tuple(int(uno_a[:, j].max()) + 1 for j in range(uno_a.shape[1]))
@@ -422,6 +432,20 @@ def quantile_grid(data: MixedData | Array, *, n: int = 100) -> MixedData:
         orde=jnp.stack(orde, axis=1) if orde else jnp.zeros((n, 0), dtype=data.orde.dtype),
         spec=spec,
     )
+
+
+def _reject_overwide_broadcast(levels: int, block: Array, label: str) -> None:
+    """Refuse a broadcast level count that over-declares some column of a multi-column block."""
+    for j in range(block.shape[1]):
+        col = block[:, j]
+        if not col.size:
+            continue
+        observed = int(col.max()) + 1
+        if levels > observed:
+            raise ValueError(
+                f"{label}_levels={levels} broadcast across {block.shape[1]} columns over-declares "
+                f"{label} column {j}, which has {observed} levels; pass a tuple to set each column"
+            )
 
 
 def _as_points(data: MixedData | Array, spec: ColumnSpec | None = None) -> MixedData:

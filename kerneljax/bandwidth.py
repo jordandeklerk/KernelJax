@@ -28,6 +28,46 @@ HAxis = Literal["shared", "eval", "train"]
 
 @partial(
     jax.tree_util.register_dataclass,
+    data_fields=["bandwidth", "value", "n_iter", "converged"],
+    meta_fields=["criterion", "kernels"],
+)
+@dataclasses.dataclass(frozen=True)
+class SelectionResult:
+    """Outcome of a bandwidth selection.
+
+    Parameters
+    ----------
+    bandwidth : Bandwidth
+        The selected bandwidth, in natural, constrained scale.
+    value : ScalarFloat
+        Criterion value at ``bandwidth``.
+    n_iter : Array
+        Number of solver iterations used by the full solve.
+    criterion : callable, optional
+        The criterion that was minimized, carried so a later fit can read
+        back the settings it was selected under. Static.
+    kernels : KernelSet, optional
+        The kernels the bandwidth was selected under, carried for the same
+        reason. A bandwidth is only meaningful alongside the kernel that
+        produced it, so an estimator handed this result reuses them rather
+        than falling back to the defaults. Static.
+    converged : Array
+        Whether the solver stopped because its progress stalled, either
+        the gradient or the objective value stopped moving, rather than
+        because it ran out of its iteration budget. ``True`` does not by
+        itself mean the gradient tolerance was the one that was met.
+    """
+
+    bandwidth: Bandwidth
+    value: ScalarFloat
+    n_iter: Array
+    converged: Array
+    criterion: Any = None
+    kernels: KernelSet | None = None
+
+
+@partial(
+    jax.tree_util.register_dataclass,
     data_fields=["h", "lam_uno", "lam_ord"],
     meta_fields=["h_axis"],
 )
@@ -52,6 +92,27 @@ class Bandwidth:
         Which axis ``h`` is indexed by, static metadata. ``"shared"`` is a
         fixed bandwidth, ``"eval"`` varies with the evaluation point and
         ``"train"`` varies with the training point.
+
+    Examples
+    --------
+    Build one directly to hold a bandwidth fixed rather than selecting it. The
+    categorical arrays stay empty when every column is continuous, and the result
+    can be passed to any estimator in place of a selection rule.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import jax.numpy as jnp
+           ...: import numpy as np
+           ...: import kerneljax as kj
+           ...:
+           ...: fixed = kj.Bandwidth(h=jnp.array([0.25]),
+           ...:                      lam_uno=jnp.zeros(0),
+           ...:                      lam_ord=jnp.zeros(0))
+           ...: rng = np.random.default_rng(0)
+           ...: x = rng.uniform(size=60)
+           ...: y = np.sin(2 * np.pi * x)
+           ...: print(kj.local_poly(x, y, fixed, at=np.array([0.5])).mean)
     """
 
     h: FloatArray
@@ -201,40 +262,6 @@ class BandwidthTransform:
         return lower, upper
 
 
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=["bandwidth", "value", "n_iter", "converged"],
-    meta_fields=["criterion"],
-)
-@dataclasses.dataclass(frozen=True)
-class SelectionResult:
-    """Outcome of a bandwidth selection.
-
-    Parameters
-    ----------
-    bandwidth : Bandwidth
-        The selected bandwidth, in natural, constrained scale.
-    value : ScalarFloat
-        Criterion value at ``bandwidth``.
-    n_iter : Array
-        Number of solver iterations used by the full solve.
-    criterion : callable, optional
-        The criterion that was minimized, carried so a later fit can read
-        back the settings it was selected under. Static.
-    converged : Array
-        Whether the solver stopped because its progress stalled, either
-        the gradient or the objective value stopped moving, rather than
-        because it ran out of its iteration budget. ``True`` does not by
-        itself mean the gradient tolerance was the one that was met.
-    """
-
-    bandwidth: Bandwidth
-    value: ScalarFloat
-    n_iter: Array
-    converged: Array
-    criterion: Any = None
-
-
 def broadcast_h(bw: Bandwidth, p_con: int) -> Float[Array, "n_eval n_train p_con"]:
     """Reshape ``bw.h`` to an explicit three axis form for the kernel sum.
 
@@ -313,6 +340,21 @@ def normal_reference(
     -------
     Bandwidth
         A starting bandwidth with ``h_axis="shared"``.
+
+    Examples
+    --------
+    The rule is closed form, so it needs no optimization and makes a fast starting
+    point or a fallback when cross validation is too costly.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import numpy as np
+           ...: import kerneljax as kj
+           ...:
+           ...: rng = np.random.default_rng(0)
+           ...: data = kj.MixedData.from_blocks(continuous=rng.normal(size=200))
+           ...: print(kj.normal_reference(data, kj.KernelSet()).h)
     """
     n = data.n
     spec = data.spec
@@ -346,6 +388,29 @@ def normal_reference(
         lam_ord=ordered_bounds / 2.0,
         h_axis="shared",
     )
+
+
+def _require_usable(bw: Bandwidth) -> None:
+    """Reject a bandwidth no kernel can be evaluated at."""
+    try:
+        h = jnp.reshape(bw.h, (-1,))
+        h_ok = bool(jnp.all(jnp.isfinite(h))) and bool(jnp.all(h > 0.0))
+        lam_ok = all(bool(jnp.all(jnp.isfinite(lam))) and bool(jnp.all(lam >= 0.0)) for lam in (bw.lam_uno, bw.lam_ord))
+    except (ValueError, TypeError, jax.errors.ConcretizationTypeError):
+        return
+
+    if not h_ok:
+        raise ValueError(
+            f"every continuous bandwidth must be finite and positive, got h={bw.h}. A kernel "
+            "divides by h, so a non-positive or non-finite value produces numbers rather than "
+            "an error. If this came from select_bandwidth, its converged flag will be False."
+        )
+
+    if not lam_ok:
+        raise ValueError(
+            f"every categorical smoothing parameter must be finite and non-negative, got "
+            f"lam_uno={bw.lam_uno} and lam_ord={bw.lam_ord}."
+        )
 
 
 def _softplus(z: Array) -> Array:

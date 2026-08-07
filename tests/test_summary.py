@@ -11,6 +11,7 @@ from kerneljax.estimators.density import density
 from kerneljax.estimators.regression import local_poly
 from kerneljax.kernels import KernelSet
 from kerneljax.kernels.base import ContinuousKernel
+from kerneljax.selection.optimize import select_bandwidth
 from kerneljax.summary import Summary, _kernel_name, summary
 
 
@@ -134,3 +135,29 @@ def test_kernel_name_omits_empty_parameters():
 
 def test_kernel_name_prefers_the_order():
     assert _kernel_name(KernelSet()) == "Gaussian, order 2"
+
+
+def test_a_criterion_the_caller_wrote_still_reports_its_selection(criteria_train, criteria_response):
+    @dataclasses.dataclass(frozen=True)
+    class AbsoluteDeviation:
+        degree: int = 1
+
+        def __call__(self, train, bandwidth, *, y, kernels=None, chunk=None):
+            fit = local_poly(train, y, bandwidth, kernels=kernels, chunk=chunk, degree=1, fold=jnp.arange(train.n))
+            return jnp.mean(jnp.abs(y - fit.mean))
+
+    result = select_bandwidth(criteria_train, AbsoluteDeviation(), y=criteria_response)
+    report = str(summary(local_poly(criteria_train, criteria_response, result)))
+
+    assert "AbsoluteDeviation" in report
+    assert "Criterion value" in report
+    assert "Converged" in report
+
+
+def test_the_report_shows_how_many_iterations_selection_took(criteria_train, criteria_response):
+    fit = local_poly(criteria_train, criteria_response, "cv_ls", degree=1)
+    report = str(summary(fit))
+
+    assert "Solver iterations" in report
+    assert f"{int(fit.selection.n_iter)}" in report
+    assert "." not in report.split("Solver iterations")[1].splitlines()[0]

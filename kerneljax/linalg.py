@@ -67,7 +67,8 @@ def wls(xtwx: FloatArray, xtwy: FloatArray, *, penalty: FloatArray | float = 0.0
 
         \mathrm{rcond} \approx \left(\frac{\min_i L_{ii}}{\max_i L_{ii}}\right)^{2}
 
-    a lower bound on the true reciprocal condition number, not an exact value.
+    a lower bound on the true reciprocal condition number, not an exact value. See
+    [1]_ for the local polynomial setting this solver serves.
 
     Parameters
     ----------
@@ -152,7 +153,7 @@ def hat_diagonal(cho: FloatArray, basis_row: FloatArray, weight_self: ScalarFloa
         h = w \, z^\top z
 
     which avoids ever forming the inverse. Summed across evaluation points, :math:`h` gives
-    the effective degrees of freedom that AICc penalizes.
+    the effective degrees of freedom that AICc penalizes, as described in [1]_.
 
     Parameters
     ----------

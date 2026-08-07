@@ -54,7 +54,9 @@ ENV/
 # Sphinx documentation
 docs/_build/
 docs/_doctree/
-docs/source/api/generated/
+# autosummary stubs, regenerated on every build
+docs/source/**/generated/
+docs/source/generated/
 
 # IDE / OS
 .idea/
@@ -64,7 +66,13 @@ docs/source/api/generated/
 /GPJax/
 /R-Package-np/
 /jax/
+/statsmodels/
 
 /.superpowers/
+# runnable copies of the docs examples, for local use only
+docs/notebooks/
+
 *.ipynb
 .ipynb_checkpoints/
+
+uv/

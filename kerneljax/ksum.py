@@ -40,8 +40,8 @@ def kweights(
         W_{ji} = \prod_{d} K_d(\mathrm{at}_{jd}, \mathrm{train}_{id}).
 
     The default kernel families are the Gaussian kernel for continuous columns, the
-    Aitchison and Aitken kernel for unordered columns [2]_, and the Wang and van
-    Ryzin kernel for ordered columns [3]_.
+    Aitchison and Aitken kernel for unordered columns [2]_, and the Li and Racine
+    kernel for ordered columns [3]_.
 
     Parameters
     ----------
@@ -96,8 +96,8 @@ def kweights(
            Multivariate Analysis, 86, 266-292.
     .. [2] Aitchison, J., & Aitken, C. G. G. (1976). "Multivariate binary
            discrimination by the kernel method." Biometrika, 63, 413-420.
-    .. [3] Wang, M. C., & van Ryzin, J. (1981). "A class of smooth estimators
-           for discrete distributions." Biometrika, 68, 301-309.
+    .. [3] Li, Q., & Racine, J. S. (2007). Nonparametric Econometrics: Theory
+           and Practice. Princeton University Press.
     """
     evaluate = train if at is None else at
     kernels = KernelSet() if kernels is None else kernels
@@ -111,24 +111,33 @@ def kweights(
 
     if spec.p_con:
         bandwidth = broadcast_h(bw, spec.p_con)
-        factors_con = jnp.asarray(
-            getattr(kernels.continuous, op_con)(evaluate.con[:, None, :], train.con[None, :, :], bandwidth)
+        factors_con = _elementwise(
+            getattr(kernels.continuous, op_con)(evaluate.con[:, None, :], train.con[None, :, :], bandwidth),
+            (evaluate.n, train.n, spec.p_con),
+            kernels.continuous,
+            op_con,
         )
         weights = weights * jnp.prod(factors_con, axis=-1)
 
     for column, levels in enumerate(spec.uno_levels):
-        factor_uno = jnp.asarray(
+        factor_uno = _elementwise(
             getattr(kernels.unordered, uno_ops[column])(
                 evaluate.uno[:, None, column], train.uno[None, :, column], bw.lam_uno[column], levels
-            )
+            ),
+            (evaluate.n, train.n),
+            kernels.unordered,
+            uno_ops[column],
         )
         weights = weights * factor_uno
 
     for column, levels in enumerate(spec.ord_levels):
-        factor_ord = jnp.asarray(
+        factor_ord = _elementwise(
             getattr(kernels.ordered, ord_ops[column])(
                 evaluate.orde[:, None, column], train.orde[None, :, column], bw.lam_ord[column], levels
-            )
+            ),
+            (evaluate.n, train.n),
+            kernels.ordered,
+            ord_ops[column],
         )
         weights = weights * factor_ord
 
@@ -515,6 +524,18 @@ def _grad_over_eval_chunks(
     p_con = train.spec.p_con
     combined = jnp.moveaxis(stacked, 0, 1).reshape(p_con, -1, train.n)
     return combined[:, : evaluate.n, :]
+
+
+def _elementwise(factor: Array, want: tuple[int, ...], kernel: object, op: str) -> Array:
+    """Reject a kernel operator that changed the shape it was handed."""
+    factor = jnp.asarray(factor)
+    if factor.shape != want:
+        raise ValueError(
+            f"{type(kernel).__name__}.{op} returned shape {factor.shape}, expected {want}. "
+            "A kernel is applied elementwise, so it must broadcast against its inputs and must "
+            "not reduce over any axis."
+        )
+    return factor
 
 
 def _resolve_ops(spec: ColumnSpec, op: OpSpec) -> tuple[str, tuple[str, ...], tuple[str, ...]]:

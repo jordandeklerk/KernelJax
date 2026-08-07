@@ -10,7 +10,7 @@ from jaxtyping import Float
 from kerneljax.bandwidth import Bandwidth
 from kerneljax.data import MixedData
 from kerneljax.kernels import KernelSet
-from kerneljax.tuning.objectives import aic_c_regression, cv_ls_density, cv_ls_regression, cv_ml_density
+from kerneljax.selection.objectives import aic_c_regression, cv_ls_density, cv_ls_regression, cv_ml_density
 from kerneljax.typing import Array, ScalarFloat
 
 __all__ = ["Criterion", "DensityCriterion", "DistributionCriterion", "RegressionCriterion"]
@@ -280,7 +280,7 @@ class DistributionCriterion:
         ScalarFloat
             The criterion value, minimized over ``bw`` to select a bandwidth.
         """
-        from kerneljax.tuning.objectives import cv_cdf_distribution
+        from kerneljax.selection.objectives import cv_cdf_distribution
 
         return cv_cdf_distribution(
             train,

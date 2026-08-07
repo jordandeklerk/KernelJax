@@ -12,8 +12,8 @@ from kerneljax.estimators.regression import local_poly
 from kerneljax.kernels import KernelSet, Op
 from kerneljax.kernels.discrete import AitchisonAitken
 from kerneljax.ksum import ksum, kweights
-from kerneljax.tuning.objectives import cv_ls_density, cv_ml_density
-from kerneljax.tuning.optimize import select_bandwidth
+from kerneljax.selection.objectives import cv_ls_density, cv_ml_density
+from kerneljax.selection.optimize import select_bandwidth
 
 
 def _density_value(train, bandwidth):

@@ -9,12 +9,14 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Float
 
-from kerneljax.bandwidth import Bandwidth, SelectionResult, normal_reference
+from kerneljax.bandwidth import Bandwidth, SelectionResult, _require_usable, normal_reference
 from kerneljax.data import ColumnSpec, MixedData, _as_points
 from kerneljax.kernels import KernelSet, Op
+from kerneljax.kernels._checks import _check_cdf_limits, _check_grad_diagonal
+from kerneljax.kernels.sets import _resolve_kernels
 from kerneljax.ksum import ksum
-from kerneljax.tuning.criteria import DistributionCriterion
-from kerneljax.tuning.optimize import select_bandwidth
+from kerneljax.selection.criteria import DistributionCriterion
+from kerneljax.selection.optimize import select_bandwidth
 from kerneljax.typing import Array
 
 __all__ = ["DistributionFit", "cdf"]
@@ -29,7 +31,7 @@ __all__ = ["DistributionFit", "cdf"]
 class DistributionFit:
     """Result of a mixed-type cumulative distribution estimate.
 
-    Parameters
+    Attributes
     ----------
     value : Float[Array, " n_eval"]
         The distribution estimate at each evaluation point.
@@ -88,7 +90,8 @@ def cdf(
     with :math:`n` the training sample size whatever the evaluation points are.
 
     Only continuous and ordered columns are supported, since an unordered column
-    carries no order to accumulate along.
+    carries no order to accumulate along. Bandwidth selection for this estimator
+    follows [1]_.
 
     Parameters
     ----------
@@ -131,22 +134,27 @@ def cdf(
 
     Examples
     --------
-    Estimate a distribution on a continuous sample.
+    Estimate a distribution with the bandwidth chosen by cross validation and read it
+    at three points. The estimate increases with the evaluation point, and the
+    standard error is largest near the median where the binomial variance peaks.
 
     .. ipython::
         :okwarning:
 
-        In [1]: import jax.numpy as jnp
+        In [1]: import numpy as np
            ...: import kerneljax as kj
            ...:
-           ...: x = jnp.linspace(-2.0, 2.0, 50).reshape(-1, 1)
-           ...: train = kj.MixedData.continuous(x)
-           ...: bw = kj.Bandwidth(h=jnp.array([0.3]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
-           ...: print(kj.cdf(train, bw).value[:5])
+           ...: rng = np.random.default_rng(0)
+           ...: z = np.concatenate([rng.normal(-2.0, 0.7, 100), rng.normal(2.0, 1.0, 100)])
+           ...: fit = kj.cdf(z, "cv_cdf", at=np.array([-2.0, 0.0, 2.0]))
+           ...: print(np.asarray(fit.value))
+           ...: print(np.asarray(fit.se))
 
     See Also
     --------
     density : Estimate a mixed-type probability density.
+    local_poly : Fit a local polynomial regression of mixed-type data.
+    select_bandwidth : Select a bandwidth by minimizing a cross-validation criterion.
 
     References
     ----------
@@ -154,7 +162,7 @@ def cdf(
            for nonparametric conditional distribution and quantile functions."
            Journal of Business and Economic Statistics, 35, 57-65.
     """
-    kernels = KernelSet() if kernels is None else kernels
+    kernels = _resolve_kernels(kernels, getattr(bw, "kernels", None))
     train = _as_points(train)
 
     if train.spec.p_uno:
@@ -163,7 +171,13 @@ def cdf(
             f"got {train.spec.p_uno} unordered columns which carry no order to accumulate along"
         )
 
+    if train.spec.p_con:
+        _check_cdf_limits(kernels.continuous)
+        if isinstance(bw, str) and bw != "normal_reference":
+            _check_grad_diagonal(kernels.continuous, "cdf")
+
     bandwidth, selection = _resolve_bandwidth(train, bw, kernels, n_starts, chunk)
+    _require_usable(bandwidth)
 
     evaluate = None if at is None else _as_points(at, train.spec)
     if at is not None and isinstance(bw, SelectionResult | DistributionFit) and bandwidth.h_axis != "shared":

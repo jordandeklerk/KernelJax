@@ -4,15 +4,15 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from kerneljax.tuning.criteria import DensityCriterion, DistributionCriterion, RegressionCriterion
-from kerneljax.tuning.objectives import (
+from kerneljax.selection.criteria import DensityCriterion, DistributionCriterion, RegressionCriterion
+from kerneljax.selection.objectives import (
     aic_c_regression,
     cv_cdf_distribution,
     cv_ls_density,
     cv_ls_regression,
     cv_ml_density,
 )
-from kerneljax.tuning.optimize import select_bandwidth
+from kerneljax.selection.optimize import select_bandwidth
 
 
 @pytest.mark.parametrize(

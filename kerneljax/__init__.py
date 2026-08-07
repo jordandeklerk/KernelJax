@@ -1,14 +1,7 @@
 """Low-level JAX interface for nonparametric kernel smoothing of mixed-type data."""
 
-from kerneljax.bandwidth import (
-    Bandwidth,
-    BandwidthTransform,
-    ConditionalBandwidth,
-    SelectionResult,
-    normal_reference,
-)
-from kerneljax.basis import LocalPolyBasis
-from kerneljax.data import ColumnSpec, Kind, MixedData, grid, quantile_grid
+from kerneljax.bandwidth import Bandwidth, SelectionResult, normal_reference
+from kerneljax.data import MixedData, grid, quantile_grid
 from kerneljax.estimators import (
     DensityFit,
     DistributionFit,
@@ -23,15 +16,13 @@ from kerneljax.kernels import (
     Gaussian,
     KernelSet,
     LiRacine,
-    Op,
     OrderedKernel,
     UnorderedKernel,
     WangVanRyzin,
 )
 from kerneljax.ksum import ksum, kweights
 from kerneljax.linalg import WLS, hat_diagonal, wls
-from kerneljax.summary import Summary, summary
-from kerneljax.tuning import (
+from kerneljax.selection import (
     DensityCriterion,
     DistributionCriterion,
     RegressionCriterion,
@@ -43,6 +34,7 @@ from kerneljax.tuning import (
     lbfgs,
     select_bandwidth,
 )
+from kerneljax.summary import Summary, summary
 
 __version__ = "0.0.1"
 
@@ -50,9 +42,6 @@ __all__ = [
     "WLS",
     "AitchisonAitken",
     "Bandwidth",
-    "BandwidthTransform",
-    "ColumnSpec",
-    "ConditionalBandwidth",
     "ContinuousKernel",
     "DensityCriterion",
     "DensityFit",
@@ -60,12 +49,9 @@ __all__ = [
     "DistributionFit",
     "Gaussian",
     "KernelSet",
-    "Kind",
     "LiRacine",
-    "LocalPolyBasis",
     "LocalPolyFit",
     "MixedData",
-    "Op",
     "OrderedKernel",
     "RegressionCriterion",
     "SelectionResult",

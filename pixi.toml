@@ -22,17 +22,25 @@ tests = "pytest -vv"
 
 [feature.docs.dependencies]
 sphinx = "*"
-sphinx-book-theme = "*"
 sphinx-copybutton = "*"
 sphinx-design = "*"
-numpydoc = "*"
+ipython = "*"
+matplotlib-base = "*"
 
 [feature.docs.pypi-dependencies]
 myst-parser = { version = ">=2.0.0", extras = ["linkify"] }
 myst-nb = ">=1.0.0"
+sphinx-immaterial = ">=0.12"
 
 [feature.docs.tasks]
-docs = "sphinx-build -d docs/_doctree docs/source docs/_build --color -v -bhtml"
+docs = "sphinx-build -E -a -W --keep-going -d docs/_doctree docs/source docs/_build/html --color -bhtml"
+docs-open = { cmd = "python -c \"import pathlib, subprocess, sys; p = str(pathlib.Path('docs/_build/html/index.html').resolve()); subprocess.run(['open', p] if sys.platform == 'darwin' else ['xdg-open', p])\"", depends-on = [
+  "docs",
+] }
+docs-serve = { cmd = "python -m http.server 8765 --directory docs/_build/html --bind 127.0.0.1", depends-on = [
+  "docs",
+] }
+docs-clean = "rm -rf docs/_build docs/_doctree"
 
 [feature.lint.dependencies]
 mypy = ">=1.0.0"
