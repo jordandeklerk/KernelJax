@@ -11,7 +11,8 @@ instead? A parametric answer commits to a shape up front, a quadratic in experie
 for the rest, and then argues about that shape for the whole analysis. The nonparametric answer
 commits to nothing and lets the data say how sharply the surface bends.
 
-We simulate it so we know the truth. Wage rises with experience and flattens off, education shifts
+We simulate it so we know the truth. Wage rises with experience, flattens and tips down late in
+the range, education shifts
 the whole curve, and region is drawn independently of everything. The estimator is not told any of
 this.
 
@@ -91,7 +92,9 @@ $$
 $$
 
 The estimate is that polynomial's intercept, $\hat m(x) = e_1^\top \hat\beta(x)$, and its
-remaining coefficients are the derivatives up to a factorial, which is why they come free.
+remaining coefficients are the derivatives up to a factorial, which is why they come free. The
+polynomial runs over the continuous columns only, the categorical ones act through the weights
+alone.
 
 None of that says how wide the weights should be. They are chosen by holding each observation out
 and asking which values predict it best,
@@ -103,8 +106,9 @@ $$
 
 which is the line `"cv_ls"` names, and the third argument is where that choice goes. A string
 selects now, while a `Bandwidth`, a `SelectionResult` or an earlier fit reuses a value already
-chosen. `degree` defaults to 0, the Nadaraya-Watson estimator, and we ask for 1, local linear,
-which keeps the boundary bias at the same order as the interior.
+chosen, a selection or fit bringing its degree along with its bandwidth. For anything else
+`degree` defaults to 0, the Nadaraya-Watson estimator, and we ask for 1, local linear, which
+keeps the boundary bias at the same order as the interior.
 
 ```python
 fit = kj.local_poly(data, wage, "cv_ls", degree=1)
@@ -122,22 +126,24 @@ Local polynomial regression
   Bandwidth type                    shared
 
   Variable      Kind             Bandwidth
-  exper         continuous        2.792196
-  region        unordered         0.749997
-  educ          ordered           0.036101
+  exper         continuous        2.792168
+  region        unordered         0.750000
+  educ          ordered           0.036096
 
   Continuous kernel         Gaussian, order 2
 
   Residual standard error         0.537311
-  R-squared                       0.908360
+  R-squared                       0.908361
 
   Selection                          cv_ls
   Criterion value                 0.334907
+  Solver iterations                     27
   Converged                           True
 ```
 
 Each column has its own smoothing parameter, chosen jointly rather than one at a time, and those
-three numbers are the entire fitted model. Everything below them is diagnostics.
+three numbers are everything the data chose. Below them sit the configuration the fit ran under
+and its diagnostics.
 
 ## What the bandwidths say
 
@@ -146,7 +152,9 @@ observations sharing the level count, which is the same as splitting the sample 
 throwing the rest away. At its upper bound every level is weighted identically, a constant factor
 that cancels from the ratio and leaves the column out of the model.
 
-So the selected value is a verdict on the variable.
+So the selected value is a verdict on the variable. The bound belongs to the kernel rather than
+the column, the default unordered kernel Aitchison-Aitken reaches it at $(c-1)/c$, and the
+default ordered kernel's bound is one, which is the scale to read the education value on.
 
 ```python
 bound = kj.AitchisonAitken().upper_bound(4)
@@ -155,8 +163,8 @@ print(f"educ    lam={fit.bandwidth.lam_ord[0]:.6f}")
 ```
 
 ```text
-region  lam=0.749997  bound=0.750000
-educ    lam=0.036101
+region  lam=0.750000  bound=0.750000
+educ    lam=0.036096
 ```
 
 Region came back sitting on its bound, so cross validation removed it. Education went the other
@@ -171,8 +179,9 @@ properly.
 
 ## Reading the fit
 
-Before interpreting a fit, check that there is one. Bandwidth selection is nonconvex, so it can
-fail, and it fails quietly rather than by raising.
+The bandwidths were worth reading first, but before leaning on any of it, check that the fit is
+really there. Bandwidth selection is nonconvex, so it can fail, and it fails quietly rather than
+by raising.
 
 ```python
 print(jax.tree.map(lambda a: a.shape, fit.bandwidth))
@@ -184,23 +193,26 @@ print(f"degree={fit.degree}  r_squared={fit.r_squared:.4f}  "
 
 ```text
 Bandwidth(h=(1,), lam_uno=(1,), lam_ord=(1,), h_axis='shared')
-converged=True  n_iter=38  criterion=0.334907
+converged=True  n_iter=27  criterion=0.334907
 degree=1  r_squared=0.9084  residual_se=0.5373
 ```
 
 `converged` is `True` when the solver stopped because progress stalled at a finite iterate and
 `False` when it ran out of iterations, the signal that the reported bandwidth was never really
-selected. It does not promise the minimum is global. The fit is also a pytree, so mapping over it
-shows how it is laid out, and that is what lets {func}`jax.grad` differentiate through the
-criteria later.
+selected. It does not promise the minimum is global. The bandwidth is a pytree, so mapping over it shows
+how it is laid out, `h_axis='shared'` meaning one bandwidth reused at every point rather than
+one per row, and that registration is what lets {func}`jax.grad` hand back gradients with
+respect to it later.
 
 ## Predicting on a grid
 
 A fitted surface over three covariates cannot be drawn, so we vary one and hold the others
 somewhere representative. The curve you get is conditional on where the others were pinned.
-{func}`~kerneljax.grid` pins a continuous column at a quantile, an unordered one at its most
-common level, and an ordered one at the level reaching that quantile, and it carries the training
-spec forward so the result drops straight into `at`.
+{func}`~kerneljax.grid` pins a continuous column at a quantile, the median by default, an
+unordered one at its most common level, and an ordered one at the level reaching that quantile,
+and it carries the training spec forward so the result drops straight into the `at` argument
+every estimator takes. `se=True` adds the pointwise standard error of the fitted mean at the
+selected bandwidth, which the band below is built from.
 
 ```python
 points = kj.grid(data, vary="exper", n=200)
@@ -210,7 +222,14 @@ exper_grid = points.con[:, 0]
 print(f"exper varies over {exper_grid.size} points "
       f"from {exper_grid[0]:.2f} to {exper_grid[-1]:.2f}")
 print(f"region pinned at {points.uno[0, 0]}, educ pinned at {points.orde[0, 0]}")
+```
 
+```text
+exper varies over 200 points from 0.01 to 29.92
+region pinned at 2, educ pinned at 2
+```
+
+```python
 fig, ax = plt.subplots()
 ax.scatter(exper, wage, s=14, alpha=0.30, color="#8a8f98", label="observations")
 ax.fill_between(exper_grid, pred.mean - 2 * pred.se, pred.mean + 2 * pred.se,
@@ -223,15 +242,11 @@ ax.legend()
 plt.show()
 ```
 
-```text
-exper varies over 200 points from 0.01 to 29.92
-region pinned at 2, educ pinned at 2
-```
-
 ![Fit at the modal region and median education](_static/figures/quickstart-1.svg)
 
-The curve recovers the concave shape without ever having been told to look for one, and the band
-widens where the data thin out.
+The curve recovers the concave shape without ever having been told to look for one. The band
+widens where the response scatters more widely inside the window, and at the right edge, where
+the window runs out of sample.
 
 ## Derivatives
 
@@ -244,7 +259,9 @@ computed.
 slope = kj.local_poly(data, wage, fit, at=points, gradient=True)
 estimated = slope.grad[:, 0]
 truth = 0.35 - 2 * 0.008 * exper_grid
+```
 
+```python
 fig, ax = plt.subplots()
 ax.plot(exper_grid, estimated, color="#e45756", lw=2.2, label="estimated")
 ax.plot(exper_grid, truth, ls="--", lw=1.6, color="#8a8f98", label="truth")
@@ -272,12 +289,21 @@ instead of a response.
 wage_data = kj.MixedData.continuous(wage)
 wage_grid = np.linspace(wage.min(), wage.max(), 200)
 wage_points = kj.MixedData.continuous(wage_grid)
+```
 
+```python
 dens = kj.density(wage_data, "cv_ml", at=wage_points)
 dist = kj.cdf(wage_data, "cv_cdf", at=wage_points)
 print(f"density       h={dens.bandwidth.h[0]:.6f}")
 print(f"distribution  h={dist.bandwidth.h[0]:.6f}")
+```
 
+```text
+density       h=0.454527
+distribution  h=0.443713
+```
+
+```python
 fig, (left, right) = plt.subplots(1, 2, figsize=(9.6, 3.6))
 left.hist(wage, bins=30, density=True, color="#8a8f98", alpha=0.35)
 left.plot(wage_grid, dens.value, color="#4c78a8", lw=2.2)
@@ -290,12 +316,10 @@ fig.tight_layout()
 plt.show()
 ```
 
-```text
-density       h=0.454527
-distribution  h=0.443713
-```
-
 ![Density and distribution of wage](_static/figures/quickstart-3.svg)
+
+The two answer different questions, the density where wage mass piles up, the distribution how
+much of it lies below any cut.
 
 ## Choosing the selection rule
 
@@ -308,8 +332,8 @@ criterion you minimize is a modelling decision rather than a setting.
 | {func}`~kerneljax.density` | `"cv_ml"`, `"cv_ls"`, `"normal_reference"` |
 | {func}`~kerneljax.cdf` | `"cv_cdf"`, `"normal_reference"` |
 
-`"normal_reference"` is the cheap one, a closed-form rule that assumes roughly normal data and
-runs no optimization. It is the quickest way to get a fit in front of you, and here it lands near
+`"normal_reference"` is the cheap one, a closed-form plug-in rule that assumes roughly normal
+data and runs no optimization. It is the quickest way to get a fit in front of you, and here it lands near
 the cross validated answer.
 
 ```python
@@ -320,28 +344,32 @@ print(f"cross validated   h={fit.bandwidth.h[0]:.6f}")
 
 ```text
 normal reference  h=3.026807
-cross validated   h=2.792196
+cross validated   h=2.792168
 ```
 
-The rest minimize a criterion with L-BFGS from `n_starts` restarts, defaulting to three. These
-criteria are not convex, and while the restarts usually agree, when they disagree they disagree
-completely.
+The rest minimize a criterion with L-BFGS from `n_starts` restarts, defaulting to three, and
+every estimator passes `n_starts` through. These criteria are not convex, and while the restarts
+usually agree, when they disagree they disagree completely.
 
 ```python
 noise_rng = np.random.default_rng(9)
 x_noise = noise_rng.uniform(size=150)
 y_noise = noise_rng.normal(0, 1, 150)
+```
 
-criterion = kj.RegressionCriterion(method="cv_ls", degree=1)
-one_start = kj.select_bandwidth(x_noise, criterion, y=y_noise, n_starts=1)
-three_starts = kj.select_bandwidth(x_noise, criterion, y=y_noise, n_starts=3)
-print(f"1 start   h={one_start.bandwidth.h[0]:8.4f}  criterion={one_start.value:.6f}")
-print(f"3 starts  h={three_starts.bandwidth.h[0]:8.4f}  criterion={three_starts.value:.6f}")
+```python
+one_start = kj.local_poly(x_noise, y_noise, "cv_ls", degree=1, n_starts=1)
+three_starts = kj.local_poly(x_noise, y_noise, "cv_ls", degree=1)
+
+for label, run in [("1 start", one_start), ("3 starts", three_starts)]:
+    s = run.selection
+    print(f"{label:8s}  h={s.bandwidth.h[0]:8.4f}  criterion={s.value:.6f}  "
+          f"converged={s.converged}")
 ```
 
 ```text
-1 start   h=  0.1392  criterion=0.989901
-3 starts  h= 41.8218  criterion=0.984698
+1 start   h=  0.1392  criterion=0.989901  converged=True
+3 starts  h= 33.5028  criterion=0.984698  converged=True
 ```
 
 On that draw `y_noise` is unrelated to `x_noise`, so the honest answer is a very large bandwidth,
@@ -351,10 +379,11 @@ enough, and why one start is rarely worth the time it saves.
 
 ## Under the hood
 
-Underneath every estimator is a single operation, contracting kernel weights against a vector, and
-it is exported. The Nadaraya-Watson estimator is a ratio of two of them, the response in the
-numerator and a column of ones in the denominator, which is how you would build a method the
-library does not ship.
+The primitive underneath is exported, kernel weights contracted against a vector, one
+contraction for a density and a small weighted least squares problem built from the same
+weights for a local polynomial. The Nadaraya-Watson estimator is a ratio of two contractions,
+the response in the numerator and a column of ones in the denominator. Rebuilding a shipped estimator this way is the pattern for building one the
+library does not ship, with an exact answer to check against.
 
 ```python
 numerator = kj.ksum(data, fit.bandwidth, wage[:, None], at=points)
@@ -367,10 +396,12 @@ print(f"largest gap to local_poly={gap:.3e}")
 ```
 
 ```text
-largest gap to local_poly=1.526e-05
+largest gap to local_poly=1.335e-05
 ```
 
-The two are the same estimator, so the gap is float32 arithmetic.
+The two are the same estimator, so the gap is float32 arithmetic. Passing `fit.bandwidth`
+rather than `fit` drops the carried degree, which is what makes the comparison a local
+constant.
 
 The criteria are open in the same way, and they are differentiable. A bandwidth chosen by a
 derivative-free search has to be settled before anything else happens, whereas a criterion with a
@@ -391,12 +422,13 @@ for label, grad in [("plug-in", at_plug_in), ("selected", at_selected)]:
 
 ```text
 plug-in   d/dh=-9.776e-03  d/dlam_uno=-1.576e-01  d/dlam_ord=+1.888e+00
-selected  d/dh=+1.799e-07  d/dlam_uno=-6.443e-05  d/dlam_ord=+1.384e-05
+selected  d/dh=+2.045e-07  d/dlam_uno=-6.394e-05  d/dlam_ord=+1.146e-06
 ```
 
 The gradient comes back shaped like the bandwidth, one entry per column with the categorical
 parameters included. At the plug-in bandwidth it points somewhere; at the one cross validation
-chose it has all but vanished.
+chose, the two interior coordinates have vanished while `lam_uno`, pinned on its bound, still
+slopes gently outward, the boundary verdict on region showing up once more.
 
 ## Where to go next
 

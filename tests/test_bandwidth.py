@@ -5,6 +5,10 @@ import jax.numpy as jnp
 import pytest
 
 from kerneljax.bandwidth import Bandwidth, broadcast_h, normal_reference
+from kerneljax.data import MixedData
+from kerneljax.estimators.density import density
+from kerneljax.estimators.distribution import cdf
+from kerneljax.estimators.regression import local_poly
 from kerneljax.kernels import KernelSet
 
 
@@ -115,3 +119,35 @@ def test_reference_lambda_starts_interior(mixed_bandwidth_data):
     assert jnp.all(start.lam_uno < unordered)
     assert jnp.all(start.lam_ord > 0.0)
     assert jnp.all(start.lam_ord < ordered)
+
+
+@pytest.mark.parametrize("bad", [jnp.nan, 0.0, -0.5, jnp.inf])
+@pytest.mark.parametrize("estimator", ["local_poly", "density", "cdf"])
+def test_an_unusable_bandwidth_is_refused_at_the_point_of_use(bad, estimator):
+    x = jnp.linspace(0.0, 1.0, 24)
+    bw = Bandwidth(h=jnp.array([bad]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+
+    call = {
+        "local_poly": lambda: local_poly(x, jnp.sin(x), bw, degree=1),
+        "density": lambda: density(x, bw),
+        "cdf": lambda: cdf(x, bw),
+    }[estimator]
+
+    with pytest.raises(ValueError, match="finite and positive"):
+        call()
+
+
+def test_a_negative_smoothing_parameter_is_refused():
+    data = MixedData.from_blocks(
+        continuous=jnp.linspace(0.0, 1.0, 24), unordered=jnp.arange(24) % 3, unordered_levels=3
+    )
+    bw = Bandwidth(h=jnp.array([0.3]), lam_uno=jnp.array([-0.1]), lam_ord=jnp.zeros(0))
+
+    with pytest.raises(ValueError, match="finite and non-negative"):
+        density(data, bw)
+
+
+def test_a_usable_bandwidth_passes_untouched(bandwidth):
+    x = jnp.linspace(0.0, 1.0, 24)
+    fit = local_poly(x, jnp.sin(x), Bandwidth(h=jnp.array([0.3]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0)))
+    assert bool(jnp.all(jnp.isfinite(fit.mean)))

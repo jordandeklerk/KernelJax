@@ -390,6 +390,29 @@ def normal_reference(
     )
 
 
+def _require_usable(bw: Bandwidth) -> None:
+    """Reject a bandwidth no kernel can be evaluated at."""
+    try:
+        h = jnp.reshape(bw.h, (-1,))
+        h_ok = bool(jnp.all(jnp.isfinite(h))) and bool(jnp.all(h > 0.0))
+        lam_ok = all(bool(jnp.all(jnp.isfinite(lam))) and bool(jnp.all(lam >= 0.0)) for lam in (bw.lam_uno, bw.lam_ord))
+    except (ValueError, TypeError, jax.errors.ConcretizationTypeError):
+        return
+
+    if not h_ok:
+        raise ValueError(
+            f"every continuous bandwidth must be finite and positive, got h={bw.h}. A kernel "
+            "divides by h, so a non-positive or non-finite value produces numbers rather than "
+            "an error. If this came from select_bandwidth, its converged flag will be False."
+        )
+
+    if not lam_ok:
+        raise ValueError(
+            f"every categorical smoothing parameter must be finite and non-negative, got "
+            f"lam_uno={bw.lam_uno} and lam_ord={bw.lam_ord}."
+        )
+
+
 def _softplus(z: Array) -> Array:
     """Map an unconstrained value to a positive one."""
     return jnp.logaddexp(z, 0.0)

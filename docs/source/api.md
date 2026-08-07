@@ -30,7 +30,7 @@ Once we've ran an estimator, we can pass the fit object to {func}`~kerneljax.sum
 ## Kernels
 
 One kernel per column kind, collected into a {class}`~kerneljax.KernelSet` and passed to any
-estimator through `kernels=`. The defaults are a second-order Gaussian for continuous
+estimator through the `kernels` argument. The defaults are a second-order Gaussian for continuous
 columns, Aitchison-Aitken for unordered ones and Wang-van Ryzin for ordered ones.
 
 ```{eval-rst}

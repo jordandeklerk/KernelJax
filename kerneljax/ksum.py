@@ -111,24 +111,33 @@ def kweights(
 
     if spec.p_con:
         bandwidth = broadcast_h(bw, spec.p_con)
-        factors_con = jnp.asarray(
-            getattr(kernels.continuous, op_con)(evaluate.con[:, None, :], train.con[None, :, :], bandwidth)
+        factors_con = _elementwise(
+            getattr(kernels.continuous, op_con)(evaluate.con[:, None, :], train.con[None, :, :], bandwidth),
+            (evaluate.n, train.n, spec.p_con),
+            kernels.continuous,
+            op_con,
         )
         weights = weights * jnp.prod(factors_con, axis=-1)
 
     for column, levels in enumerate(spec.uno_levels):
-        factor_uno = jnp.asarray(
+        factor_uno = _elementwise(
             getattr(kernels.unordered, uno_ops[column])(
                 evaluate.uno[:, None, column], train.uno[None, :, column], bw.lam_uno[column], levels
-            )
+            ),
+            (evaluate.n, train.n),
+            kernels.unordered,
+            uno_ops[column],
         )
         weights = weights * factor_uno
 
     for column, levels in enumerate(spec.ord_levels):
-        factor_ord = jnp.asarray(
+        factor_ord = _elementwise(
             getattr(kernels.ordered, ord_ops[column])(
                 evaluate.orde[:, None, column], train.orde[None, :, column], bw.lam_ord[column], levels
-            )
+            ),
+            (evaluate.n, train.n),
+            kernels.ordered,
+            ord_ops[column],
         )
         weights = weights * factor_ord
 
@@ -515,6 +524,18 @@ def _grad_over_eval_chunks(
     p_con = train.spec.p_con
     combined = jnp.moveaxis(stacked, 0, 1).reshape(p_con, -1, train.n)
     return combined[:, : evaluate.n, :]
+
+
+def _elementwise(factor: Array, want: tuple[int, ...], kernel: object, op: str) -> Array:
+    """Reject a kernel operator that changed the shape it was handed."""
+    factor = jnp.asarray(factor)
+    if factor.shape != want:
+        raise ValueError(
+            f"{type(kernel).__name__}.{op} returned shape {factor.shape}, expected {want}. "
+            "A kernel is applied elementwise, so it must broadcast against its inputs and must "
+            "not reduce over any axis."
+        )
+    return factor
 
 
 def _resolve_ops(spec: ColumnSpec, op: OpSpec) -> tuple[str, tuple[str, ...], tuple[str, ...]]:

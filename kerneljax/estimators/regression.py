@@ -10,10 +10,11 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Float
 
-from kerneljax.bandwidth import Bandwidth, SelectionResult, broadcast_h, normal_reference
+from kerneljax.bandwidth import Bandwidth, SelectionResult, _require_usable, broadcast_h, normal_reference
 from kerneljax.basis import LocalPolyBasis
 from kerneljax.data import ColumnSpec, MixedData, _as_points
 from kerneljax.kernels import KernelSet
+from kerneljax.kernels._checks import _check_conv_at_zero, _check_grad_diagonal
 from kerneljax.kernels.sets import _resolve_kernels
 from kerneljax.ksum import _pad_index, _pad_rows, kweights
 from kerneljax.linalg import wls
@@ -271,7 +272,14 @@ def local_poly(
     """
     kernels = _resolve_kernels(kernels, getattr(bw, "kernels", None))
     train = _as_points(train)
+    if train.spec.p_con:
+        if isinstance(bw, str) and bw != "normal_reference":
+            _check_grad_diagonal(kernels.continuous, "value")
+        if se:
+            _check_conv_at_zero(kernels.continuous)
+
     bandwidth, selection, degree = _resolve_bandwidth(train, y, bw, degree, kernels, n_starts, chunk)
+    _require_usable(bandwidth)
 
     if gradient and degree == 0:
         raise ValueError("gradient requires degree >= 1, a constant fit carries no slope information")

@@ -99,6 +99,7 @@ Local polynomial regression
 
   Selection                          cv_ls
   Criterion value                 0.034301
+  Solver iterations                      8
   Converged                           True
 ```
 

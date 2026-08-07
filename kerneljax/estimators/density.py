@@ -10,9 +10,10 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Float
 
-from kerneljax.bandwidth import Bandwidth, SelectionResult, normal_reference
+from kerneljax.bandwidth import Bandwidth, SelectionResult, _require_usable, normal_reference
 from kerneljax.data import ColumnSpec, MixedData, _as_points
 from kerneljax.kernels import KernelSet
+from kerneljax.kernels._checks import _check_conv_matches, _check_grad_diagonal, _check_value_mass
 from kerneljax.kernels.sets import _resolve_kernels
 from kerneljax.ksum import ksum
 from kerneljax.selection.criteria import DensityCriterion
@@ -153,7 +154,16 @@ def density(
     """
     kernels = _resolve_kernels(kernels, getattr(bw, "kernels", None))
     train = _as_points(train)
+
+    if train.spec.p_con:
+        _check_value_mass(kernels.continuous)
+        if isinstance(bw, str) and bw != "normal_reference":
+            _check_grad_diagonal(kernels.continuous, "value")
+        if bw == "cv_ls":
+            _check_conv_matches(kernels.continuous)
+
     bandwidth, selection = _resolve_bandwidth(train, bw, kernels, n_starts, chunk)
+    _require_usable(bandwidth)
 
     evaluate = None if at is None else _as_points(at, train.spec)
     if at is not None and isinstance(bw, SelectionResult | DensityFit) and bandwidth.h_axis != "shared":

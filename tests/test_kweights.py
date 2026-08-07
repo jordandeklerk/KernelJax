@@ -1,12 +1,16 @@
 """Tests for the product kernel weight matrix."""
 
+import dataclasses
+
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from kerneljax.bandwidth import Bandwidth
 from kerneljax.data import Kind, MixedData
 from kerneljax.kernels import KernelSet, Op
+from kerneljax.kernels.base import ContinuousKernel
 from kerneljax.ksum import kweights
 
 
@@ -172,3 +176,16 @@ def test_mismatched_levels_raise_value_error(kweights_train, kweights_bandwidth)
     )
     with pytest.raises(ValueError, match="kinds"):
         kweights(kweights_train, kweights_bandwidth, at=at)
+
+
+def test_kernel_that_reduces_over_columns_is_refused():
+    @dataclasses.dataclass(frozen=True)
+    class Reducing(ContinuousKernel):
+        def value(self, x, y, h):
+            u = (x - y) / h
+            return jnp.sum(jnp.exp(-0.5 * u * u), axis=-1, keepdims=True)
+
+    train = MixedData.continuous(np.column_stack([np.linspace(0.0, 1.0, 6)] * 2))
+    bw = Bandwidth(h=jnp.array([0.3, 0.3]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+    with pytest.raises(ValueError, match="must not reduce over any axis"):
+        kweights(train, bw, kernels=KernelSet(continuous=Reducing()))

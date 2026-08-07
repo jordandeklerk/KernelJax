@@ -1,11 +1,14 @@
 """Tests for KernelSet."""
 
+import dataclasses
+
 import jax
 import jax.numpy as jnp
 import pytest
 
 from kerneljax.estimators.density import density
 from kerneljax.kernels import AitchisonAitken, Gaussian, KernelSet, LiRacine, Op, WangVanRyzin
+from kerneljax.kernels.base import ContinuousKernel
 
 
 def test_defaults_are_expected_types():
@@ -99,3 +102,25 @@ def test_kernel_set_jit_needs_no_static_argnames(public_api_data, public_api_ban
     jitted(public_api_data, public_api_bandwidth, KernelSet())
 
     assert calls["n"] == 1
+
+
+def test_unhashable_kernel_is_refused_at_construction():
+    @dataclasses.dataclass
+    class Mutable(ContinuousKernel):
+        def value(self, x, y, h):
+            return jnp.exp(-0.5 * ((x - y) / h) ** 2)
+
+    with pytest.raises(TypeError, match="not hashable"):
+        KernelSet(continuous=Mutable())
+
+
+def test_kernel_holding_an_array_is_refused_at_construction():
+    @dataclasses.dataclass(frozen=True)
+    class Weighted(ContinuousKernel):
+        w: object = None
+
+        def value(self, x, y, h):
+            return jnp.exp(-0.5 * ((x - y) / h) ** 2)
+
+    with pytest.raises(TypeError, match="not hashable"):
+        KernelSet(continuous=Weighted(w=jnp.ones(3)))

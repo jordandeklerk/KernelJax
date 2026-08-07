@@ -47,6 +47,23 @@ class KernelSet:
     unordered: UnorderedKernel = dataclasses.field(default_factory=AitchisonAitken)
     ordered: OrderedKernel = dataclasses.field(default_factory=LiRacine)
 
+    def __post_init__(self) -> None:
+        """Reject unhashable kernels."""
+        for kind in ("continuous", "unordered", "ordered"):
+            _require_hashable(getattr(self, kind), f"{kind} kernel")
+
+
+def _require_hashable(obj: object, role: str) -> None:
+    """Reject an unhashable kernel."""
+    try:
+        hash(obj)
+    except TypeError as exc:
+        raise TypeError(
+            f"{role} {type(obj).__name__} is not hashable, so it cannot be a static argument. "
+            "Decorate it with @dataclasses.dataclass(frozen=True), and hold any array field as a "
+            "tuple of floats rather than as a jax.Array."
+        ) from exc
+
 
 def _resolve_kernels(explicit: KernelSet | None, carried: KernelSet | None) -> KernelSet:
     """Settle on one kernel set."""

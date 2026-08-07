@@ -121,6 +121,7 @@ class Summary:
                 "",
                 _row("Selection", self.method),
                 _row("Criterion value", self.criterion_value),
+                _row("Solver iterations", self.n_iter),
                 _row("Converged", self.converged),
             ]
 
@@ -218,7 +219,7 @@ def summary(fit: DensityFit | LocalPolyFit) -> Summary:
         )
 
     selection = fit.selection
-    method = None if selection is None else getattr(selection.criterion, "method", None)
+    method = None if selection is None else _criterion_name(selection.criterion)
 
     if isinstance(fit, DensityFit):
         return Summary(
@@ -264,10 +265,23 @@ def _number(value: object) -> str:
     if isinstance(value, jax.Array) and jnp.issubdtype(value.dtype, jnp.bool_):
         return str(value)
 
+    if isinstance(value, jax.Array) and jnp.issubdtype(value.dtype, jnp.integer):
+        try:
+            return str(int(value))
+        except (TypeError, jax.errors.ConcretizationTypeError):
+            return str(value)
+
     try:
         return f"{float(value):.6f}" if isinstance(value, jax.Array | float) else str(value)
     except (TypeError, jax.errors.ConcretizationTypeError):
         return str(value)
+
+
+def _criterion_name(criterion: object) -> str | None:
+    """Name the selection rule, falling back to the class for a criterion the caller wrote."""
+    if criterion is None:
+        return None
+    return getattr(criterion, "method", None) or type(criterion).__name__
 
 
 def _estimator_name(degree: int) -> str:
