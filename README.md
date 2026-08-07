@@ -42,18 +42,16 @@ naturally into the wider JAX ecosystem.
 
 ## Features
 
-- [Density][density], [cumulative distribution][distribution], and [local polynomial
-  regression][regression] over samples mixing continuous, unordered categorical, and
-  ordered categorical columns.
-- [Bandwidths][bandwidth] and categorical smoothing parameters selected jointly from the
-  data by [least squares or likelihood cross validation, a corrected AIC][objectives], or
-  a [closed-form plug-in rule][normal_reference].
-- [Cross-validation criteria][selection] are ordinary JAX functions that compose with
+- Density, cumulative distribution, and local polynomial regression over samples
+  mixing continuous, unordered categorical, and ordered categorical columns.
+- Bandwidths and categorical smoothing parameters selected jointly from the data by
+  least squares or likelihood cross validation, a corrected AIC, or a closed-form
+  plug-in rule.
+- Cross-validation criteria are ordinary JAX functions that compose with
   `jax.grad`, `jax.jit`, and `jax.vmap`, so a bandwidth can be learned inside a larger
   model rather than fixed by a derivative-free search.
-- Composable primitives ([`kweights`][kweights], [`ksum`][ksum], the [kernel base
-  classes][kernels]) are public, so estimators the high-level interface does not ship can
-  be built directly.
+- Composable primitives (`kweights`, `ksum`, the kernel base classes) are public,
+  so estimators the high-level interface does not ship can be built directly.
 
 ## Installation
 
@@ -103,9 +101,9 @@ Local polynomial regression
 
 ### Custom kernels
 
-A kernel sets how observations are weighted. Subclass [`ContinuousKernel`][kernels] or the
+A kernel sets how observations are weighted. Subclass `ContinuousKernel` or the
 categorical base for that column kind, implement `value`, and pass the result through
-[`KernelSet`][kernelset]. Bandwidth selection then runs through the kernel you wrote.
+`KernelSet`. Bandwidth selection then runs through the kernel you wrote.
 
 ```python
 import dataclasses
@@ -128,12 +126,12 @@ Epanechnikov  h=0.084645  r2=0.947231
 Gaussian      h=0.036019  r2=0.947953
 ```
 
-### Custom selection criteria
+### Custom bandwidth selection
 
 Bandwidth selection minimizes a scalar criterion. The built-in rules
-([`cv_ls`][cv_ls], [corrected AIC][aic]) are ordinary JAX callables, and so is anything you
+(`cv_ls`, corrected AIC) are ordinary JAX callables, and so is anything you
 write in their place. Implement `__call__`, pass it to
-[`select_bandwidth`][select_bandwidth], and the optimizer finds `h` by differentiating the
+`select_bandwidth`, and the optimizer finds `h` by differentiating the
 loss you wrote.
 
 ```python
