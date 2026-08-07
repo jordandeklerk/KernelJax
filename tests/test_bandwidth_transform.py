@@ -4,7 +4,13 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from kerneljax.bandwidth import Bandwidth, BandwidthTransform, ConditionalBandwidth, normal_reference
+from kerneljax.bandwidth import (
+    Bandwidth,
+    BandwidthTransform,
+    ConditionalBandwidth,
+    _search_start,
+    normal_reference,
+)
 from kerneljax.data import MixedData
 from kerneljax.kernels import KernelSet
 
@@ -61,8 +67,6 @@ def test_normal_reference_positive_and_shaped(mixed_bandwidth_data):
     assert bw.h[0] > 0.0
     assert bw.lam_uno.shape == (1,)
     assert bw.lam_ord.shape == (1,)
-    assert bw.lam_uno[0] > 0.0
-    assert bw.lam_ord[0] > 0.0
     assert bw.h_axis == "shared"
 
 
@@ -131,9 +135,9 @@ def test_purely_categorical_spec_round_trips():
 
 
 @pytest.mark.parametrize("target", ["density", "distribution"])
-def test_normal_reference_halves_the_bound(mixed_bandwidth_data, target):
+def test_the_search_start_halves_the_bound(mixed_bandwidth_data, target):
     kernels = KernelSet()
-    bw = normal_reference(mixed_bandwidth_data, kernels, target=target)
+    bw = _search_start(mixed_bandwidth_data, kernels, target=target)
     spec = mixed_bandwidth_data.spec
 
     assert bw.lam_uno[0] == kernels.unordered.upper_bound(spec.uno_levels[0]) / 2.0
@@ -187,6 +191,6 @@ def test_start_is_not_in_a_transform_tail(request, sample):
     kernels = KernelSet()
     transform = BandwidthTransform(spec=data.spec, kernels=kernels)
 
-    z = transform.to_unconstrained(normal_reference(data, kernels))
+    z = transform.to_unconstrained(_search_start(data, kernels))
 
     assert jnp.all(jnp.abs(z) < 10.0)

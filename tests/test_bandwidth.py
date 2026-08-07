@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from kerneljax.bandwidth import Bandwidth, broadcast_h, normal_reference
+from kerneljax.bandwidth import Bandwidth, _search_start, broadcast_h, normal_reference
 from kerneljax.data import MixedData
 from kerneljax.estimators.density import density
 from kerneljax.estimators.distribution import cdf
@@ -108,9 +108,9 @@ def test_ambiguous_per_observation_vector_raises():
         broadcast_h(bw, p_con=1)
 
 
-def test_reference_lambda_starts_interior(mixed_bandwidth_data):
+def test_search_start_lambda_is_interior(mixed_bandwidth_data):
     kernels = KernelSet()
-    start = normal_reference(mixed_bandwidth_data, kernels)
+    start = _search_start(mixed_bandwidth_data, kernels)
     spec = mixed_bandwidth_data.spec
     unordered = jnp.asarray([kernels.unordered.upper_bound(levels) for levels in spec.uno_levels])
     ordered = jnp.asarray([kernels.ordered.upper_bound(levels) for levels in spec.ord_levels])
@@ -151,3 +151,11 @@ def test_a_usable_bandwidth_passes_untouched(bandwidth):
     x = jnp.linspace(0.0, 1.0, 24)
     fit = local_poly(x, jnp.sin(x), Bandwidth(h=jnp.array([0.3]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0)))
     assert bool(jnp.all(jnp.isfinite(fit.mean)))
+
+
+def test_normal_reference_leaves_categorical_smoothing_at_zero(mixed_bandwidth_data):
+    bw = normal_reference(mixed_bandwidth_data, KernelSet())
+
+    assert float(bw.h[0]) > 0.0
+    assert jnp.all(bw.lam_uno == 0.0)
+    assert jnp.all(bw.lam_ord == 0.0)

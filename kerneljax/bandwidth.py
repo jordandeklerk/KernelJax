@@ -305,7 +305,7 @@ def normal_reference(
     *,
     target: Literal["density", "distribution"] = "density",
 ) -> Bandwidth:
-    r"""Compute a normal-reference starting bandwidth.
+    r"""Compute the normal-reference rule of thumb.
 
     Every continuous entry scales :math:`\sigma`, the smallest positive value
     among the standard deviation, the interquartile range divided by
@@ -379,14 +379,31 @@ def normal_reference(
     else:
         h = jnp.zeros(0)
 
+    return Bandwidth(
+        h=h,
+        lam_uno=jnp.zeros(spec.p_uno, dtype=h.dtype),
+        lam_ord=jnp.zeros(spec.p_ord, dtype=h.dtype),
+        h_axis="shared",
+    )
+
+
+def _search_start(
+    data: MixedData,
+    kernels: KernelSet,
+    *,
+    target: Literal["density", "distribution"] = "density",
+) -> Bandwidth:
+    """Place a search where every coordinate still has a gradient to follow."""
+    reference = normal_reference(data, kernels, target=target)
+    spec = data.spec
+
     unordered_bounds = jnp.asarray([kernels.unordered.upper_bound(levels) for levels in spec.uno_levels])
     ordered_bounds = jnp.asarray([kernels.ordered.upper_bound(levels) for levels in spec.ord_levels])
 
-    return Bandwidth(
-        h=h,
+    return dataclasses.replace(
+        reference,
         lam_uno=unordered_bounds / 2.0,
         lam_ord=ordered_bounds / 2.0,
-        h_axis="shared",
     )
 
 
