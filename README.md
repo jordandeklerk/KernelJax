@@ -12,8 +12,6 @@
 <p>
   <a href="https://kerneljax.readthedocs.io/en/latest/" target="_blank"><strong>Docs</strong></a> ·
   <a href="https://kerneljax.readthedocs.io/en/latest/quickstart.html" target="_blank"><strong>Quickstart</strong></a> ·
-  <a href="https://kerneljax.readthedocs.io/en/latest/user-guide/custom-kernels.html" target="_blank"><strong>Custom Kernels</strong></a> ·
-  <a href="https://kerneljax.readthedocs.io/en/latest/user-guide/custom-criteria.html" target="_blank"><strong>Custom Criteria</strong></a> ·
   <a href="https://kerneljax.readthedocs.io/en/latest/background/smoothing.html" target="_blank"><strong>Background</strong></a> ·
   <a href="https://kerneljax.readthedocs.io/en/latest/api.html" target="_blank"><strong>API Reference</strong></a>
 </p>
