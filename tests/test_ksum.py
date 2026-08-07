@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from kerneljax.data import MixedData
-from kerneljax.ksum import ksum, kweights
+from kerneljax.ksum import _h_divisor, ksum, kweights
 
 
 def test_default_v_is_ones(ksum_data, ksum_bandwidth):
@@ -142,3 +142,33 @@ def test_jit_grad_and_vmap_work_when_chunked(ksum_data, ksum_bandwidth):
     out = jax.vmap(per_h)(jnp.array([[0.5], [0.7]]))
     assert out.shape == (2,)
     assert jnp.all(jnp.isfinite(out))
+
+
+@pytest.mark.parametrize(
+    ("ops", "exponents"),
+    [
+        (("value", "value"), (1, 1)),
+        (("value", "cdf"), (1, 0)),
+        (("cdf", "cdf"), (0, 0)),
+        (("deriv", "value"), (2, 1)),
+        (("conv", "cdf"), (1, 0)),
+    ],
+)
+def test_the_divisor_follows_each_column_operator(divisor_case, ops, exponents):
+    _, bw = divisor_case
+
+    got = float(_h_divisor(bw, ops))
+    want = float(jnp.prod(bw.h ** jnp.asarray(exponents, dtype=bw.h.dtype)))
+
+    assert got == pytest.approx(want, rel=1e-6)
+
+
+def test_an_integrating_column_leaves_the_scale_to_the_others(divisor_case):
+    data, bw = divisor_case
+
+    both = ksum(data, bw, weight_scale="per_eval", op=("value", "value"))
+    one = ksum(data, bw, weight_scale="per_eval", op=("value", "cdf"))
+    unscaled = ksum(data, bw, op=("value", "cdf"))
+
+    assert not jnp.allclose(both, one)
+    assert jnp.allclose(one, unscaled / bw.h[0], rtol=1e-6)

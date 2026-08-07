@@ -189,3 +189,29 @@ def test_kernel_that_reduces_over_columns_is_refused():
     bw = Bandwidth(h=jnp.array([0.3, 0.3]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
     with pytest.raises(ValueError, match="must not reduce over any axis"):
         kweights(train, bw, kernels=KernelSet(continuous=Reducing()))
+
+
+@pytest.mark.parametrize("ops", [("value", "cdf"), ("cdf", "value"), ("value", "conv"), ("conv", "cdf")])
+def test_each_continuous_column_uses_its_own_operator(two_continuous, ops):
+    data, bw = two_continuous
+    kernel = KernelSet().continuous
+    columns = data.con
+
+    got = kweights(data, bw, op=ops)
+    want = jnp.ones((data.n, data.n))
+    for index, name in enumerate(ops):
+        want = want * getattr(kernel, name)(columns[:, None, index], columns[None, :, index], bw.h[index])
+
+    assert jnp.allclose(got, want, atol=1e-6)
+
+
+def test_a_mixed_operator_vector_differs_from_its_first_entry(two_continuous):
+    data, bw = two_continuous
+    assert not jnp.array_equal(kweights(data, bw, op=("value", "cdf")), kweights(data, bw, op="value"))
+    assert not jnp.array_equal(kweights(data, bw, op=("cdf", "value")), kweights(data, bw, op="cdf"))
+
+
+def test_a_uniform_operator_vector_matches_the_string_form(two_continuous):
+    data, bw = two_continuous
+    for name in ("value", "cdf", "conv"):
+        assert jnp.array_equal(kweights(data, bw, op=(name, name)), kweights(data, bw, op=name))
