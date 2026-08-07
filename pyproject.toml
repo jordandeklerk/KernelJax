@@ -45,12 +45,12 @@ test = [
     "pytest-timeout",
 ]
 doc = [
-    "sphinx",
-    "sphinx-immaterial",
-    "myst-parser[linkify]",
-    "myst-nb",
-    "sphinx-copybutton",
-    "sphinx-design",
+    "sphinx>=9.0",
+    "sphinx-immaterial>=0.13.9",
+    "myst-parser[linkify]>=5.0",
+    "myst-nb>=1.4",
+    "sphinx-copybutton>=0.5",
+    "sphinx-design>=0.7",
     "ipython",
 ]
 dev = [

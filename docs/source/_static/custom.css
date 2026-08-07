@@ -264,3 +264,17 @@ vector, so widening costs nothing.
   width: 100%;
   height: auto;
 }
+
+/*
+The header names the project, never the section being read. The theme swaps the two
+header topics on scroll, so both states are overridden at the same specificity and this
+file loads last.
+*/
+.md-header__title .md-header__topic {
+  transform: none;
+  opacity: 1;
+}
+
+.md-header__title .md-header__topic + .md-header__topic {
+  display: none;
+}
