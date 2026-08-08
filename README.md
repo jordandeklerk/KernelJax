@@ -42,8 +42,14 @@ naturally into the wider JAX ecosystem.
 
 ## Features
 
-- Density, cumulative distribution, and local polynomial regression over samples
-  mixing continuous, unordered categorical, and ordered categorical columns.
+- Estimators for samples mixing continuous, unordered categorical, and ordered
+  categorical columns.
+  - [Density](kerneljax/estimators/density.py) and
+    [cumulative distribution](kerneljax/estimators/distribution.py) estimation.
+  - [Conditional density and distribution](kerneljax/estimators/conditional.py) of a
+    response given mixed covariates.
+  - [Local polynomial regression](kerneljax/estimators/regression.py) with
+    derivatives and pointwise standard errors.
 - Bandwidths and categorical smoothing parameters selected jointly from the data by
   least squares or likelihood cross validation, a corrected AIC, or a closed-form
   plug-in rule.
