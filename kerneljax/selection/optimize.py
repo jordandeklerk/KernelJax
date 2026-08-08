@@ -138,33 +138,6 @@ def select_bandwidth(
     return _multistart(objective, transform, z0, solver, n_starts, criterion, kernels)
 
 
-def _multistart(
-    objective: Callable[[Array], ScalarFloat],
-    transform: BandwidthTransform | ConditionalTransform,
-    z0: Array,
-    solver: Callable[..., tuple[Array, ScalarFloat, Array, Array]],
-    n_starts: int,
-    criterion: Callable[..., ScalarFloat],
-    kernels: KernelSet,
-) -> SelectionResult:
-    """Solve from several starts and keep the best usable one."""
-    perturbations = jnp.linspace(-1.5, 1.5, n_starts - 1) if n_starts > 1 else jnp.zeros(0)
-    offsets = jnp.concatenate([jnp.zeros(1), perturbations])[:, None] * jnp.ones_like(z0)[None, :]
-    candidates = z0[None, :] + offsets
-    solved, values, iterations, flags = jax.lax.map(lambda start: solver(objective, start), candidates)
-    usable = jnp.logical_and(jnp.isfinite(values), jnp.all(jnp.isfinite(solved), axis=1))
-    ranked = jnp.argmin(jnp.where(usable, values, jnp.inf))
-
-    return SelectionResult(
-        bandwidth=transform.from_unconstrained(solved[ranked]),
-        value=values[ranked],
-        n_iter=iterations[ranked],
-        converged=jnp.logical_and(flags[ranked], usable[ranked]),
-        criterion=criterion,
-        kernels=kernels,
-    )
-
-
 def lbfgs(
     fun: Callable[[Array], ScalarFloat],
     z0: Array,
@@ -337,3 +310,30 @@ def _backtracking_step(
     _, value_new, z_new = jax.lax.while_loop(line_search_cond, line_search_body, (step0, fun(candidate0), candidate0))
     z_new = jnp.where(jnp.isfinite(value_new), z_new, z)
     return z_new, value_new
+
+
+def _multistart(
+    objective: Callable[[Array], ScalarFloat],
+    transform: BandwidthTransform | ConditionalTransform,
+    z0: Array,
+    solver: Callable[..., tuple[Array, ScalarFloat, Array, Array]],
+    n_starts: int,
+    criterion: Callable[..., ScalarFloat],
+    kernels: KernelSet,
+) -> SelectionResult:
+    """Solve from several starts and keep the best usable one."""
+    perturbations = jnp.linspace(-1.5, 1.5, n_starts - 1) if n_starts > 1 else jnp.zeros(0)
+    offsets = jnp.concatenate([jnp.zeros(1), perturbations])[:, None] * jnp.ones_like(z0)[None, :]
+    candidates = z0[None, :] + offsets
+    solved, values, iterations, flags = jax.lax.map(lambda start: solver(objective, start), candidates)
+    usable = jnp.logical_and(jnp.isfinite(values), jnp.all(jnp.isfinite(solved), axis=1))
+    ranked = jnp.argmin(jnp.where(usable, values, jnp.inf))
+
+    return SelectionResult(
+        bandwidth=transform.from_unconstrained(solved[ranked]),
+        value=values[ranked],
+        n_iter=iterations[ranked],
+        converged=jnp.logical_and(flags[ranked], usable[ranked]),
+        criterion=criterion,
+        kernels=kernels,
+    )
