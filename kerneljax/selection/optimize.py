@@ -10,7 +10,7 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Float
 
-from kerneljax.bandwidth import BandwidthTransform, SelectionResult, _search_start
+from kerneljax.bandwidth import BandwidthTransform, ConditionalTransform, SelectionResult, _search_start
 from kerneljax.data import MixedData, _as_points
 from kerneljax.kernels import KernelSet
 from kerneljax.typing import Array, ScalarFloat
@@ -135,6 +135,19 @@ def select_bandwidth(
         bandwidth = transform.from_unconstrained(z)
         return criterion(train, bandwidth, **extra, kernels=kernels, chunk=chunk)
 
+    return _multistart(objective, transform, z0, solver, n_starts, criterion, kernels)
+
+
+def _multistart(
+    objective: Callable[[Array], ScalarFloat],
+    transform: BandwidthTransform | ConditionalTransform,
+    z0: Array,
+    solver: Callable[..., tuple[Array, ScalarFloat, Array, Array]],
+    n_starts: int,
+    criterion: Callable[..., ScalarFloat],
+    kernels: KernelSet,
+) -> SelectionResult:
+    """Solve from several starts and keep the best usable one."""
     perturbations = jnp.linspace(-1.5, 1.5, n_starts - 1) if n_starts > 1 else jnp.zeros(0)
     offsets = jnp.concatenate([jnp.zeros(1), perturbations])[:, None] * jnp.ones_like(z0)[None, :]
     candidates = z0[None, :] + offsets

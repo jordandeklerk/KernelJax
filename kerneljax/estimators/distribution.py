@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 from functools import partial
+from typing import cast
 
 import jax
 import jax.numpy as jnp
@@ -248,7 +249,7 @@ def _resolve_bandwidth(
         return bw.bandwidth, bw.selection
 
     if isinstance(bw, SelectionResult):
-        return bw.bandwidth, bw
+        return cast(Bandwidth, bw.bandwidth), bw
 
     if not isinstance(bw, str):
         raise TypeError(

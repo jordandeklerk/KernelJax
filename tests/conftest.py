@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from kerneljax.bandwidth import Bandwidth, BandwidthTransform
+from kerneljax.bandwidth import Bandwidth, BandwidthTransform, ConditionalBandwidth
 from kerneljax.data import ColumnSpec, Kind, MixedData
 from kerneljax.kernels import KernelSet
 from kerneljax.kernels.base import ContinuousKernel, OrderedKernel, UnorderedKernel
@@ -873,3 +873,22 @@ def probe_y(probe_x):
 @pytest.fixture
 def probe_bw():
     return Bandwidth(h=jnp.array([0.3]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+
+
+@pytest.fixture
+def conditional_sample():
+    rng = np.random.default_rng(4242)
+    n = 50
+    x1 = rng.normal(size=n)
+    levels = rng.integers(0, 3, n)
+    response = 0.8 * x1 + rng.normal(0, 0.5, n)
+    x = MixedData.from_blocks(continuous=x1, unordered=levels, unordered_levels=3)
+    return x, MixedData.continuous(response)
+
+
+@pytest.fixture
+def conditional_bandwidth():
+    return ConditionalBandwidth(
+        x=Bandwidth(h=jnp.array([0.55]), lam_uno=jnp.array([0.25]), lam_ord=jnp.zeros(0)),
+        y=Bandwidth(h=jnp.array([0.35]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0)),
+    )
