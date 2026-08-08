@@ -18,6 +18,7 @@ __all__ = [
     "Bandwidth",
     "BandwidthTransform",
     "ConditionalBandwidth",
+    "ConditionalTransform",
     "SelectionResult",
     "broadcast_h",
     "normal_reference",
@@ -37,8 +38,9 @@ class SelectionResult:
 
     Parameters
     ----------
-    bandwidth : Bandwidth
-        The selected bandwidth, in natural, constrained scale.
+    bandwidth : Bandwidth or ConditionalBandwidth
+        The selected bandwidth, in natural, constrained scale. A conditional
+        selection carries the two block form.
     value : ScalarFloat
         Criterion value at ``bandwidth``.
     n_iter : Array
@@ -58,7 +60,7 @@ class SelectionResult:
         itself mean the gradient tolerance was the one that was met.
     """
 
-    bandwidth: Bandwidth
+    bandwidth: Bandwidth | ConditionalBandwidth
     value: ScalarFloat
     n_iter: Array
     converged: Array
@@ -143,6 +145,37 @@ class ConditionalBandwidth:
 
 
 @dataclasses.dataclass(frozen=True)
+class ConditionalTransform:
+    r"""Bijection between a ``ConditionalBandwidth`` and a flat unconstrained vector.
+
+    Each block maps through its own :class:`BandwidthTransform`, and the two
+    vectors are laid end to end with the response first, matching the order
+    the conditional estimators report their bandwidths in.
+
+    Parameters
+    ----------
+    x : BandwidthTransform
+        Transform for the conditioning block.
+    y : BandwidthTransform
+        Transform for the response block.
+    """
+
+    x: BandwidthTransform
+    y: BandwidthTransform
+
+    def to_unconstrained(self, bw: ConditionalBandwidth) -> Float[Array, " k"]:
+        """Map a conditional bandwidth to a flat unconstrained vector."""
+        return jnp.concatenate([self.y.to_unconstrained(bw.y), self.x.to_unconstrained(bw.x)])
+
+    def from_unconstrained(self, z: Float[Array, " k"]) -> ConditionalBandwidth:
+        """Map a flat unconstrained vector back to a conditional bandwidth."""
+        return ConditionalBandwidth(
+            x=self.x.from_unconstrained(z[self.y.size :]),
+            y=self.y.from_unconstrained(z[: self.y.size]),
+        )
+
+
+@dataclasses.dataclass(frozen=True)
 class BandwidthTransform:
     r"""Bijection between a ``Bandwidth`` and a flat unconstrained vector.
 
@@ -161,6 +194,11 @@ class BandwidthTransform:
 
     spec: ColumnSpec
     kernels: KernelSet
+
+    @property
+    def size(self) -> int:
+        """Give the length of the unconstrained vector this transform maps to."""
+        return self.spec.p_con + self.spec.p_uno + self.spec.p_ord
 
     @property
     def _uno_bounds(self) -> tuple[float, ...]:

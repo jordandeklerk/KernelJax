@@ -371,7 +371,7 @@ def _resolve_bandwidth(
         return bw.bandwidth, bw.selection, _resolve_degree(degree, bw.degree)
 
     if isinstance(bw, SelectionResult):
-        return bw.bandwidth, bw, _resolve_degree(degree, getattr(bw.criterion, "degree", None))
+        return cast(Bandwidth, bw.bandwidth), bw, _resolve_degree(degree, getattr(bw.criterion, "degree", None))
 
     if not isinstance(bw, str):
         raise TypeError(

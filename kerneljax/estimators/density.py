@@ -206,7 +206,7 @@ def _resolve_bandwidth(
         return bw.bandwidth, bw.selection
 
     if isinstance(bw, SelectionResult):
-        return bw.bandwidth, bw
+        return cast(Bandwidth, bw.bandwidth), bw
 
     if not isinstance(bw, str):
         raise TypeError(

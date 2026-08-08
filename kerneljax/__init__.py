@@ -1,13 +1,16 @@
 """Low-level JAX interface for nonparametric kernel smoothing of mixed-type data."""
 
-from kerneljax.bandwidth import Bandwidth, SelectionResult, normal_reference
+from kerneljax.bandwidth import Bandwidth, ConditionalBandwidth, SelectionResult, normal_reference
 from kerneljax.data import MixedData, grid, quantile_grid
 from kerneljax.estimators import (
+    ConditionalFit,
     DensityFit,
     DistributionFit,
     LocalPolyFit,
-    density,
+    cdensity,
     cdf,
+    cdist,
+    density,
     local_poly,
 )
 from kerneljax.kernels import (
@@ -42,6 +45,8 @@ __all__ = [
     "WLS",
     "AitchisonAitken",
     "Bandwidth",
+    "ConditionalBandwidth",
+    "ConditionalFit",
     "ContinuousKernel",
     "DensityCriterion",
     "DensityFit",
@@ -59,7 +64,9 @@ __all__ = [
     "UnorderedKernel",
     "WangVanRyzin",
     "aic_c_regression",
+    "cdensity",
     "cdf",
+    "cdist",
     "cv_cdf_distribution",
     "cv_ls_density",
     "cv_ls_regression",
