@@ -15,9 +15,11 @@ The entry points. Each takes training data and a bandwidth rule, and returns a f
    kerneljax.local_poly
    kerneljax.density
    kerneljax.cdf
+   kerneljax.cdensity
+   kerneljax.cdist
 ```
 
-Once we've ran an estimator, we can pass the fit object to {func}`~kerneljax.summary`. It reads a density or regression fit back and renders the report shown throughout these docs.
+Once we've ran an estimator, we can pass the fit object to {func}`~kerneljax.summary`. It reads a density, regression or conditional fit back and renders the report shown throughout these docs.
 
 ```{eval-rst}
 .. autosummary::
@@ -50,7 +52,9 @@ columns, Aitchison-Aitken for unordered ones and Wang-van Ryzin for ordered ones
 Passing a string to an estimator covers the common case. These are for selecting once and
 reusing the result, fixing a bandwidth by hand, or swapping the solver.
 {class}`~kerneljax.Bandwidth` is the container the rest of this section produces and every
-estimator consumes, holding one smoothing parameter per column.
+estimator consumes, holding one smoothing parameter per column. A conditional estimator
+smooths two samples at once, so {func}`~kerneljax.cdensity` and {func}`~kerneljax.cdist`
+take a {class}`~kerneljax.ConditionalBandwidth` instead, one block per sample.
 
 ```{eval-rst}
 .. autosummary::
@@ -58,6 +62,7 @@ estimator consumes, holding one smoothing parameter per column.
    :nosignatures:
 
    kerneljax.Bandwidth
+   kerneljax.ConditionalBandwidth
    kerneljax.select_bandwidth
    kerneljax.normal_reference
    kerneljax.lbfgs
@@ -123,6 +128,7 @@ so {func}`~kerneljax.local_poly` returns a {class}`~kerneljax.LocalPolyFit` and
    kerneljax.LocalPolyFit
    kerneljax.DensityFit
    kerneljax.DistributionFit
+   kerneljax.ConditionalFit
    kerneljax.SelectionResult
    kerneljax.Summary
    kerneljax.WLS

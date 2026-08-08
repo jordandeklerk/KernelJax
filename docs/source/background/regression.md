@@ -189,7 +189,7 @@ component,
 $$
 \hat\beta(x) = \bigl(\mathbf{X}_x^\top \mathbf{W}_x \mathbf{X}_x\bigr)^{-1}
                \mathbf{X}_x^\top \mathbf{W}_x \mathbf{y},
-\qquad
+\quad
 \hat m(x) = e_1^\top \hat\beta(x),
 $$
 
@@ -210,7 +210,7 @@ the $2 \times 2$ system explicitly, the local linear estimate is
 
 $$
 \hat m_{\mathrm{LL}}(x) = \sum_{i=1}^n \ell_i(x)\, Y_i,
-\qquad
+\quad
 \ell_i(x) = \frac{k_h(x - X_i)\bigl[s_2 - (X_i - x)\, s_1\bigr]}{s_0 s_2 - s_1^2}.
 $$
 
@@ -220,7 +220,7 @@ tilt to accommodate an asymmetric window. Two identities follow directly from th
 and are worth stating, since they are the whole story,
 
 $$
-\sum_{i=1}^n \ell_i(x) = 1, \qquad \sum_{i=1}^n \ell_i(x)\, (X_i - x) = 0 .
+\sum_{i=1}^n \ell_i(x) = 1, \quad \sum_{i=1}^n \ell_i(x)\, (X_i - x) = 0 .
 $$
 
 The first says the weights reproduce constants; the second says they reproduce linear
@@ -257,7 +257,7 @@ $$
 Compare this with the local constant result. The leading interior variance is identical, so
 the improvement costs nothing at that order, though finite-sample variances differ and the
 boundary constants differ as the previous paragraph describes. The bias has lost its $m'f'/f$ term entirely and depends only on the curvature of $m$,
-which is the irreducible cost of smoothing. Fan and Gijbels (1996) call this *design
+which is the irreducible cost of smoothing. [Fan and Gijbels (1996)](https://doi.org/10.1201/9780203748725) call this *design
 adaptivity*, since the estimator's leading bias does not depend on the design density at all.
 
 The same argument repairs the boundary, though it is worth being exact about what survives.

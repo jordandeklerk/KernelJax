@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import inspect
 from functools import partial
 
 import jax
@@ -10,6 +11,7 @@ import jax.numpy as jnp
 
 from kerneljax.bandwidth import Bandwidth
 from kerneljax.data import ColumnSpec, Kind
+from kerneljax.estimators.conditional import ConditionalFit
 from kerneljax.estimators.density import DensityFit
 from kerneljax.estimators.regression import LocalPolyFit
 from kerneljax.kernels import KernelSet
@@ -28,8 +30,9 @@ __all__ = ["Summary", "summary"]
         "r_squared",
         "residual_se",
         "log_likelihood",
+        "response_bandwidth",
     ],
-    meta_fields=["label", "method", "degree", "n_train", "spec", "kernels"],
+    meta_fields=["label", "method", "degree", "n_train", "spec", "kernels", "response_spec"],
 )
 @dataclasses.dataclass(frozen=True, repr=False)
 class Summary:
@@ -70,6 +73,11 @@ class Summary:
         Root mean squared residual of the fit.
     log_likelihood : ScalarFloat, optional
         Summed log density at the training points.
+    response_spec : ColumnSpec, optional
+        Column metadata of the response sample, set only for a conditional
+        estimate. Static.
+    response_bandwidth : Bandwidth, optional
+        Bandwidth for the response block, set only for a conditional estimate.
     """
 
     label: str
@@ -85,6 +93,8 @@ class Summary:
     r_squared: ScalarFloat | None
     residual_se: ScalarFloat | None
     log_likelihood: ScalarFloat | None
+    response_spec: ColumnSpec | None = None
+    response_bandwidth: Bandwidth | None = None
 
     def __repr__(self) -> str:
         """Render the summary as an aligned report."""
@@ -102,8 +112,14 @@ class Summary:
             rows.append(_row("Estimator", _estimator_name(self.degree)))
         rows.append(_row("Bandwidth type", self.bandwidth.h_axis))
 
-        rows += ["", f"  {'Variable':<14}{'Kind':<14}{'Bandwidth':>12}"]
-        rows += [f"  {name:<14}{kind:<14}{_number(width):>12}" for name, kind, width in self._columns()]
+        header = f"  {'Variable':<14}{'Kind':<14}{'Bandwidth':>12}"
+        if self.response_spec is not None and self.response_bandwidth is not None:
+            rows += ["", "  Response", header]
+            rows += _column_rows(self.response_spec, self.response_bandwidth)
+            rows += ["", "  Conditioning", header]
+        else:
+            rows += ["", header]
+        rows += _column_rows(self.spec, self.bandwidth)
 
         rows += ["", _row("Continuous kernel", _kernel_name(self.kernels))]
 
@@ -127,25 +143,8 @@ class Summary:
 
         return "\n".join(rows)
 
-    def _columns(self) -> list[tuple[str, str, Array]]:
-        """Pair every column with its kind and the smoothing parameter it was fit under."""
-        names = self.spec.names or tuple(f"x{i + 1}" for i in range(self.spec.p))
-        widths = jnp.concatenate(
-            [jnp.reshape(self.bandwidth.h, (-1,))[: self.spec.p_con], self.bandwidth.lam_uno, self.bandwidth.lam_ord]
-        )
 
-        order = (
-            [Kind.CONTINUOUS] * self.spec.p_con + [Kind.UNORDERED] * self.spec.p_uno + [Kind.ORDERED] * self.spec.p_ord
-        )
-        sorted_names = (
-            [n for n, k in zip(names, self.spec.kinds, strict=True) if k is Kind.CONTINUOUS]
-            + [n for n, k in zip(names, self.spec.kinds, strict=True) if k is Kind.UNORDERED]
-            + [n for n, k in zip(names, self.spec.kinds, strict=True) if k is Kind.ORDERED]
-        )
-        return [(n, k.name.lower(), widths[i]) for i, (n, k) in enumerate(zip(sorted_names, order, strict=True))]
-
-
-def summary(fit: DensityFit | LocalPolyFit) -> Summary:
+def summary(fit: ConditionalFit | DensityFit | LocalPolyFit) -> Summary:
     r"""Measure how well a fitted estimator describes the sample it was fit on.
 
     For a regression the report carries the squared correlation between fitted
@@ -206,6 +205,9 @@ def summary(fit: DensityFit | LocalPolyFit) -> Summary:
     local_poly : Fit a local polynomial regression.
     density : Estimate a mixed-type probability density.
     """
+    if isinstance(fit, ConditionalFit):
+        return _conditional_summary(fit)
+
     fitted = fit.mean if isinstance(fit, LocalPolyFit) else fit.value
     if fit.spec is None:
         raise ValueError(
@@ -281,7 +283,12 @@ def _criterion_name(criterion: object) -> str | None:
     """Name the selection rule, falling back to the class for a criterion the caller wrote."""
     if criterion is None:
         return None
-    return getattr(criterion, "method", None) or type(criterion).__name__
+    method = getattr(criterion, "method", None)
+    if isinstance(method, str):
+        return method
+    if inspect.isfunction(criterion):
+        return criterion.__name__
+    return type(criterion).__name__
 
 
 def _estimator_name(degree: int) -> str:
@@ -303,3 +310,51 @@ def _kernel_name(kernels: KernelSet) -> str:
         settings = [f"{field.name}={getattr(kernel, field.name)}" for field in dataclasses.fields(kernel) if field.repr]
 
     return f"{name}({', '.join(settings)})" if settings else name
+
+
+def _column_rows(spec: ColumnSpec, bandwidth: Bandwidth) -> list[str]:
+    """Lay one block's columns out against the smoothing parameter each was fit under."""
+    names = spec.names or tuple(f"x{i + 1}" for i in range(spec.p))
+    widths = jnp.concatenate([jnp.reshape(bandwidth.h, (-1,))[: spec.p_con], bandwidth.lam_uno, bandwidth.lam_ord])
+
+    order = [Kind.CONTINUOUS] * spec.p_con + [Kind.UNORDERED] * spec.p_uno + [Kind.ORDERED] * spec.p_ord
+    sorted_names = (
+        [n for n, k in zip(names, spec.kinds, strict=True) if k is Kind.CONTINUOUS]
+        + [n for n, k in zip(names, spec.kinds, strict=True) if k is Kind.UNORDERED]
+        + [n for n, k in zip(names, spec.kinds, strict=True) if k is Kind.ORDERED]
+    )
+    paired = zip(sorted_names, order, strict=True)
+    return [f"  {n:<14}{k.name.lower():<14}{_number(widths[i]):>12}" for i, (n, k) in enumerate(paired)]
+
+
+def _conditional_summary(fit: ConditionalFit) -> Summary:
+    """Report a conditional estimate."""
+    if fit.x_spec is None or fit.y_spec is None:
+        raise ValueError("summary needs a conditional fit that recorded the column metadata of both samples")
+
+    if fit.value.shape[0] != fit.n_train:
+        raise ValueError(
+            f"summary needs a fit evaluated at its own training points, got {fit.value.shape[0]} "
+            f"evaluation points for {fit.n_train} training points"
+        )
+
+    selection = fit.selection
+    density = fit.target == "density"
+
+    return Summary(
+        label=f"Conditional {fit.target} estimate",
+        method=None if selection is None else _criterion_name(selection.criterion),
+        degree=None,
+        n_train=fit.n_train,
+        spec=fit.x_spec,
+        kernels=fit.kernels,
+        bandwidth=fit.bandwidth.x,
+        criterion_value=None if selection is None else selection.value,
+        converged=None if selection is None else selection.converged,
+        n_iter=None if selection is None else selection.n_iter,
+        r_squared=None,
+        residual_se=None,
+        log_likelihood=jnp.sum(jnp.log(fit.value)) if density else None,
+        response_spec=fit.y_spec,
+        response_bandwidth=fit.bandwidth.y,
+    )

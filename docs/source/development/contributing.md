@@ -44,9 +44,8 @@ git checkout -b fix-aic-penalty-barrier upstream/main
 ```
 
 Commit messages start with a capitalized prefix saying what kind of change it is, then a
-short description in the imperative. KernelJax uses three. `FEAT` marks new behavior, `REF`
-refactoring and maintenance, and `DOC` documentation. Pull request titles take the same
-prefix.
+short description in the imperative. For example, `FEAT` marks new behavior, `REF` indicates
+refactoring and maintenance, and `DOC` refers to documentation changes. Pull request titles take the same prefix.
 
 ```text
 FEAT: add standard errors to local polynomial regression

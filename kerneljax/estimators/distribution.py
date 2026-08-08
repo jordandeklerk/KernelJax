@@ -154,6 +154,7 @@ def cdf(
     See Also
     --------
     density : Estimate a mixed-type probability density.
+    cdist : Estimate a conditional cumulative distribution.
     local_poly : Fit a local polynomial regression of mixed-type data.
     select_bandwidth : Select a bandwidth by minimizing a cross-validation criterion.
 

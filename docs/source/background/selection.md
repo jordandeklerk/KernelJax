@@ -140,7 +140,9 @@ $H_{ii}$ come out of the same Cholesky factorization that produced the fit.
 Cross validation is not the only route. An alternative fits once and charges for the
 flexibility used, which avoids leaving anything out. It also aims somewhere slightly
 different. Least squares cross validation targets squared prediction error, while the
-corrected Akaike criterion of Hurvich, Simonoff and Tsai (1998) approximates the expected
+corrected Akaike criterion of
+[Hurvich, Simonoff and Tsai (1998)](https://doi.org/10.1111/1467-9868.00125) approximates
+the expected
 Kullback-Leibler discrepancy of a Gaussian working model,
 
 $$
@@ -191,7 +193,7 @@ in that variable's terms vanishes and it contributes nothing to the bias, for *a
 its $\lambda$. The criterion is then free to set that parameter purely to reduce variance, and
 the asymptotic variance factor is smallest at complete pooling.
 
-Hall, Li and Racine (2007) made this precise. Under their conditions the smoothing parameter
+[Hall, Li and Racine (2007)](https://doi.org/10.1162/rest.89.4.784) made this precise. Under their conditions the smoothing parameter
 selected for an irrelevant discrete covariate converges in probability to its upper
 extremity, at which point, as we saw, the variable is removed from the estimate altogether,
 and the bandwidth selected for an irrelevant continuous covariate diverges rather than
@@ -273,9 +275,11 @@ finite sample behavior. Cross validation then supplies every smoothing parameter
 data, and asymptotically smooths away the variables that were not helping.
 
 To see these estimators at work, the [Quickstart](../quickstart.md) applies them to data, and
-the [Home](../index.md#installation) page covers getting set up. For fuller treatments, Li and
-Racine (2007) is the standard reference for mixed-type kernel methods, and Fan and Gijbels
-(1996) for local polynomial modelling.
+the [Home](../index.md#installation) page covers getting set up. For fuller treatments,
+[Li and Racine (2007)](https://press.princeton.edu/books/hardcover/9780691121611/nonparametric-econometrics) is
+the standard reference for mixed-type kernel methods, and
+[Fan and Gijbels (1996)](https://doi.org/10.1201/9780203748725) for local
+polynomial modelling.
 
 ## References
 

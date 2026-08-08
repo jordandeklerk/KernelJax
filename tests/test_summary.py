@@ -7,6 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from kerneljax.estimators.conditional import cdensity, cdist
 from kerneljax.estimators.density import density
 from kerneljax.estimators.regression import local_poly
 from kerneljax.kernels import KernelSet
@@ -161,3 +162,52 @@ def test_the_report_shows_how_many_iterations_selection_took(criteria_train, cri
     assert "Solver iterations" in report
     assert f"{int(fit.selection.n_iter)}" in report
     assert "." not in report.split("Solver iterations")[1].splitlines()[0]
+
+
+def test_a_conditional_summary_renders_both_blocks(conditional_sample, conditional_bandwidth):
+    x, y = conditional_sample
+
+    report = summary(cdensity(x, y, conditional_bandwidth))
+    text = repr(report)
+
+    assert report.response_spec is not None
+    assert report.response_bandwidth is conditional_bandwidth.y
+    assert "Response" in text
+    assert "Conditioning" in text
+    assert text.index("Response") < text.index("Conditioning")
+
+
+def test_a_conditional_density_reports_a_log_likelihood(conditional_sample, conditional_bandwidth):
+    x, y = conditional_sample
+
+    fit = cdensity(x, y, conditional_bandwidth)
+    report = summary(fit)
+
+    assert float(report.log_likelihood) == pytest.approx(float(jnp.sum(jnp.log(fit.value))))
+    assert report.r_squared is None
+
+
+def test_a_conditional_distribution_leaves_likelihood_unset(conditional_sample, conditional_bandwidth):
+    x, y = conditional_sample
+    assert summary(cdist(x, y, conditional_bandwidth)).log_likelihood is None
+
+
+def test_conditional_selection_fields_travel_onto_the_report(conditional_sample):
+    x, y = conditional_sample
+
+    fit = cdensity(x, y, "cv_ml", n_starts=1)
+    report = summary(fit)
+
+    assert report.method is not None
+    assert float(report.criterion_value) == pytest.approx(float(fit.selection.value))
+
+
+def test_a_conditional_fit_evaluated_elsewhere_is_refused(conditional_sample, conditional_bandwidth):
+    x, y = conditional_sample
+
+    grid = jnp.linspace(-2.0, 2.0, 7)
+    head = jax.tree.map(lambda a: a[: grid.size], x)
+    fit = cdist(x, y, conditional_bandwidth, at_x=head, at_y=grid[:, None])
+
+    with pytest.raises(ValueError, match="training points"):
+        summary(fit)

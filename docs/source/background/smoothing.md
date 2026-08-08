@@ -86,8 +86,8 @@ sum discontinuously. We therefore ask for a function $k$ that is nonnegative and
 weight depends only on distance, and that satisfies
 
 $$
-\int k(u)\, du = 1, \qquad
-\mu_2(k) = \int u^2 k(u)\, du < \infty, \qquad
+\int k(u)\, du = 1, \quad
+\mu_2(k) = \int u^2 k(u)\, du < \infty, \quad
 R(k) = \int k(u)^2\, du < \infty .
 $$
 
@@ -100,7 +100,7 @@ faster rate, at the price of estimates that can dip below zero. The estimator $k
 $$
 \hat f(x) = \frac{1}{nh} \sum_{i=1}^{n} k\!\left(\frac{x - X_i}{h}\right)
           = \frac{1}{n} \sum_{i=1}^{n} k_h(x - X_i),
-\qquad
+\quad
 k_h(u) = \tfrac{1}{h}\, k(u/h),
 $$
 
@@ -194,8 +194,8 @@ The second moment succumbs to the same substitution as before,
 $$
 \begin{aligned}
 \mathbb{E}\!\left[k_h(x - X)^2\right]
- &= \int \frac{1}{h^2} k\!\left(\frac{x-u}{h}\right)^{\!2} f(u)\, du
-  = \frac{1}{h} \int k(v)^2 f(x + hv)\, dv \\[4pt]
+ = \int \frac{1}{h^2} k\!\left(\frac{x-u}{h}\right)^{\!2} f(u)\, du
+  &= \frac{1}{h} \int k(v)^2 f(x + hv)\, dv \\[4pt]
  &= \frac{R(k)\, f(x)}{h} + O(1),
 \end{aligned}
 $$
@@ -229,7 +229,7 @@ asymptotic form
 
 $$
 \mathrm{AMISE}(h) = \frac{h^4}{4}\, \mu_2(k)^2\, R(f'') + \frac{R(k)}{nh},
-\qquad R(f'') = \int f''(x)^2 dx ,
+\quad R(f'') = \int f''(x)^2 dx ,
 $$
 
 taking $R(f'')$ to be finite, which is what lets the pointwise expansions be integrated.
@@ -322,73 +322,97 @@ scale of $f$ decays at $n^{-2/(d+4)}$.
 
 ## How fast can we learn?
 
-The deterioration above is not an artifact of our estimator. Stone (1980) established the
-best rate *any* estimator can achieve, and the statement is worth giving as he gives it.
+The deterioration above is not an artifact of the kernel estimator. [Stone (1980)](https://projecteuclid.org/journals/annals-of-statistics/volume-8/issue-6/Optimal-Rates-of-Convergence-for-Nonparametric-Estimators/10.1214/aos/1176345206.full)
+established the best pointwise rate any estimator can achieve uniformly over a broad
+smoothness class.
 
-Fix a nonnegative integer $k$ and a constant $p > k$, write $g_k$ for the degree-$k$ Taylor
-polynomial of $g$ about the point of interest, and let $\Theta$ collect the functions on
-$\mathbb{R}^d$ that are $k$ times continuously differentiable and satisfy
+Fix a nonnegative integer $k$ and a constant $p > k$. After translating the point of
+interest to the origin, write $g_k$ for the degree-$k$ Taylor polynomial of $g$ there,
+and let $\Theta$ collect functions that are $k$ times continuously differentiable and
+satisfy
 
 $$
 \bigl| g(x) - g_k(x) \bigr| \le M \lVert x \rVert^{p}
 $$
 
-on a neighborhood of that point. The exponent $p$ therefore measures smoothness on a
-continuous scale rather than by counting whole derivatives. Stone notes that when $p$ is a
-positive integer and $k = p - 1$, this is implied by a boundedness condition on the $p$th
-derivative, which is the sense in which we may read it as "$p$ bounded derivatives".
+on a neighborhood of the origin. The exponent $p$ measures local smoothness on a
+continuous scale rather than simply counting derivatives. When $p$ is a positive
+integer and $k = p - 1$, this condition follows, on a convex neighborhood, from an
+appropriate bound on the derivatives of order $p$.
 
-Let $m \le k$ and suppose the target is a derivative of order $m$, with $m = 0$ meaning the
-function itself. Assuming the design density and the conditional variance of the response
-are both bounded away from zero and infinity nearby, Stone's theorem states that
+Let $m \le k$ and suppose the target is a derivative of order $m$, with $m = 0$
+corresponding to the function value itself. Under regularity conditions on the design
+density and response distribution, Stone shows that the optimal uniform pointwise rate is
 
 $$
-n^{-r}, \qquad r = \frac{p - m}{2p + d},
+n^{-r}, \qquad r = \frac{p - m}{2p + d}.
 $$
 
-is the optimal rate of convergence, meaning both that some estimator attains it and that no
-sequence of estimators attains a faster rate uniformly over $\Theta$. The theorem is proved
-for two models, an unknown regression function and an unknown density, and gives the same
-rate for both, which is why one statement covers everything on these pages.
+Optimal here has a precise minimax meaning. There are estimators that attain this rate
+uniformly over the function class, while no sequence of estimators can converge uniformly
+over the class at a strictly faster rate. Stone proves the result for an unknown regression
+function and obtains an analogous result for density estimation.
 
-A twice differentiable function estimated directly puts $p = 2$, $k = 1$ and $m = 0$, giving
-$r = 2/(4+d)$, precisely the rate our estimator achieves. It is worth knowing what Stone
-uses to prove the rate achievable. For the regression model he fits, by least squares on a
-shrinking neighborhood of the evaluation point, a polynomial of degree $k$, which is exactly
-the local polynomial estimator of the [next page](regression.md). For the density model he
-uses a kernel estimator instead. Either way the rate is not merely a bound our estimators
-happen to meet; it is attained by them.
+Our twice continuously differentiable setting corresponds locally to $p = 2$, $k = 1$
+and $m = 0$, giving
 
-Writing out a few values makes the situation vivid.
+$$
+r = \frac{2}{4+d}.
+$$
 
-| Covariates $d$ | Optimal rate | Sample matching $n = 100$ in one dimension |
+This is the same rate obtained from the bias-variance calculation above. For regression,
+Stone establishes achievability using a polynomial least-squares fit over a shrinking
+neighborhood, a local polynomial estimator of the kind introduced on the
+[next page](regression.md). For density estimation he uses a suitably chosen kernel
+estimator. These rates are therefore not peculiar to the calculations above. They attain
+the optimal rate permitted by the smoothness class.
+
+Writing out a few values makes the effect of dimension vivid.
+
+| Covariates $d$ | Optimal rate | $n$ giving the same asymptotic rate factor as $n=100$ for $d=1$ |
 | --- | --- | --- |
 | 1 | $n^{-2/5}$ | 100 |
 | 2 | $n^{-1/3}$ | 251 |
 | 5 | $n^{-2/9}$ | 3,981 |
 | 10 | $n^{-1/7}$ | 398,107 |
 
-The right-hand column solves $n_d^{-2/(4+d)} = 100^{-2/5}$ for $n_d$, giving
-$n_d = 100^{(4+d)/5}$, the sample we would need in $d$ dimensions to match the accuracy that
-100 observations give us in one. The growth is punishing, and inside the smoothness
-class Stone assumes there is no way around it, since his result bounds every estimator
-rather than describing any one of them.
+The right-hand column equates only the dimension-dependent rate terms,
 
-What can be done is to leave that class. Assuming the function is additive across
-coordinates, or depends on only a few linear combinations of them, or on only a handful of
-the covariates, each restores a rate governed by a smaller effective dimension than $d$. The
-last of those is the one KernelJax gets without being asked, and
-[Bandwidth selection](selection.md) shows how.
+$$
+n_d^{-2/(4+d)} = 100^{-2/5},
+$$
 
-The intuition behind this *curse of dimensionality* is geometric. We estimate at $x$ using
-observations near $x$, but a cube capturing a fraction $q$ of a uniform sample in $d$
-dimensions has side length $q^{1/d}$, which tends to 1 as $d$ grows for any fixed $q$. A
-neighborhood holding 1 percent of the sample in ten dimensions spans 63 percent of the range
-of every coordinate. Local averaging stops being local.
+which gives
 
-This table is worth keeping in mind. It is the backdrop against which the ability to discard
-uninformative variables automatically, which we meet in
-[Bandwidth selection](selection.md), becomes so valuable.
+$$
+n_d = 100^{(4+d)/5}.
+$$
+
+The comparison ignores constants and should therefore be read as an illustration of
+asymptotic scaling rather than an exact finite-sample equivalence. Even so, the growth is
+punishing. Within Stone's smoothness class there is no estimator that avoids this
+dimension dependence.
+
+What can be done is to impose additional structure. If the function is additive across
+coordinates, depends on only a few linear combinations of them, or depends on only a
+subset of the covariates, the relevant rate can instead be governed by a smaller effective
+dimension. The last of these is particularly relevant to KernelJax, since bandwidth
+selection can effectively smooth out uninformative variables, as discussed in
+[Bandwidth selection](selection.md).
+
+The intuition behind this *curse of dimensionality* is geometric. In a uniform
+$d$-dimensional unit cube, a hypercube containing a fraction $q$ of the volume has side
+length $q^{1/d}$. For $q = 0.01$ and $d = 10$,
+
+$$
+0.01^{1/10} \approx 0.63,
+$$
+
+so a neighborhood containing just 1 percent of the sample spans about 63 percent of the
+range of every coordinate. Local averaging rapidly stops being very local.
+
+This is the backdrop against which the ability to discard uninformative variables
+automatically becomes so valuable.
 
 ## Where next
 

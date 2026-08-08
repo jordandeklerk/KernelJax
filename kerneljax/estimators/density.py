@@ -143,6 +143,7 @@ def density(
     --------
     local_poly : Fit a local polynomial regression of mixed-type data.
     cdf : Estimate a mixed-type cumulative distribution.
+    cdensity : Estimate a conditional probability density.
     summary : Measure how well a fitted estimator describes the sample it was fit on.
     select_bandwidth : Select a bandwidth by minimizing a cross-validation criterion.
 

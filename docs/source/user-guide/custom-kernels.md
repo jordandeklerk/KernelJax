@@ -452,7 +452,7 @@ NotImplementedError: Epanechnikov does not implement conv
 The Epanechnikov from [Writing one](#writing-one) has a closed-form self-convolution,
 
 $$
-\tfrac{3}{160}\,(2 - |u|)^3(u^2 + 6|u| + 4), \qquad |u| \le 2.
+\tfrac{3}{160}\,(2 - |u|)^3(u^2 + 6|u| + 4), \quad |u| \le 2.
 $$
 
 One method on a subclass supplies it, and both calls in the first table row open up.
