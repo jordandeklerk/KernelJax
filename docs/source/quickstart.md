@@ -49,18 +49,10 @@ Internally, columns are stored in block order. Continuous columns come first, th
 
 ```python
 colors = ["#482475", "#2d708e", "#2ab07f", "#bddf26"]
-
 fig, ax = plt.subplots()
 for level, color in enumerate(colors):
     mask = educ == level
-    ax.scatter(
-        exper[mask],
-        wage[mask],
-        color=color,
-        s=18,
-        alpha=0.85,
-        label=f"educ {level}",
-    )
+    ax.scatter(exper[mask], wage[mask], color=color, s=18, alpha=0.85, label=f"educ {level}")
 
 ax.set_xlabel("experience (years)")
 ax.set_ylabel("wage")
@@ -153,7 +145,7 @@ region        unordered         0.750000
 educ          ordered           0.036096
 ```
 
-For a continuous variable such as experience, the bandwidth controls the width of the local neighborhood. Larger values pool observations over a wider range; smaller values make the fit more local.
+For a continuous variable such as experience, the bandwidth controls the width of the local neighborhood. Larger values pool observations over a wider range, and smaller values make the fit more local.
 
 Categorical bandwidths have a slightly different interpretation. At one extreme, observations from different categories receive little or no weight. At the other, category membership stops affecting the weights at all.
 
@@ -161,7 +153,6 @@ For the default Aitchison-Aitken kernel used with unordered variables, that uppe
 
 ```python
 bound = kj.AitchisonAitken().upper_bound(4)
-
 print(f"region  lam={fit.bandwidth.lam_uno[0]:.6f}  bound={bound:.6f}")
 print(f"educ    lam={fit.bandwidth.lam_ord[0]:.6f}")
 ```
@@ -190,17 +181,12 @@ Because the model contains three covariates, we cannot draw the entire fitted su
 ```python
 points = kj.grid(data, vary="exper", n=200)
 pred = kj.local_poly(data, wage, fit, at=points, se=True)
-
 exper_grid = points.con[:, 0]
 
 print(
-    f"exper varies over {exper_grid.size} points "
-    f"from {exper_grid[0]:.2f} to {exper_grid[-1]:.2f}"
+    f"exper varies over {exper_grid.size} points from {exper_grid[0]:.2f} to {exper_grid[-1]:.2f}"
 )
-print(
-    f"region pinned at {points.uno[0, 0]}, "
-    f"educ pinned at {points.orde[0, 0]}"
-)
+print(f"region pinned at {points.uno[0, 0]}, educ pinned at {points.orde[0, 0]}")
 ```
 
 ```text
@@ -214,15 +200,7 @@ Passing the fitted object back to `local_poly` reuses its selected bandwidths an
 
 ```python
 fig, ax = plt.subplots()
-
-ax.scatter(
-    exper,
-    wage,
-    s=14,
-    alpha=0.30,
-    color="#8a8f98",
-    label="observations",
-)
+ax.scatter(exper, wage, s=14, alpha=0.30, color="#8a8f98", label="observations")
 
 ax.fill_between(
     exper_grid,
@@ -234,14 +212,7 @@ ax.fill_between(
     label="±2 se",
 )
 
-ax.plot(
-    exper_grid,
-    pred.mean,
-    color="#4c78a8",
-    lw=2.2,
-    label="local linear fit",
-)
-
+ax.plot(exper_grid, pred.mean, color="#4c78a8", lw=2.2, label="local linear fit")
 ax.set_xlabel("experience (years)")
 ax.set_ylabel("wage")
 ax.set_title("Fit at the modal region and median education")
@@ -262,14 +233,7 @@ A local polynomial gives us more than the fitted level. Its slope also provides 
 For this example, that means we can estimate how the expected wage changes with another year of experience at each point along the curve.
 
 ```python
-slope = kj.local_poly(
-    data,
-    wage,
-    fit,
-    at=points,
-    gradient=True,
-)
-
+slope = kj.local_poly(data, wage, fit, at=points, gradient=True)
 estimated = slope.grad[:, 0]
 truth = 0.35 - 2 * 0.008 * exper_grid
 ```
@@ -278,26 +242,9 @@ Because the data are simulated, we can compare the estimated derivative with the
 
 ```python
 fig, ax = plt.subplots()
-
-ax.plot(
-    exper_grid,
-    estimated,
-    color="#e45756",
-    lw=2.2,
-    label="estimated",
-)
-
-ax.plot(
-    exper_grid,
-    truth,
-    ls="--",
-    lw=1.6,
-    color="#8a8f98",
-    label="truth",
-)
-
+ax.plot(exper_grid, estimated, color="#e45756", lw=2.2, label="estimated")
+ax.plot(exper_grid, truth, ls="--", lw=1.6, color="#8a8f98", label="truth")
 ax.axhline(0, lw=0.8, color="#8a8f98", alpha=0.5)
-
 ax.set_xlabel("experience (years)")
 ax.set_ylabel("d wage / d experience")
 ax.set_title("Estimated marginal effect against the truth")
@@ -316,11 +263,7 @@ Regression asks how the conditional mean of a response changes with its covariat
 First, put wage into a `MixedData` object and create a grid over its range.
 
 ```python
-wage_data = kj.MixedData.from_blocks(
-    continuous=wage,
-    names=("wage",),
-)
-
+wage_data = kj.MixedData.from_blocks(continuous=wage, names=("wage",))
 wage_grid = np.linspace(wage.min(), wage.max(), 200)
 wage_points = kj.MixedData.continuous(wage_grid)
 ```
@@ -328,18 +271,8 @@ wage_points = kj.MixedData.continuous(wage_grid)
 A density and CDF differ mainly in the criterion used to select their bandwidths.
 
 ```python
-dens = kj.density(
-    wage_data,
-    "cv_ml",
-    at=wage_points,
-)
-
-dist = kj.cdf(
-    wage_data,
-    "cv_cdf",
-    at=wage_points,
-)
-
+dens = kj.density(wage_data, "cv_ml", at=wage_points)
+dist = kj.cdf(wage_data, "cv_cdf", at=wage_points)
 print(f"density       h={dens.bandwidth.h[0]:.6f}")
 print(f"distribution  h={dist.bandwidth.h[0]:.6f}")
 ```
@@ -351,35 +284,13 @@ distribution  h=0.443713
 
 ```python
 fig, (left, right) = plt.subplots(1, 2, figsize=(9.6, 3.6))
-
-left.hist(
-    wage,
-    bins=30,
-    density=True,
-    color="#8a8f98",
-    alpha=0.35,
-)
-
-left.plot(
-    wage_grid,
-    dens.value,
-    color="#4c78a8",
-    lw=2.2,
-)
-
+left.hist(wage, bins=30, density=True, color="#8a8f98", alpha=0.35)
+left.plot(wage_grid, dens.value, color="#4c78a8", lw=2.2)
 left.set_title("density")
 left.set_xlabel("wage")
-
-right.plot(
-    wage_grid,
-    dist.value,
-    color="#54a24b",
-    lw=2.2,
-)
-
+right.plot(wage_grid, dist.value, color="#54a24b", lw=2.2)
 right.set_title("distribution")
 right.set_xlabel("wage")
-
 fig.tight_layout()
 plt.show()
 ```
@@ -444,13 +355,7 @@ def pay_distribution(years):
         ordered_levels=4,
     )
 
-    return kj.cdensity(
-        data,
-        wage_data,
-        cfit,
-        at_x=pinned,
-        at_y=wage_points,
-    ).value
+    return kj.cdensity(data, wage_data, cfit, at_x=pinned, at_y=wage_points).value
 ```
 
 ```python
@@ -460,28 +365,12 @@ late = pay_distribution(25.0)
 
 ```python
 fig, ax = plt.subplots()
-
-ax.plot(
-    wage_grid,
-    early,
-    color="#4c78a8",
-    lw=2.2,
-    label="5 years",
-)
-
-ax.plot(
-    wage_grid,
-    late,
-    color="#e45756",
-    lw=2.2,
-    label="25 years",
-)
-
+ax.plot(wage_grid, early, color="#4c78a8", lw=2.2, label="5 years")
+ax.plot(wage_grid, late, color="#e45756", lw=2.2, label="25 years")
 ax.set_xlabel("wage")
 ax.set_ylabel("conditional density")
 ax.set_title("Distribution of pay, given experience")
 ax.legend(title="experience")
-
 fig.tight_layout()
 plt.show()
 ```
@@ -509,13 +398,7 @@ We have used `"cv_ls"`, `"cv_ml"`, and `"cv_cdf"` without saying much about the 
 That makes it useful when you want a quick first fit.
 
 ```python
-quick = kj.local_poly(
-    data,
-    wage,
-    "normal_reference",
-    degree=1,
-)
-
+quick = kj.local_poly(data, wage, "normal_reference", degree=1)
 print(f"normal reference  h={quick.bandwidth.h[0]:.6f}")
 print(f"cross validated   h={fit.bandwidth.h[0]:.6f}")
 ```
@@ -540,32 +423,14 @@ y_noise = noise_rng.normal(0, 1, 150)
 ```
 
 ```python
-one_start = kj.local_poly(
-    x_noise,
-    y_noise,
-    "cv_ls",
-    degree=1,
-    n_starts=1,
-)
+one_start = kj.local_poly(x_noise, y_noise, "cv_ls", degree=1, n_starts=1)
+three_starts = kj.local_poly(x_noise, y_noise, "cv_ls", degree=1)
 
-three_starts = kj.local_poly(
-    x_noise,
-    y_noise,
-    "cv_ls",
-    degree=1,
-)
-
-for label, run in [
-    ("1 start", one_start),
-    ("3 starts", three_starts),
-]:
+for label, run in [("1 start", one_start), ("3 starts", three_starts)]:
     s = run.selection
 
     print(
-        f"{label:8s}  "
-        f"h={s.bandwidth.h[0]:8.4f}  "
-        f"criterion={s.value:.6f}  "
-        f"converged={s.converged}"
+        f"{label:8s}  h={s.bandwidth.h[0]:8.4f}  criterion={s.value:.6f}  converged={s.converged}"
     )
 ```
 
@@ -591,11 +456,7 @@ print(
     f"criterion={fit.selection.value:.6f}"
 )
 
-print(
-    f"degree={fit.degree}  "
-    f"r_squared={fit.r_squared:.4f}  "
-    f"residual_se={fit.residual_se:.4f}"
-)
+print(f"degree={fit.degree}  r_squared={fit.r_squared:.4f}  residual_se={fit.residual_se:.4f}")
 ```
 
 ```text
@@ -619,32 +480,11 @@ The central operation is a kernel-weighted contraction. A density contracts the 
 We can reproduce KernelJax's local-constant regression directly.
 
 ```python
-numerator = kj.ksum(
-    data,
-    fit.bandwidth,
-    wage[:, None],
-    at=points,
-)
-
-denominator = kj.ksum(
-    data,
-    fit.bandwidth,
-    at=points,
-)
-
+numerator = kj.ksum(data, fit.bandwidth, wage[:, None], at=points)
+denominator = kj.ksum(data, fit.bandwidth, at=points)
 nadaraya_watson = (numerator / denominator).ravel()
-
-local_constant = kj.local_poly(
-    data,
-    wage,
-    fit.bandwidth,
-    at=points,
-)
-
-gap = abs(
-    nadaraya_watson - local_constant.mean
-).max()
-
+local_constant = kj.local_poly(data, wage, fit.bandwidth, at=points)
+gap = abs(nadaraya_watson - local_constant.mean).max()
 print(f"largest gap to local_poly={gap:.3e}")
 ```
 
@@ -654,27 +494,18 @@ largest gap to local_poly=1.335e-05
 
 These are the same estimator. The small numerical difference comes from float32 arithmetic.
 
-Notice that we passed `fit.bandwidth` rather than `fit`. Passing the full fit would also carry its `degree=1`; passing only the bandwidth causes `local_poly` to use its default degree of zero, giving the local-constant estimator we want to reproduce.
+Notice that we passed `fit.bandwidth` rather than `fit`. Passing the full fit would also carry its `degree=1`, while passing only the bandwidth causes `local_poly` to use its default degree of zero, giving the local-constant estimator we want to reproduce.
 
 The selection criteria themselves are exposed in the same way and remain differentiable.
 
 ```python
 def cv_ls(bandwidth):
-    return kj.cv_ls_regression(
-        data,
-        bandwidth,
-        y=wage,
-        degree=1,
-    )
-
+    return kj.cv_ls_regression(data, bandwidth, y=wage, degree=1)
 
 at_plug_in = jax.grad(cv_ls)(quick.bandwidth)
 at_selected = jax.grad(cv_ls)(fit.bandwidth)
 
-for label, grad in [
-    ("plug-in", at_plug_in),
-    ("selected", at_selected),
-]:
+for label, grad in [("plug-in", at_plug_in), ("selected", at_selected)]:
     print(
         f"{label:9s} "
         f"d/dh={grad.h[0]:+.3e}  "

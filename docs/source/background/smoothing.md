@@ -94,7 +94,7 @@ $$
 Symmetry does two jobs below. It makes $\int u\, k(u)\, du = 0$, which kills the first-order
 term of the expansion, and it lets us replace $k(-v)$ by $k(v)$ after a change of variable.
 A function meeting these requirements with $\mu_2(k) \neq 0$ is a *second-order kernel*.
-Nonnegativity is what keeps $\hat f$ a density; higher-order kernels give it up to buy a
+Nonnegativity is what keeps $\hat f$ a density, and higher-order kernels give it up to buy a
 faster rate, at the price of estimates that can dip below zero. The estimator $k$ produces,
 
 $$
@@ -110,7 +110,7 @@ $R(k) = \int k^2 = 1/(2\sqrt{\pi}) \approx 0.2821$.
 
 There is a pleasant way to read this expression. We are placing a small bump of area $1/n$
 at each observation and adding them up. Where observations cluster the bumps overlap and
-our estimate is large; where they are sparse it is small. The parameter $h$, which we call
+our estimate is large, and where they are sparse it is small. The parameter $h$, which we call
 the *bandwidth*, controls how wide each bump is, and it is to that parameter that we now
 turn.
 
@@ -135,7 +135,7 @@ the evaluation point, so the estimate becomes local. The second says it must not
 fast that the window empties, and the variance calculation will give that condition an exact reading.
 
 Two pieces of notation recur from here on. Writing $a_n = O(b_n)$ means $a_n / b_n$ stays
-bounded, so $a_n$ is at most of the size of $b_n$; writing $a_n = o(b_n)$ means
+bounded, so $a_n$ is at most of the size of $b_n$. Writing $a_n = o(b_n)$ means
 $a_n / b_n \to 0$, so $a_n$ is negligible beside $b_n$. A term recorded as $o(h^2)$ is
 therefore one we may ignore once $h$ is small enough, and the expressions below are exact
 only to the order shown.
@@ -215,7 +215,7 @@ is precisely the statement that it must grow.
 ## Trading bias against variance
 
 Our two expressions point in opposite directions. The bias grows with $h$ and the variance
-shrinks with it. Taking $h$ small leaves us nearly unbiased but wildly variable; taking $h$
+shrinks with it. Taking $h$ small leaves us nearly unbiased but wildly variable, while taking $h$
 large gives a stable estimate biased toward a flat line. To choose between them we need a
 single criterion, and the usual one is the *mean integrated squared error*,
 

@@ -208,7 +208,7 @@ at realistic sample sizes rather than merely in the limit.
 
 Recalling our
 [table of rates](smoothing.md#how-fast-can-we-learn), this is
-worth a great deal. A variable carrying no signal is not merely tolerated; it is removed, so
+worth a great deal. A variable carrying no signal is not merely tolerated but removed, so
 it costs nothing in effective dimension. Including a covariate whose relevance we are unsure
 of is far less dangerous than the table alone would suggest.
 

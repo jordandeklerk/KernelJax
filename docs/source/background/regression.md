@@ -44,7 +44,7 @@ $$
 $$
 
 This is the *Nadaraya-Watson* estimator. It is exactly the weighted average of responses our
-opening intuition suggested, and we did not postulate it; it fell out of substituting
+opening intuition suggested, and we did not postulate it. It fell out of substituting
 density estimates into the definition of a conditional expectation.
 
 That route assumes more than the estimator needs. Writing $m$ as a ratio of integrals
@@ -223,10 +223,10 @@ $$
 \sum_{i=1}^n \ell_i(x) = 1, \quad \sum_{i=1}^n \ell_i(x)\, (X_i - x) = 0 .
 $$
 
-The first says the weights reproduce constants; the second says they reproduce linear
+The first says the weights reproduce constants, and the second says they reproduce linear
 functions exactly. Any $m$ that is exactly linear across the window is therefore estimated
 without bias, conditional on the design and however the covariates are distributed. That is
-a statement about the conditional mean; the noise in the responses is untouched.
+a statement about the conditional mean, and the noise in the responses is untouched.
 
 The variance also follows directly. Because $\hat m_{\mathrm{LL}}$ is linear in the
 responses and the errors are conditionally uncorrelated, and since the weights depend on
@@ -263,7 +263,7 @@ adaptivity*, since the estimator's leading bias does not depend on the design de
 The same argument repairs the boundary, though it is worth being exact about what survives.
 Because the weights reproduce linear functions on whatever data lie inside the window, the
 bias stays $O(h^2)$ right up to the edge, where the local constant fit degrades to $O(h)$.
-The *order* is what carries over; the constant is not. At an edge the equivalent kernel is
+The *order* is what carries over, but the constant is not. At an edge the equivalent kernel is
 truncated to one side, so $\mu_2(k)$ is replaced by the second moment of that truncated
 kernel, which for a Gaussian at a left endpoint is about $-0.752$ rather than $1$. Local
 linear is boundary adaptive in rate, not in constant. That is still enough to make an

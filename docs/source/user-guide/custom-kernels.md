@@ -1,255 +1,200 @@
 # Custom kernels
 
-Every estimator takes a `kernels` argument, a {class}`~kerneljax.KernelSet` holding one kernel per
-column kind. The defaults are a second-order Gaussian for continuous columns,
-Aitchison-Aitken for unordered ones and Li-Racine for ordered ones, and swapping any of them
-changes the smoothing without touching the estimator.
+Every KernelJax estimator accepts a `kernels` argument. It is a {class}`~kerneljax.KernelSet` containing the kernels used for continuous, unordered, and ordered variables.
 
-That substitution is the point of the design, since a kernel travels as an argument rather
-than through a registry, and one you write is held to five requirements, each
-checked at the first call that depends on it. This page writes one kernel and takes it
-through the library, meeting each requirement where it binds, and
-[the requirements at a glance](#the-requirements-at-a-glance) collects them at the end. The
-[Quickstart](../quickstart.md) covers the rest of the API, and
-[Kernel smoothing](../background/smoothing.md) covers what a kernel is doing.
+By default, KernelJax uses a second-order Gaussian kernel for continuous variables, Aitchison-Aitken for unordered variables, and Li-Racine for ordered variables. You can replace any of them without changing the estimator itself.
 
-## Writing one
+A custom kernel does not need to be registered anywhere. Define it, place it in a `KernelSet`, and pass it directly to an estimator.
 
-Subclass the base class for the column kind you are targeting and implement `value`.
-Here is the Epanechnikov kernel, which is optimal in the sense described in
-[Kernel smoothing](../background/smoothing.md#why-the-kernel-hardly-matters).
+This page builds an Epanechnikov kernel first, uses it in regression and density estimation, and then works through the small interface a custom kernel must satisfy to work throughout the library. For the surrounding estimator API, see the [Quickstart](../quickstart.md). For the statistical role of the kernel itself, see [Kernel smoothing](../background/smoothing.md).
+
+## Your first custom kernel
+
+A continuous kernel subclasses {class}`~kerneljax.ContinuousKernel` and implements `value`.
+
+The Epanechnikov kernel is
+
+$$
+k(u) = \frac{3}{4}(1-u^2)\mathbf{1}(|u|\le1).
+$$
+
+Here is the same kernel in KernelJax.
 
 ```python
 import dataclasses
+
 import jax
 import jax.numpy as jnp
 import numpy as np
+
 import kerneljax as kj
 
+@dataclasses.dataclass(frozen=True)
+class Epanechnikov(kj.ContinuousKernel):
+    def value(self, x, y, h):
+        u = (x - y) / h
+        return jnp.where(jnp.abs(u) <= 1.0, 0.75 * (1.0 - u * u), 0.0)
+```
+
+We can use it immediately.
+
+```python
 rng = np.random.default_rng(1)
 x = rng.uniform(size=200)
 y = np.sin(2 * np.pi * x) + rng.normal(0, 0.2, 200)
+kernels = kj.KernelSet(continuous=Epanechnikov())
+epan = kj.local_poly(x, y, "cv_ls", degree=1, kernels=kernels)
+gauss = kj.local_poly(x, y, "cv_ls", degree=1)
+print(f"Epanechnikov  h={epan.bandwidth.h[0]:.6f}  r2={epan.r_squared:.6f}")
+print(f"Gaussian      h={gauss.bandwidth.h[0]:.6f}  r2={gauss.r_squared:.6f}")
 ```
+
+```text
+Epanechnikov  h=0.084645  r2=0.947231
+Gaussian      h=0.036019  r2=0.947953
+```
+
+The numerical bandwidths are different because bandwidth is measured on the scale of the kernel. A larger Epanechnikov bandwidth therefore does not mean that the resulting regression is necessarily smoother.
+
+The two fitted regressions are nearly identical here, which is what we would expect. For ordinary second-order kernels, choosing the bandwidth well generally matters much more than choosing between reasonable kernel shapes.
+
+## What a kernel must satisfy
+
+The `Epanechnikov` class above is already enough for local polynomial regression. More generally, a custom continuous kernel should satisfy a few rules.
+
+* `value(x, y, h)` should operate elementwise and preserve the broadcast shape of its inputs.
+* `value` should return the kernel in standardized $u$-space and should not include its own $1/h$ normalization.
+* The kernel object must be hashable so JAX can use it as a static argument.
+* Kernel values and bandwidth gradients must remain finite wherever KernelJax may evaluate them.
+* When the kernel is used for density or distribution estimation, `value` must integrate to one in $u$-space.
+
+Categorical kernels follow the same general pattern but also define `upper_bound(levels)`.
+
+Additional methods such as `conv`, `cdf`, and `deriv` are optional. You only need to implement them when you use functionality that depends on them.
+
+The rest of this page works through those rules one at a time.
+
+## How `value` is called
+
+For a continuous kernel, `value` is called across all continuous columns at once. Its inputs broadcast as
+
+```text
+x:  (n_eval, 1,       p_con)
+y:  (1,      n_train, p_con)
+h:  broadcast against both
+```
+
+where `p_con` is the number of continuous variables.
+
+The important part is simpler than the shapes make it look.
+
+> Write `value` elementwise and leave one kernel factor per continuous column.
+
+KernelJax multiplies those factors across columns for you. This version is correct.
 
 ```python
 @dataclasses.dataclass(frozen=True)
 class Epanechnikov(kj.ContinuousKernel):
     def value(self, x, y, h):
         u = (x - y) / h
+
         return jnp.where(jnp.abs(u) <= 1.0, 0.75 * (1.0 - u * u), 0.0)
-
-kernels = kj.KernelSet(continuous=Epanechnikov())
-
-epan = kj.local_poly(x, y, "cv_ls", degree=1, kernels=kernels)
-gauss = kj.local_poly(x, y, "cv_ls", degree=1)
-
-print(f"Epanechnikov  h={epan.bandwidth.h[0]:.6f}  r2={epan.r_squared:.6f}")
-print(f"Gaussian      h={gauss.bandwidth.h[0]:.6f}  r2={gauss.r_squared:.6f}")
-print(f"ratio of bandwidths {epan.bandwidth.h[0] / gauss.bandwidth.h[0]:.3f}")
 ```
 
-```text
-Epanechnikov  h=0.084645  r2=0.947231
-Gaussian      h=0.036019  r2=0.947953
-ratio of bandwidths 2.350
-```
-
-The selected bandwidth is more than double what the Gaussian default gives on the same data,
-because the two kernels carry different scales and not because either is smoothing more. The
-canonical bandwidth ratio predicts $2.214$ against the $2.35$ observed, a statement about
-optimal bandwidths rather than selected ones. The fits agree to three digits in $r^2$, which
-is what the section linked above leads you to expect.
-
-The `frozen=True` on the class is load-bearing rather than style. The kernel travels inside a
-{class}`~kerneljax.KernelSet` handed to the compiler as a static argument, so it has to be
-hashable, and an unfrozen `@dataclass` sets `__hash__` to `None`, while a frozen one holding
-a `jax.Array` field fails the moment that field is hashed. Write one and it is refused at
-construction.
-
-```python
-@dataclasses.dataclass
-class Mutable(kj.ContinuousKernel):
-    def value(self, x, y, h):
-        u = (x - y) / h
-        return jnp.where(jnp.abs(u) <= 1.0, 0.75 * (1.0 - u * u), 0.0)
-
-kj.KernelSet(continuous=Mutable())
-```
-
-```text
-TypeError: continuous kernel Mutable is not hashable, so it cannot be a static argument.
-Decorate it with @dataclasses.dataclass(frozen=True), and hold any array field as a tuple of
-floats rather than as a jax.Array.
-```
-
-A plain class without the decorator is hashable and will run, but its instances compare
-unequal, so every fresh instance is a compilation cache miss.
-
-## What `value` receives
-
-A continuous `value` is called once for all continuous columns. It receives `x` broadcasting as
-`(n_eval, 1, p_con)` against `y` of shape `(1, n_train, p_con)`, with a bandwidth broadcast
-against both, so a univariate formula written elementwise is already a product kernel over the
-columns. The library multiplies over the trailing column axis itself, so `value` must leave
-one factor per column in place. A kernel that reduces over that axis, here on data carrying
-two continuous columns, is rejected on the spot.
+This one is not.
 
 ```python
 @dataclasses.dataclass(frozen=True)
 class Reducing(kj.ContinuousKernel):
     def value(self, x, y, h):
         u = (x - y) / h
+
         return jnp.sum(jnp.exp(-0.5 * u * u), axis=-1, keepdims=True)
+```
 
-two_columns = kj.MixedData.continuous(np.column_stack([x, x ** 2]))
+Run it on data with two continuous columns and KernelJax rejects the reduced output.
+
+```python
+two_columns = kj.MixedData.continuous(np.column_stack([x, x**2]))
 wide = kj.Bandwidth(h=jnp.array([0.2, 0.2]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
-
 kj.local_poly(two_columns, y, wide, degree=1, kernels=kj.KernelSet(continuous=Reducing()))
 ```
 
 ```text
-ValueError: Reducing.value returned shape (1, 200, 1), expected (1, 200, 2). A kernel is applied
-elementwise, so it must broadcast against its inputs and must not reduce over any axis.
+ValueError: Reducing.value returned shape (1, 200, 1), expected (1, 200, 2).
+A kernel is applied elementwise, so it must broadcast against its inputs and
+must not reduce over any axis.
 ```
 
-Branching inside `value` goes through `jnp.where` rather than a Python `if`, because an
-`if` asks a whole array which way to go.
+The rule to remember is simple.
+
+> Do not sum or multiply across variables inside `value`.
+
+### Use JAX control flow
+
+Because `value` receives JAX arrays, array-dependent branching should use JAX operations such as `jnp.where` rather than a Python `if`.
+
+This will fail.
 
 ```python
 @dataclasses.dataclass(frozen=True)
 class Branching(kj.ContinuousKernel):
     def value(self, x, y, h):
         u = (x - y) / h
+
         if jnp.abs(u) <= 1.0:
             return 0.75 * (1.0 - u * u)
-        return jnp.zeros_like(u)
 
+        return jnp.zeros_like(u)
+```
+
+```python
 Branching().value(x[:3], 0.0, 0.2)
 ```
 
 ```text
-ValueError: The truth value of an array with more than one element is ambiguous. Use a.any() or
-a.all()
+ValueError: The truth value of an array with more than one element is ambiguous.
+Use a.any() or a.all()
 ```
 
-How many evaluation points arrive at once is the estimator's business, not yours. Written
-elementwise a kernel never notices the difference, which is the reason to write it that way
-rather than to reach for the leading axis.
+The elementwise `jnp.where` version handles both broadcasting and JAX transformations correctly. How many evaluation points arrive at once is the estimator's concern. A well-written kernel should not need to inspect or manipulate the leading axes directly.
 
-Categorical kernels are called once per column, receiving `x` and `y` shaped the same way with
-the column axis dropped, a scalar `lam`, and a `levels` count that arrives as a plain Python
-integer rather than a traced value, so it is safe in Python control flow in a way that `lam` is
-not.
+## Why kernels are frozen dataclasses
 
-The categorical entries are `int32` codes, contiguous and zero based, and for an ordered
-column the code order is the level order, which is what makes `jnp.abs(x - y)` a count of
-levels between two categories. A kernel sees codes, never labels, and
-{func}`~kerneljax.MixedData.from_blocks` rejects codes outside the declared level count, so
-encode labels as `0, ..., levels - 1` before building the data rather than letting stray
-integers pass as codes. It also rejects a degenerate column, so `levels` is always at least
-two and `value` and `upper_bound` may divide by `levels - 1` without guarding.
-
-The argument order is always `value(evaluation_point, training_point)`. Nothing in the library
-assumes the two are interchangeable, so an asymmetric kernel runs end to end without complaint
-and quietly mirrors the estimator if you had the order backwards.
-
-## Selecting with it
-
-The block in [Writing one](#writing-one) already selected a bandwidth, so the kernel has been
-differentiated. Selection drives the criterion's gradient through `value`, and keeping that
-gradient finite is the hardest requirement to see, because `jnp.where` evaluates *both*
-branches and differentiates both. An unsafe expression in the branch that is not taken
-poisons the gradient while leaving the value correct. A sinc kernel is the natural
-illustration, since $u = 0$ occurs on the diagonal of any fit evaluated at its own training
-points, so the guarded branch is always reached.
+The `frozen=True` in the first example is functional rather than stylistic. A `KernelSet` is passed to compiled JAX functions as a static argument, so its kernels must be hashable. A frozen dataclass is the simplest way to get predictable equality and hashing behavior. This class is mutable and therefore not hashable.
 
 ```python
-def unsafe(u):
-    return jnp.where(u == 0.0, 1.0, jnp.sin(u) / u)
-
-def safe(u):
-    nonzero_u = jnp.where(u == 0.0, 1.0, u)
-    return jnp.where(u == 0.0, 1.0, jnp.sin(nonzero_u) / nonzero_u)
-
-unsafe_value, unsafe_grad = jax.value_and_grad(unsafe)(0.0)
-safe_value, safe_grad = jax.value_and_grad(safe)(0.0)
-
-print(f"unsafe  value={unsafe_value:.4f}  d/du={unsafe_grad:.4f}")
-print(f"safe    value={safe_value:.4f}  d/du={safe_grad:.4f}")
-```
-
-```text
-unsafe  value=1.0000  d/du=nan
-safe    value=1.0000  d/du=0.0000
-```
-
-The two agree on the value and disagree on the gradient, so a forward-only check will not
-catch it. Guard the denominator, not just the branch. A kink is fine, the triangular kernel
-selects without complaint, and only a NaN poisons. Built into a kernel and handed to an
-estimator, the unsafe version is refused before the search starts, probed both on the
-diagonal and beyond the support edge, where a clamped square root hides the same mistake.
-
-```python
-@dataclasses.dataclass(frozen=True)
-class Sinc(kj.ContinuousKernel):
+@dataclasses.dataclass
+class Mutable(kj.ContinuousKernel):
     def value(self, x, y, h):
         u = (x - y) / h
-        return jnp.where(u == 0.0, 1.0, jnp.sin(u) / u)
 
-sinc_kernels = kj.KernelSet(continuous=Sinc())
+        return jnp.where(jnp.abs(u) <= 1.0, 0.75 * (1.0 - u * u), 0.0)
 
-kj.local_poly(x, y, "cv_ls", degree=1, kernels=sinc_kernels)
+kj.KernelSet(continuous=Mutable())
 ```
 
 ```text
-ValueError: Sinc.value has a non-finite bandwidth gradient at |x - y| = 0, a separation any
-sample can contain. jnp.where differentiates both branches, so guard the argument inside the
-untaken branch, not just the branch.
+TypeError: continuous kernel Mutable is not hashable, so it cannot be a static
+argument. Decorate it with @dataclasses.dataclass(frozen=True), and hold any
+array field as a tuple of floats rather than as a jax.Array.
 ```
 
-The selector itself does not probe, so calling it directly shows what the probe exists to
-prevent, a search that runs its full budget and produces nothing.
+A plain Python class is technically hashable by identity, but two otherwise identical instances then compare as different objects. Creating a fresh instance can therefore cause an unnecessary JAX compilation cache miss. For custom kernels with configuration, prefer immutable Python values such as floats, integers, strings, and tuples rather than `jax.Array` fields.
 
-```python
-result = kj.select_bandwidth(x, kj.cv_ls_regression, y=y, kernels=sinc_kernels, n_starts=1)
+## Using a custom kernel for density estimation
 
-print(f"h={result.bandwidth.h[0]:.6f}  n_iter={result.n_iter}  "
-      f"converged={result.converged}")
-```
+The Epanechnikov kernel already works for local polynomial regression. Density estimation adds an important requirement. A regression estimator is a ratio of kernel-weighted quantities, so a common multiplicative constant cancels. Density estimation does not have that property.
 
-```text
-h=nan  n_iter=200  converged=False
-```
+For a continuous kernel used in a density, two things must hold.
 
-Reading `converged` is the habit that catches this. A run that exhausts its iteration budget
-and reports `False` has not selected anything, and an estimator handed its bandwidth refuses
-to fit.
+1. `value` must integrate to one in standardized $u$-space.
+2. `value` must not include its own $1/h$ factor.
 
-```python
-kj.local_poly(x, y, result.bandwidth)
-```
-
-```text
-ValueError: every continuous bandwidth must be finite and positive, got h=[nan]. A kernel
-divides by h, so a non-positive or non-finite value produces numbers rather than an error. If
-this came from select_bandwidth, its converged flag will be False.
-```
-
-## Taking it to a density
-
-Nothing so far pinned down the kernel's normalization, neither that it integrates to one
-nor that it carries no $1/h$ of its own, and that is not an oversight. A regression fit is a
-ratio, so a constant factor cancels, and a kernel carrying its own $1/h$ cancels there too. The estimator divides by the bandwidths of the continuous columns exactly
-once itself, which is why `value` is written in $u$ units with no $1/h$ of its own, a
-convention that also governs `conv` and `cdf`. `deriv` is the one exception, differentiating
-with respect to $x$ rather than $u$ and so carrying the chain rule factor.
-
-A density puts real weight on both conventions, and the kernel that just selected for a
-regression selects for a density unchanged.
+KernelJax applies the bandwidth normalization itself. Our Epanechnikov implementation satisfies both conditions.
 
 ```python
 dens = kj.density(x, "cv_ml", kernels=kernels)
-
 print(f"h={dens.bandwidth.h[0]:.6f}")
 ```
 
@@ -257,64 +202,94 @@ print(f"h={dens.bandwidth.h[0]:.6f}")
 h=0.040642
 ```
 
-The first density call is also where normalization is enforced, by integrating `value` at
-two bandwidths, and the first distribution call runs the same two-bandwidth check on `cdf`.
-A kernel returning half the mass draws one error,
+### KernelJax handles the `1/h`
+
+Notice that `value` was written as
+
+```python
+def value(self, x, y, h):
+    u = (x - y) / h
+    return 0.75 * (1.0 - u * u)
+```
+
+rather than
+
+```python
+def value(self, x, y, h):
+    u = (x - y) / h
+    return 0.75 * (1.0 - u * u) / h
+```
+
+KernelJax divides by the continuous bandwidths exactly once when the estimator requires it.
+
+The same convention applies to `value`, `conv`, and `cdf`. The exception is `deriv`, which differentiates with respect to the original evaluation coordinate and therefore carries the corresponding chain-rule factor.
+
+### Normalization is checked when it matters
+
+A regression fit cannot detect a common scaling error because that scale cancels from the ratio. A kernel scaled to half its mass makes the point.
 
 ```python
 @dataclasses.dataclass(frozen=True)
 class HalfMass(kj.ContinuousKernel):
     def value(self, x, y, h):
         return 0.5 * Epanechnikov().value(x, y, h)
+```
 
+This kernel can still produce a regression fit, but its total mass is only one half. Density estimation catches the problem.
+
+```python
 kj.density(x, "cv_ml", kernels=kj.KernelSet(continuous=HalfMass()))
 ```
 
 ```text
-ValueError: HalfMass.value integrates to 0.5000 in u units rather than one, so every density it
-produces is scaled by that factor. A regression fit is a ratio and cancels the constant, which
-is why this only fires from a density.
+ValueError: HalfMass.value integrates to 0.5000 in u units rather than one, so
+every density it produces is scaled by that factor. A regression fit is a ratio
+and cancels the constant, which is why this only fires from a density.
 ```
 
-and a kernel dividing by `h` draws the other, since it is right at one bandwidth and wrong at
-the second.
+KernelJax also checks for a kernel that applies its own bandwidth normalization.
 
 ```python
 @dataclasses.dataclass(frozen=True)
 class SelfNormalizing(kj.ContinuousKernel):
     def value(self, x, y, h):
         return Epanechnikov().value(x, y, h) / h
+```
 
+```python
 kj.density(x, "cv_ml", kernels=kj.KernelSet(continuous=SelfNormalizing()))
 ```
 
 ```text
-ValueError: SelfNormalizing.value integrates to one at h=1 but to 0.5000 at h=2, the signature
-of a kernel carrying its own 1/h factor. Return the kernel in u units with no normalization by
-h, since the estimator divides by h exactly once itself.
+ValueError: SelfNormalizing.value integrates to one at h=1 but to 0.5000 at
+h=2, the signature of a kernel carrying its own 1/h factor. Return the kernel
+in u units with no normalization by h, since the estimator divides by h
+exactly once itself.
 ```
 
-Neither mistake is detectable where you would first look. The half-mass kernel also shifts
-the `cv_ml` criterion by a constant, which moves no minimum, so the checks you would
-naturally run both pass and the density call runs the one that decides it.
+These checks run when a feature first requires the corresponding property rather than imposing every possible requirement on every regression kernel.
 
 ## Categorical kernels
 
-A categorical kernel owes one thing more than a continuous one, a second method
-`upper_bound(levels)`. It is abstract on both categorical base classes, so leaving it out
-fails at instantiation rather than silently. It answers one question. At what value of
-$\lambda$ does this kernel weight every level equally, so that the column stops influencing
-the estimate at all?
+Categorical kernels use the same general extension pattern and add one method,
+`upper_bound(levels)`. Its meaning is important.
 
-That value is a property of the parameterization and not of the data. The Aitchison-Aitken
-kernel reaches it at $(c-1)/c$, as the [background page](../background/mixed-data.md#unordered-categories)
-derives, while the unnormalized variant, which is $1$ on a match and $\lambda$ otherwise,
-reaches it at $\lambda = 1$.
+`upper_bound` returns the value of the smoothing parameter $\lambda$ at which every category receives the same weight. At that point, the variable no longer influences the estimate. That value belongs to the kernel's parameterization, not to the data.
+
+### Unordered categories
+
+For the default Aitchison-Aitken kernel with $c$ categories, complete pooling occurs at
+
+$$
+\lambda = \frac{c-1}{c}.
+$$
+
+Suppose instead we use the simpler parameterization that assigns weight 1 to a match and $\lambda$ otherwise.
 
 ```python
 @dataclasses.dataclass(frozen=True)
 class Plain(kj.UnorderedKernel):
-    """The unnormalized variant, 1 on a match and lam otherwise."""
+    """Weight 1 on a match and lam otherwise."""
 
     def value(self, x, y, lam, levels):
         return jnp.where(x == y, 1.0, lam)
@@ -323,28 +298,36 @@ class Plain(kj.UnorderedKernel):
         return 1.0
 ```
 
+At $\lambda = 1$, every category receives weight 1, so the variable is completely smoothed out. We can compare it with Aitchison-Aitken.
+
 ```python
 rng = np.random.default_rng(0)
 exper = rng.uniform(0, 30, 200)
 region = rng.integers(0, 4, 200)
 wage = 2.0 + 0.1 * exper + region + rng.normal(0, 0.5, 200)
 
-data = kj.MixedData.from_blocks(continuous=exper, unordered=region,
-                                unordered_levels=4, names=("exper", "region"))
-```
+data = kj.MixedData.from_blocks(
+    continuous=exper, unordered=region, unordered_levels=4, names=("exper", "region")
+)
 
-```python
 plain = Plain()
 aitchison = kj.AitchisonAitken()
-
-custom = kj.local_poly(data, wage, "cv_ls", degree=1,
-                       kernels=kj.KernelSet(unordered=plain))
+custom = kj.local_poly(data, wage, "cv_ls", degree=1, kernels=kj.KernelSet(unordered=plain))
 shipped = kj.local_poly(data, wage, "cv_ls", degree=1)
 
-print(f"Plain            lam={custom.bandwidth.lam_uno[0]:.6f}  "
-      f"bound={plain.upper_bound(4):.2f}  r2={custom.r_squared:.6f}")
-print(f"AitchisonAitken  lam={shipped.bandwidth.lam_uno[0]:.6f}  "
-      f"bound={aitchison.upper_bound(4):.2f}  r2={shipped.r_squared:.6f}")
+print(
+    f"Plain            "
+    f"lam={custom.bandwidth.lam_uno[0]:.6f}  "
+    f"bound={plain.upper_bound(4):.2f}  "
+    f"r2={custom.r_squared:.6f}"
+)
+
+print(
+    f"AitchisonAitken  "
+    f"lam={shipped.bandwidth.lam_uno[0]:.6f}  "
+    f"bound={aitchison.upper_bound(4):.2f}  "
+    f"r2={shipped.r_squared:.6f}"
+)
 ```
 
 ```text
@@ -352,31 +335,18 @@ Plain            lam=0.001234  bound=1.00  r2=0.897111
 AitchisonAitken  lam=0.003673  bound=0.75  r2=0.897111
 ```
 
-The two fits agree to six digits, because the normalization the shipped kernel carries is a
-factor common to every level and cancels from a ratio estimator. The smoothing parameters
-differ, because $\lambda$ means a different thing in each. This is why `upper_bound` cannot be
-inherited from anything. Return a bound that is too high and the search walks past complete
-pooling into a region where a *matching* level receives less weight than a non-matching one,
-reporting `converged=True` throughout. Return zero and the search box collapses,
-{func}`~kerneljax.select_bandwidth` returns `nan`, and an estimator refuses to fit at it.
+The fitted regressions agree, while the numerical values of $\lambda$ differ because the two kernels parameterize smoothing differently. That is why each categorical kernel defines its own `upper_bound`.
 
-The bound also fixes where selection begins and where it moves, since a search starts every
-categorical parameter at half of it and the box runs from zero to the bound. The rule of thumb
-{func}`~kerneljax.normal_reference` returns for a categorical column is zero, matching np, but
-zero sits in the flat tail of the transform where a gradient cannot move, so the search starts
-inside the box instead. Two kernels with different bounds are therefore reporting the same smoothing in
-different units, the reading that
-[Bandwidth selection](../background/selection.md#what-cross-validation-buys) sets out.
+Returning the wrong bound can change the search space itself. If it is too large, the optimizer can move beyond complete pooling into a region where matching categories receive less weight than nonmatching ones. If it is too small, valid smoothing levels become inaccessible.
 
-An ordered kernel is written the same way, except that the number of levels between `x` and
-`y` carries the information rather than a match alone. Here is the geometric family, `lam` to
-the power of the level distance, beside the shipped Li-Racine on an education column that
-moves wage.
+### Ordered categories
+
+Ordered kernels have the same interface, except that the distance between category codes carries information. For example, weight can decay geometrically with level distance.
 
 ```python
 @dataclasses.dataclass(frozen=True)
 class Geometric(kj.OrderedKernel):
-    """The unnormalized variant, lam to the number of levels between x and y."""
+    """Weight decays geometrically with level distance."""
 
     def value(self, x, y, lam, levels):
         return lam ** jnp.abs(x - y)
@@ -385,61 +355,54 @@ class Geometric(kj.OrderedKernel):
         return 1.0
 ```
 
-```python
-educ = rng.integers(0, 6, 200)
-wage = wage + 0.25 * educ
+When $\lambda = 0$, only exact matches receive weight. As $\lambda$ approaches 1, increasingly distant levels are pooled together. At $\lambda = 1$, every level receives equal weight.
 
-data = kj.MixedData.from_blocks(continuous=exper, unordered=region, ordered=educ,
-                                unordered_levels=4, ordered_levels=6,
-                                names=("exper", "region", "educ"))
-```
+### What categorical kernels receive
 
-```python
-geometric = Geometric()
-liracine = kj.LiRacine()
-
-custom = kj.local_poly(data, wage, "cv_ls", degree=1,
-                       kernels=kj.KernelSet(ordered=geometric))
-shipped = kj.local_poly(data, wage, "cv_ls", degree=1)
-
-print(f"Geometric  lam_ord={custom.bandwidth.lam_ord[0]:.6f}  "
-      f"bound={geometric.upper_bound(6):.2f}  r2={custom.r_squared:.6f}")
-print(f"LiRacine   lam_ord={shipped.bandwidth.lam_ord[0]:.6f}  "
-      f"bound={liracine.upper_bound(6):.2f}  r2={shipped.r_squared:.6f}")
-```
+Categorical columns are stored as contiguous, zero-based integer codes.
 
 ```text
-Geometric  lam_ord=0.297765  bound=1.00  r2=0.917434
-LiRacine   lam_ord=0.297599  bound=1.00  r2=0.917440
+0, 1, ..., levels - 1
 ```
 
-The two land within a whisker of each other, since both are the same geometric family. The
-shipped kernel computes the power through a guarded form whose gradient survives `lam = 0`,
-the trap [Selecting with it](#selecting-with-it) walks through, while the bare `**` escapes
-it here only because integer codes take an exact integer-power derivative.
+A custom kernel sees those codes rather than the original labels.
 
-## Optional methods
+For ordered variables, code order must therefore match category order. The expression
 
-`value` alone is enough for local polynomial regression at any degree, including
-`gradient=True`, for likelihood cross validation, for `normal_reference`, and for
-{func}`~kerneljax.summary`. The rest of the interface is optional, one capability apiece, and
-each raises `NotImplementedError` naming the kernel and the method, so these are among the few
-failures that announce themselves.
+```python
+jnp.abs(x - y)
+```
 
-| Method | Needed for | Notes |
-| --- | --- | --- |
-| `conv` | `density(..., "cv_ls")`, and `local_poly(..., se=True)` | The self-convolution of `value` |
-| `cdf` | {func}`~kerneljax.cdf` and its criterion | Fires at a fixed bandwidth too, not only in selection |
-| `deriv` | derivative weight tensors, reached through the `op` argument of {func}`~kerneljax.kweights` | Not needed by any estimator |
+then represents the number of levels separating two categories.
 
-`local_poly(..., se=True)` needs `conv` even though nothing in a standard error looks like a
-density, since the variance carries $R(k) = \int k^2$, the self-convolution at zero, and that
-call asks only the continuous kernel. `density(..., "cv_ls")` asks every kernel in the set,
-where a categorical self-convolution is the sum over levels of $k(x, s)\,k(y, s)$.
-{func}`~kerneljax.cdf` asks the continuous and ordered kernels and rejects unordered columns
-outright, the ordered accumulation being the kernel summed over every integer at or below `x`.
+{func}`~kerneljax.MixedData.from_blocks` validates the codes against the declared number of levels and rejects degenerate categorical columns. The `levels` argument arrives as a regular Python integer, so it can safely participate in Python control flow. The smoothing parameter `lam`, by contrast, may be traced by JAX and should be handled with JAX operations.
 
-Ask the value-only kernel for a standard error and the gap announces itself.
+`value` always receives the evaluation point first and the training point second.
+KernelJax does not require kernels to be symmetric. If you intentionally implement an asymmetric kernel, that argument order therefore matters.
+
+## Add capabilities when you need them
+
+`value` is the core interface. By itself it supports the following.
+
+* local polynomial regression at any degree
+* regression gradients through `gradient=True`
+* likelihood cross validation
+* `normal_reference`
+* {func}`~kerneljax.summary`
+
+Other methods enable additional features.
+
+| Method  | Needed for                                                    | Meaning                                              |
+| ------- | ------------------------------------------------------------- | ---------------------------------------------------- |
+| `conv`  | `density(..., "cv_ls")` and `local_poly(..., se=True)`        | Self-convolution of `value`                          |
+| `cdf`   | {func}`~kerneljax.cdf` and its selection criterion            | Integrated kernel                                    |
+| `deriv` | derivative weight tensors through {func}`~kerneljax.kweights` | Derivative with respect to the evaluation coordinate |
+
+If a requested feature needs a method your kernel does not implement, KernelJax raises `NotImplementedError` and names the missing method.
+
+### Adding `conv`
+
+For example, our first Epanechnikov implementation does not provide `conv`. Requesting regression standard errors names the missing method.
 
 ```python
 kj.local_poly(x, y, "cv_ls", degree=1, kernels=kernels, se=True, n_starts=1)
@@ -449,28 +412,31 @@ kj.local_poly(x, y, "cv_ls", degree=1, kernels=kernels, se=True, n_starts=1)
 NotImplementedError: Epanechnikov does not implement conv
 ```
 
-The Epanechnikov from [Writing one](#writing-one) has a closed-form self-convolution,
+For Epanechnikov, the self-convolution has the closed form
 
 $$
-\tfrac{3}{160}\,(2 - |u|)^3(u^2 + 6|u| + 4), \quad |u| \le 2.
+(k * k)(u) = \frac{3}{160}(2 - |u|)^3(u^2 + 6|u| + 4), \quad |u| \le 2.
 $$
 
-One method on a subclass supplies it, and both calls in the first table row open up.
+We can add it in a subclass.
 
 ```python
 @dataclasses.dataclass(frozen=True)
 class EpanechnikovConv(Epanechnikov):
     def conv(self, x, y, h):
         u = jnp.abs(x - y) / h
+
         piece = 3.0 / 160.0 * (2.0 - u) ** 3 * (u * u + 6.0 * u + 4.0)
+
         return jnp.where(u <= 2.0, piece, 0.0)
+```
 
+Now both least squares density bandwidth selection and regression standard errors are available.
+
+```python
 conv_kernels = kj.KernelSet(continuous=EpanechnikovConv())
-
 dens = kj.density(x, "cv_ls", kernels=conv_kernels, n_starts=1)
-fit = kj.local_poly(x, y, "cv_ls", degree=1, kernels=conv_kernels,
-                    se=True, n_starts=1)
-
+fit = kj.local_poly(x, y, "cv_ls", degree=1, kernels=conv_kernels, se=True, n_starts=1)
 print(f"density     h={dens.bandwidth.h[0]:.6f}")
 print(f"regression  mean se={fit.se.mean():.6f}")
 ```
@@ -480,50 +446,139 @@ density     h=0.203672
 regression  mean se=0.043252
 ```
 
-`conv` at zero is $3/5$, the $R(k)$ a standard error consumes, and the `u <= 2.0` support in
-the code is the doubled support the next paragraph warns about truncating.
+One detail is easy to miss. Convolution expands support. If `value` is supported on $|u| \le 1$, its self-convolution is supported on $|u| \le 2$. KernelJax validates `conv` against `value` when a feature first requires it, so truncating the convolution at the original kernel support is caught automatically.
 
-Each of those calls also checks that `conv` genuinely is the self-convolution of `value`,
-`se=True` at zero against $R(k)$ computed from your own `value`, and `density(..., "cv_ls")`
-pointwise across offsets. A self-convolution doubles the support, so for a kernel on
-$|u| \le 1$ `conv` reaches $|u| \le 2$, and truncating it to the kernel's own support is
-caught whatever the kernel's smoothness.
+For regression standard errors, only the continuous kernel's convolution is required. In
+particular, $(k * k)(0) = \int k(u)^2 \, du = R(k)$, which is the kernel quantity entering
+the variance calculation.
 
-## Where a valid kernel can still fail
+## Bandwidth selection and gradients
 
-Two properties of a kernel are not requirements of the interface but do constrain how
-selection behaves with it.
+Optimization-based bandwidth selectors differentiate their criterion through the kernel. That means a custom `value` can return perfectly reasonable numbers and still fail during selection if its gradient contains a `nan`. A common source is `jnp.where`. Consider the sinc function.
 
-Likelihood cross validation takes the log of a leave-one-out density, so it needs that density
-to be strictly positive at every training point. A compactly supported kernel makes a zero
-easy to reach, and in single precision even the Gaussian underflows to exactly zero far enough
-into the tail, so an isolated observation can produce `nan` and a bandwidth that never moves.
-The same applies to a higher-order kernel, which takes negative values by construction and can
-drive the leave-one-out density below zero. Least squares cross validation has no logarithm
-and handles both cases, which is the reason to reach for `cv_ls` rather than `cv_ml` with an
-unusual kernel.
+```python
+def unsafe(u):
+    return jnp.where(u == 0.0, 1.0, jnp.sin(u) / u)
+```
 
-Second, nothing in the package special-cases the Gaussian, but `normal_reference` does read
-an `order` attribute off the continuous kernel and falls back to `2` when there is none, and
-the order sits in the exponent, $n^{-1/(2r + p)}$ for a density. Under a cross-validation
-method a missing `order = 4` moves only the starting point. Under `bw="normal_reference"` it
-is the answer, sixty percent of the bandwidth for a triangular kernel on the data above. And
-the rule of thumb's constants are the Gaussian ones, never rescaled for your kernel, so it
-hands that triangular kernel the same number as the default even though cross validation puts
-the two a factor apart. `normal_reference` is a starting point for an unusual kernel, not a
-bandwidth for one.
+The value at zero looks safe, but the unused branch still contains division by zero. Compare it with a version that guards the argument itself.
 
-## The requirements at a glance
+```python
+def safe(u):
+    nonzero_u = jnp.where(u == 0.0, 1.0, u)
 
-Five requirements, each shown above where it binds.
+    return jnp.where(u == 0.0, 1.0, jnp.sin(nonzero_u) / nonzero_u)
+```
 
-1. Return no $1/h$ factor, in `value`, `conv` and `cdf` alike, with `deriv` the one
-   exception. Enforced at the first density or distribution call.
-2. Be hashable, a frozen dataclass with no array fields. Enforced by
-   {class}`~kerneljax.KernelSet` at construction.
-3. Be elementwise, broadcasting and never reducing. Rejected at the first call that builds
-   kernel weights.
-4. Carry no NaN into the bandwidth gradient. Probed before any selection an estimator runs,
-   with {func}`~kerneljax.select_bandwidth` called directly the one unprobed path.
-5. Integrate to one in $u$ units. Enforced by the same integral that catches the $1/h$
-   factor.
+```python
+unsafe_value, unsafe_grad = jax.value_and_grad(unsafe)(0.0)
+safe_value, safe_grad = jax.value_and_grad(safe)(0.0)
+print(f"unsafe  value={unsafe_value:.4f}  d/du={unsafe_grad:.4f}")
+print(f"safe    value={safe_value:.4f}  d/du={safe_grad:.4f}")
+```
+
+```text
+unsafe  value=1.0000  d/du=nan
+safe    value=1.0000  d/du=0.0000
+```
+
+The forward values agree, but only one implementation has a valid gradient.
+
+The practical rule is simple.
+
+> Guard the unsafe expression itself, not only the branch that returns it.
+
+KernelJax probes custom kernels before estimator-driven bandwidth selection and rejects non-finite bandwidth gradients early. For example, wrap the sinc into a kernel and hand it to selection.
+
+```python
+@dataclasses.dataclass(frozen=True)
+class Sinc(kj.ContinuousKernel):
+    def value(self, x, y, h):
+        u = (x - y) / h
+
+        return jnp.where(u == 0.0, 1.0, jnp.sin(u) / u)
+```
+
+```python
+sinc_kernels = kj.KernelSet(continuous=Sinc())
+kj.local_poly(x, y, "cv_ls", degree=1, kernels=sinc_kernels)
+```
+
+```text
+ValueError: Sinc.value has a non-finite bandwidth gradient at |x - y| = 0, a
+separation any sample can contain. jnp.where differentiates both branches, so
+guard the argument inside the untaken branch, not just the branch.
+```
+
+Nondifferentiability by itself is not necessarily a problem. Compactly supported kernels can contain kinks. What matters for optimization is that the values and gradients encountered by the selector remain finite.
+
+## Choose a compatible bandwidth selector
+
+A kernel can satisfy the KernelJax interface and still be a poor match for a particular bandwidth-selection criterion.
+
+### Likelihood cross validation needs positive densities
+
+Likelihood cross validation contains a term of the form
+
+$$
+\log \hat f_{-i}(X_i).
+$$
+
+The leave-one-out density therefore needs to remain strictly positive at every training observation. A compactly supported kernel can easily assign zero density to an isolated observation. Even a Gaussian kernel can underflow to exactly zero far enough into its tail in single precision.
+
+Higher-order kernels introduce another problem. Because they can take negative values, a leave-one-out density estimate can itself become nonpositive.
+
+In those situations, least squares cross validation does not take a logarithm and is
+generally the safer criterion, so select with `"cv_ls"` rather than `"cv_ml"`. The
+distinction is statistical rather than an interface restriction.
+
+### Treat `normal_reference` cautiously
+
+`normal_reference` is also worth treating carefully with unusual custom kernels. For continuous kernels it reads an `order` attribute when one is available and otherwise assumes order 2. Cross-validation methods mainly use the resulting rule as an initialization. With
+
+```python
+bw = "normal_reference"
+```
+
+the plug-in bandwidth itself is the final answer.
+
+The reference-rule constants are based on the Gaussian rather than recalibrated for an arbitrary custom kernel. For that reason, `normal_reference` is best treated as a quick starting point or rough benchmark when using a substantially different kernel rather than as a kernel-specific optimal bandwidth.
+
+## Common mistakes
+
+Most custom-kernel problems come from a small set of interface mismatches, and each row of this table is demonstrated earlier on the page with the error it produces.
+
+| Mistake                              | Symptom                                            | Fix                                                     |
+| ------------------------------------ | -------------------------------------------------- | ------------------------------------------------------- |
+| Reducing across columns in `value`   | `returned shape (1, 200, 1), expected (1, 200, 2)` | Return one factor per column and let KernelJax multiply |
+| Including `1/h` in `value`           | `integrates to one at h=1 but to 0.5000 at h=2`    | Return the kernel in standardized $u$-space             |
+| Python `if` on array values          | `The truth value of an array ... is ambiguous`     | Branch with `jnp.where`                                 |
+| Guarding only the visible branch     | `non-finite bandwidth gradient` at zero separation | Guard the argument inside the untaken branch            |
+| A wrong categorical `upper_bound`    | The search misses or overshoots complete pooling   | Return the $\lambda$ where all levels weigh equally     |
+| Mutable or array-valued state        | `not hashable, so it cannot be a static argument`  | Freeze the dataclass and hold plain Python values       |
+
+## Interface at a glance
+
+A custom kernel only needs to implement the parts of the interface required by the estimators you intend to use.
+
+| Requirement                                          | Applies to                                             | When it matters                              |
+| ---------------------------------------------------- | ------------------------------------------------------ | -------------------------------------------- |
+| `value` is elementwise and preserves broadcast shape | all kernels                                            | every estimator                              |
+| kernel object is hashable                            | all kernels                                            | `KernelSet` construction and JAX compilation |
+| finite values and bandwidth gradients                | all kernels used in selection                          | optimization-based bandwidth selection       |
+| no `1/h` inside `value`                              | continuous kernels                                     | density and distribution estimation          |
+| `value` integrates to one in $u$-space               | continuous kernels                                     | density and distribution estimation          |
+| `upper_bound(levels)`                                | categorical kernels                                    | categorical bandwidth selection              |
+| `conv`                                               | kernels used where convolution is required             | density LS-CV and regression standard errors |
+| `cdf`                                                | continuous and ordered kernels used for CDF estimation | `cdf` and its criterion                      |
+| `deriv`                                              | kernels used for derivative weight tensors             | `kweights(..., op=...)`                      |
+
+The shortest useful custom continuous kernel is therefore still just the following.
+
+```python
+@dataclasses.dataclass(frozen=True)
+class MyKernel(kj.ContinuousKernel):
+    def value(self, x, y, h): ...
+```
+
+Start there. Add `conv`, `cdf`, or `deriv` only when the estimator you are building needs them.
