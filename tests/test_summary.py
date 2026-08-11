@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from kerneljax.estimators.conditional import cdensity, cdist
+from kerneljax.estimators.conditional import cdensity, cdist, cquantile
 from kerneljax.estimators.density import density
 from kerneljax.estimators.regression import local_poly
 from kerneljax.kernels import KernelSet
@@ -211,3 +211,14 @@ def test_a_conditional_fit_evaluated_elsewhere_is_refused(conditional_sample, co
 
     with pytest.raises(ValueError, match="training points"):
         summary(fit)
+
+
+def test_a_quantile_summary_names_its_level(conditional_sample, conditional_bandwidth):
+    x, y = conditional_sample
+
+    report = summary(cquantile(x, y, conditional_bandwidth, tau=0.75))
+    text = repr(report)
+
+    assert "tau 0.75" in text
+    assert "Response" in text
+    assert "Conditioning" in text

@@ -26,7 +26,7 @@ from kerneljax.kernels.sets import _resolve_kernels
 from kerneljax.ksum import kweights
 from kerneljax.typing import Array, ScalarFloat
 
-__all__ = ["ConditionalFit", "cdensity", "cdist"]
+__all__ = ["ConditionalFit", "QuantileFit", "cdensity", "cdist", "cquantile"]
 
 
 @partial(
@@ -67,6 +67,47 @@ class ConditionalFit:
     y_spec: ColumnSpec | None = None
     n_train: int = 0
     target: Literal["density", "distribution"] = "density"
+
+
+@partial(
+    jax.tree_util.register_dataclass,
+    data_fields=["value", "bandwidth", "selection"],
+    meta_fields=["tau", "kernels", "x_spec", "y_spec", "n_train"],
+)
+@dataclasses.dataclass(frozen=True)
+class QuantileFit:
+    """Result of a conditional quantile regression.
+
+    Attributes
+    ----------
+    value : Float[Array, " n_eval"]
+        The conditional quantile at each evaluation point, clamped to the
+        observed response range where the distribution never crosses ``tau``.
+    bandwidth : ConditionalBandwidth
+        The bandwidth used to produce ``value``, one block per sample.
+    tau : float
+        The quantile level the fit inverts at. Static.
+    selection : SelectionResult, optional
+        The selection that produced ``bandwidth``, or ``None`` when the
+        bandwidth was supplied directly.
+    kernels : KernelSet
+        Kernel families the estimate was produced with. Static.
+    x_spec : ColumnSpec, optional
+        Column metadata of the conditioning sample. Static.
+    y_spec : ColumnSpec, optional
+        Column metadata of the response sample. Static.
+    n_train : int
+        Number of training points. Static.
+    """
+
+    value: Float[Array, " n_eval"]
+    bandwidth: ConditionalBandwidth
+    tau: float = 0.5
+    selection: SelectionResult | None = None
+    kernels: KernelSet = dataclasses.field(default_factory=KernelSet)
+    x_spec: ColumnSpec | None = None
+    y_spec: ColumnSpec | None = None
+    n_train: int = 0
 
 
 def cdensity(
@@ -220,6 +261,137 @@ def cdist(
     summary : Measure how well a fitted estimator describes the sample it was fit on.
     """
     return _conditional(x, y, bw, at_x, at_y, kernels, n_starts, "distribution")
+
+
+def cquantile(
+    x: MixedData | Array,
+    y: MixedData | Array,
+    bw: ConditionalBandwidth | SelectionResult | ConditionalFit | str,
+    *,
+    tau: float = 0.5,
+    at_x: MixedData | Array | None = None,
+    kernels: KernelSet | None = None,
+    n_starts: int = 3,
+    n_iter: int = 64,
+) -> QuantileFit:
+    r"""Estimate the conditional quantile of ``y`` given ``x``.
+
+    The quantile inverts the conditional distribution by bisection over the
+    observed response range,
+
+    .. math::
+
+        \hat q_\tau(x) = \inf \{\, y : \hat F(y \mid x) \ge \tau \,\},
+
+    with evaluation points whose distribution never reaches ``tau`` clamped
+    to the nearest end of that range, following np.
+
+    Parameters
+    ----------
+    x : MixedData or Array
+        Conditioning sample.
+    y : MixedData or Array
+        Response sample, a single continuous column.
+    bw : ConditionalBandwidth, SelectionResult, ConditionalFit or str
+        The bandwidth, a selection to reuse, an earlier fit, or the name of
+        a selection rule, either ``"cv_ls"`` or ``"normal_reference"``. The
+        bandwidth is the one a conditional distribution uses.
+    tau : float
+        The quantile level in the open unit interval. Static.
+    at_x : MixedData or Array, optional
+        Conditioning evaluation points. Defaults to ``x``.
+    kernels : KernelSet, optional
+        Kernel families, one per column kind. Static.
+    n_starts : int
+        Number of restarts when a rule name asks for a search. Static.
+    n_iter : int
+        Bisection steps. The default halves the response range past any
+        useful floating point resolution. Static.
+
+    Returns
+    -------
+    QuantileFit
+        The quantile estimates, the bandwidth behind them, and the selection
+        if one ran.
+
+    Examples
+    --------
+    Estimate a conditional median that tracks its covariate. The fitted
+    median follows the response upward as the covariate grows.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import numpy as np
+           ...: import kerneljax as kj
+           ...:
+           ...: rng = np.random.default_rng(0)
+           ...: x = rng.uniform(0.0, 1.0, 200)
+           ...: y = 2.0 * x + rng.normal(0.0, 0.3, 200)
+           ...: fit = kj.cquantile(x, y, "normal_reference", at_x=np.array([0.2, 0.5, 0.8]))
+           ...: print(np.asarray(fit.value))
+
+    See Also
+    --------
+    cdist : Estimate a conditional cumulative distribution.
+    cdensity : Estimate a conditional probability density.
+    """
+    if not 0.0 < tau < 1.0:
+        raise ValueError(f"tau must lie strictly between 0 and 1, got {tau}")
+
+    kernels = _resolve_kernels(kernels, getattr(bw, "kernels", None))
+    x_train, y_train = _as_points(x), _as_points(y)
+
+    if x_train.n != y_train.n:
+        raise ValueError(
+            f"x and y must describe the same sample, got {x_train.n} conditioning rows "
+            f"against {y_train.n} response rows"
+        )
+    if y_train.spec.p != 1 or y_train.spec.p_con != 1:
+        raise ValueError("cquantile inverts a scalar distribution, so y must be a single continuous column")
+
+    bandwidth, selection = _resolve_conditional(x_train, y_train, bw, kernels, n_starts, "distribution")
+    _require_usable(bandwidth.x)
+    _require_usable(bandwidth.y)
+
+    x_eval = x_train if at_x is None else _as_points(at_x, x_train.spec)
+    weights_x = kweights(x_train, bandwidth.x, at=x_eval, kernels=kernels)
+    weight_sum = jnp.sum(weights_x, axis=1)
+
+    def distribution(candidates: Array) -> Array:
+        accumulated = kweights(y_train, bandwidth.y, at=MixedData.continuous(candidates), kernels=kernels, op=Op.CDF)
+        return jnp.sum(weights_x * accumulated, axis=1) / weight_sum
+
+    y_min = jnp.min(y_train.con[:, 0])
+    y_max = jnp.max(y_train.con[:, 0])
+    low = jnp.full(x_eval.n, y_min)
+    high = jnp.full(x_eval.n, y_max)
+
+    at_low = distribution(low)
+    at_high = distribution(high)
+    clamp_low = at_low >= tau
+    clamp_high = at_high < tau
+
+    def halve(_: int, bracket: tuple[Array, Array]) -> tuple[Array, Array]:
+        low, high = bracket
+        mid = 0.5 * (low + high)
+        upper = distribution(mid) >= tau
+        return jnp.where(upper, low, mid), jnp.where(upper, mid, high)
+
+    low, high = jax.lax.fori_loop(0, n_iter, halve, (low, high))
+    value = 0.5 * (low + high)
+    value = jnp.where(clamp_low, y_min, jnp.where(clamp_high, y_max, value))
+
+    return QuantileFit(
+        value=value,
+        tau=tau,
+        bandwidth=bandwidth,
+        selection=selection,
+        kernels=kernels,
+        x_spec=x_train.spec,
+        y_spec=y_train.spec,
+        n_train=x_train.n,
+    )
 
 
 def cv_ml_conditional(

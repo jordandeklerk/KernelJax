@@ -391,6 +391,7 @@ We have used `"cv_ls"`, `"cv_ml"`, and `"cv_cdf"` without saying much about the 
 | {func}`~kerneljax.cdf`        | `"cv_cdf"`, `"normal_reference"`           |
 | {func}`~kerneljax.cdensity`   | `"cv_ml"`, `"normal_reference"`            |
 | {func}`~kerneljax.cdist`      | `"cv_ls"`, `"normal_reference"`            |
+| {func}`~kerneljax.cquantile`  | `"cv_ls"`, `"normal_reference"`            |
 
 `"normal_reference"` is the inexpensive option. It uses a closed-form plug-in rule based on a normal reference model and does not run numerical optimization.
 

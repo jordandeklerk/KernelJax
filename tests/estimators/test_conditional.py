@@ -9,8 +9,10 @@ from kerneljax.bandwidth import ConditionalBandwidth
 from kerneljax.data import MixedData
 from kerneljax.estimators.conditional import (
     ConditionalFit,
+    QuantileFit,
     cdensity,
     cdist,
+    cquantile,
     cv_ls_conditional,
     cv_ml_conditional,
 )
@@ -236,6 +238,79 @@ def test_least_squares_differentiates_through_both_blocks(conditional_sample, co
     assert bool(jnp.all(jnp.isfinite(grad.x.h)))
     assert bool(jnp.all(jnp.isfinite(grad.y.h)))
     assert bool(jnp.all(jnp.isfinite(grad.x.lam_uno)))
+
+
+def test_the_quantile_inverts_the_distribution(conditional_sample, conditional_bandwidth):
+    x, y = conditional_sample
+
+    fit = cquantile(x, y, conditional_bandwidth, tau=0.5)
+    at_quantile = cdist(x, y, conditional_bandwidth, at_x=x, at_y=fit.value[:, None]).value
+
+    assert bool(jnp.all(jnp.abs(at_quantile - 0.5) < 1e-3))
+
+
+def test_quantiles_increase_with_tau(conditional_sample, conditional_bandwidth):
+    x, y = conditional_sample
+
+    lower = cquantile(x, y, conditional_bandwidth, tau=0.25).value
+    middle = cquantile(x, y, conditional_bandwidth, tau=0.5).value
+    upper = cquantile(x, y, conditional_bandwidth, tau=0.75).value
+
+    assert bool(jnp.all(lower <= middle))
+    assert bool(jnp.all(middle <= upper))
+
+
+def test_extreme_levels_clamp_to_the_response_range(conditional_sample, conditional_bandwidth):
+    x, y = conditional_sample
+
+    bottom = cquantile(x, y, conditional_bandwidth, tau=0.001).value
+    top = cquantile(x, y, conditional_bandwidth, tau=0.999).value
+
+    assert bool(jnp.all(bottom >= jnp.min(y.con)))
+    assert bool(jnp.all(top <= jnp.max(y.con)))
+
+
+def test_a_distribution_fit_hands_its_bandwidth_to_the_quantile(conditional_sample):
+    x, y = conditional_sample
+
+    selected = cdist(x, y, "cv_ls", n_starts=1)
+    fit = cquantile(x, y, selected, tau=0.5)
+
+    assert fit.bandwidth is selected.bandwidth
+    assert fit.selection is selected.selection
+
+
+def test_likelihood_selection_is_refused_for_quantiles(conditional_sample):
+    x, y = conditional_sample
+
+    with pytest.raises(ValueError, match="oversmoothing"):
+        cquantile(x, y, "cv_ml")
+
+
+def test_a_multicolumn_response_is_refused_by_the_quantile(conditional_sample, conditional_bandwidth):
+    x, y = conditional_sample
+    wide = MixedData.continuous(jnp.column_stack([y.con[:, 0], y.con[:, 0]]))
+
+    with pytest.raises(ValueError, match="single continuous column"):
+        cquantile(x, wide, conditional_bandwidth)
+
+
+def test_a_level_outside_the_unit_interval_is_refused(conditional_sample, conditional_bandwidth):
+    x, y = conditional_sample
+
+    with pytest.raises(ValueError, match="strictly between"):
+        cquantile(x, y, conditional_bandwidth, tau=1.0)
+
+
+def test_the_quantile_fit_is_a_pytree(conditional_sample, conditional_bandwidth):
+    x, y = conditional_sample
+
+    fit = cquantile(x, y, conditional_bandwidth)
+    leaves = jax.tree_util.tree_leaves(fit)
+
+    assert isinstance(fit, QuantileFit)
+    assert all(isinstance(leaf, jax.Array) for leaf in leaves)
+    assert fit.tau == 0.5
 
 
 def _pin_first(x, rows):

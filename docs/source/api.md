@@ -17,9 +17,10 @@ The entry points. Each takes training data and a bandwidth rule, and returns a f
    kerneljax.cdf
    kerneljax.cdensity
    kerneljax.cdist
+   kerneljax.cquantile
 ```
 
-Once we've ran an estimator, we can pass the fit object to {func}`~kerneljax.summary`. It reads a density, regression or conditional fit back and renders the report shown throughout these docs.
+Once we've ran an estimator, we can pass the fit object to {func}`~kerneljax.summary`. It reads a density, regression, conditional or quantile fit back and renders the report shown throughout these docs.
 
 ```{eval-rst}
 .. autosummary::
@@ -129,6 +130,7 @@ so {func}`~kerneljax.local_poly` returns a {class}`~kerneljax.LocalPolyFit` and
    kerneljax.DensityFit
    kerneljax.DistributionFit
    kerneljax.ConditionalFit
+   kerneljax.QuantileFit
    kerneljax.SelectionResult
    kerneljax.Summary
    kerneljax.WLS

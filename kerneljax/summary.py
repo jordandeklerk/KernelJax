@@ -11,7 +11,7 @@ import jax.numpy as jnp
 
 from kerneljax.bandwidth import Bandwidth
 from kerneljax.data import ColumnSpec, Kind
-from kerneljax.estimators.conditional import ConditionalFit
+from kerneljax.estimators.conditional import ConditionalFit, QuantileFit
 from kerneljax.estimators.density import DensityFit
 from kerneljax.estimators.regression import LocalPolyFit
 from kerneljax.kernels import KernelSet
@@ -144,7 +144,7 @@ class Summary:
         return "\n".join(rows)
 
 
-def summary(fit: ConditionalFit | DensityFit | LocalPolyFit) -> Summary:
+def summary(fit: ConditionalFit | DensityFit | LocalPolyFit | QuantileFit) -> Summary:
     r"""Measure how well a fitted estimator describes the sample it was fit on.
 
     For a regression the report carries the squared correlation between fitted
@@ -205,7 +205,7 @@ def summary(fit: ConditionalFit | DensityFit | LocalPolyFit) -> Summary:
     local_poly : Fit a local polynomial regression.
     density : Estimate a mixed-type probability density.
     """
-    if isinstance(fit, ConditionalFit):
+    if isinstance(fit, (ConditionalFit, QuantileFit)):
         return _conditional_summary(fit)
 
     fitted = fit.mean if isinstance(fit, LocalPolyFit) else fit.value
@@ -327,7 +327,7 @@ def _column_rows(spec: ColumnSpec, bandwidth: Bandwidth) -> list[str]:
     return [f"  {n:<14}{k.name.lower():<14}{_number(widths[i]):>12}" for i, (n, k) in enumerate(paired)]
 
 
-def _conditional_summary(fit: ConditionalFit) -> Summary:
+def _conditional_summary(fit: ConditionalFit | QuantileFit) -> Summary:
     """Report a conditional estimate."""
     if fit.x_spec is None or fit.y_spec is None:
         raise ValueError("summary needs a conditional fit that recorded the column metadata of both samples")
@@ -339,10 +339,15 @@ def _conditional_summary(fit: ConditionalFit) -> Summary:
         )
 
     selection = fit.selection
-    density = fit.target == "density"
+    if isinstance(fit, QuantileFit):
+        label = f"Conditional quantile estimate at tau {fit.tau:g}"
+        density = False
+    else:
+        label = f"Conditional {fit.target} estimate"
+        density = fit.target == "density"
 
     return Summary(
-        label=f"Conditional {fit.target} estimate",
+        label=label,
         method=None if selection is None else _criterion_name(selection.criterion),
         degree=None,
         n_train=fit.n_train,

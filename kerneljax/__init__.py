@@ -4,12 +4,14 @@ from kerneljax.bandwidth import Bandwidth, ConditionalBandwidth, SelectionResult
 from kerneljax.data import MixedData, grid, quantile_grid
 from kerneljax.estimators import (
     ConditionalFit,
+    QuantileFit,
     DensityFit,
     DistributionFit,
     LocalPolyFit,
     cdensity,
     cdf,
     cdist,
+    cquantile,
     density,
     local_poly,
 )
@@ -58,6 +60,7 @@ __all__ = [
     "LocalPolyFit",
     "MixedData",
     "OrderedKernel",
+    "QuantileFit",
     "RegressionCriterion",
     "SelectionResult",
     "Summary",
@@ -67,6 +70,7 @@ __all__ = [
     "cdensity",
     "cdf",
     "cdist",
+    "cquantile",
     "cv_cdf_distribution",
     "cv_ls_density",
     "cv_ls_regression",
