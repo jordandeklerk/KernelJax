@@ -88,9 +88,11 @@ where `p_con` is the number of continuous variables.
 
 The important part is simpler than the shapes make it look.
 
-> Write `value` elementwise and leave one kernel factor per continuous column.
+```{tip}
+Write `value` elementwise and leave one kernel factor per continuous column. KernelJax multiplies those factors across columns for you.
+```
 
-KernelJax multiplies those factors across columns for you. This version is correct.
+This version is correct.
 
 ```python
 @dataclasses.dataclass(frozen=True)
@@ -126,9 +128,9 @@ A kernel is applied elementwise, so it must broadcast against its inputs and
 must not reduce over any axis.
 ```
 
-The rule to remember is simple.
-
-> Do not sum or multiply across variables inside `value`.
+```{important}
+Do not sum or multiply across variables inside `value`.
+```
 
 ### Use JAX control flow
 
@@ -484,9 +486,9 @@ safe    value=1.0000  d/du=0.0000
 
 The forward values agree, but only one implementation has a valid gradient.
 
-The practical rule is simple.
-
-> Guard the unsafe expression itself, not only the branch that returns it.
+```{important}
+Guard the unsafe expression itself, not only the branch that returns it.
+```
 
 KernelJax probes custom kernels before estimator-driven bandwidth selection and rejects non-finite bandwidth gradients early. For example, wrap the sinc into a kernel and hand it to selection.
 

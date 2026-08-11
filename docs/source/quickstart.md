@@ -371,7 +371,6 @@ ax.set_xlabel("wage")
 ax.set_ylabel("conditional density")
 ax.set_title("Distribution of pay, given experience")
 ax.legend(title="experience")
-fig.tight_layout()
 plt.show()
 ```
 

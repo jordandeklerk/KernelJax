@@ -439,11 +439,9 @@ nan value     h = 0.1081  value = nan     n_iter = 200  converged = False
 
 The two failures look very different. With a bad gradient, the objective value can remain finite even while the optimizer moves to an invalid bandwidth. With a bad objective value, the bandwidth can look completely ordinary because the solver never found a usable step and returned the starting point.
 
-The practical rule is simple.
-
-> Read `bandwidth`, `value`, `n_iter`, and `converged` together.
-
-A plausible bandwidth by itself is not evidence of a successful solve.
+```{important}
+Read `bandwidth`, `value`, `n_iter`, and `converged` together. A plausible bandwidth by itself is not evidence of a successful solve.
+```
 
 ## Where the search starts
 
@@ -525,7 +523,7 @@ Most custom-criterion problems come from a small number of interface mismatches,
 
 A custom criterion is any JAX-compatible callable with this general shape.
 
-```python
+```text
 criterion(train, bandwidth, *, kernels=None, chunk=None, **data) -> scalar
 ```
 
