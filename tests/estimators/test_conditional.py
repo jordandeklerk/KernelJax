@@ -2,11 +2,18 @@
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 from kerneljax.bandwidth import ConditionalBandwidth
 from kerneljax.data import MixedData
-from kerneljax.estimators.conditional import ConditionalFit, cdensity, cdist, cv_ml_conditional
+from kerneljax.estimators.conditional import (
+    ConditionalFit,
+    cdensity,
+    cdist,
+    cv_ls_conditional,
+    cv_ml_conditional,
+)
 from kerneljax.ksum import kweights
 
 
@@ -151,6 +158,81 @@ def test_selection_differentiates_through_both_blocks(conditional_sample, condit
     grad = jax.grad(lambda bw: cv_ml_conditional(x, y, bw))(conditional_bandwidth)
 
     assert isinstance(grad, ConditionalBandwidth)
+    assert bool(jnp.all(jnp.isfinite(grad.x.h)))
+    assert bool(jnp.all(jnp.isfinite(grad.y.h)))
+    assert bool(jnp.all(jnp.isfinite(grad.x.lam_uno)))
+
+
+def test_least_squares_matches_a_dense_reimplementation(conditional_sample, conditional_bandwidth):
+    x, y = conditional_sample
+    n = x.n
+
+    got = float(cv_ls_conditional(x, y, conditional_bandwidth))
+
+    grid = np.quantile(np.asarray(y.con[:, 0]), np.linspace(0.0, 1.0, 100))
+    weights_x = np.asarray(kweights(x, conditional_bandwidth.x))
+    accumulated = np.asarray(kweights(y, conditional_bandwidth.y, at=MixedData.continuous(grid), op="cdf"))
+    total = 0.0
+    for i in range(n):
+        w = weights_x[i].copy()
+        w[i] = 0.0
+        for g in range(100):
+            f = float(np.dot(w, accumulated[g]) / w.sum())
+            total += (float(y.con[i, 0] <= grid[g]) - f) ** 2
+
+    assert got == pytest.approx(total / (n * 100), rel=1e-5)
+
+
+def test_a_distribution_selects_under_least_squares(conditional_sample):
+    x, y = conditional_sample
+
+    fit = cdist(x, y, "cv_ls", n_starts=1)
+
+    assert fit.selection is not None
+    assert bool(jnp.isfinite(fit.selection.value))
+    assert bool(jnp.all(jnp.isfinite(fit.value)))
+
+
+def test_least_squares_beats_its_own_starting_point(conditional_sample):
+    x, y = conditional_sample
+
+    fit = cdist(x, y, "cv_ls", n_starts=1)
+    start = cdist(x, y, "normal_reference").bandwidth
+
+    assert float(fit.selection.value) <= float(cv_ls_conditional(x, y, start))
+
+
+def test_an_explicit_grid_of_the_quantiles_matches_the_default(conditional_sample, conditional_bandwidth):
+    x, y = conditional_sample
+
+    grid = jnp.quantile(y.con, jnp.linspace(0.0, 1.0, 100), axis=0)
+    explicit = cv_ls_conditional(x, y, conditional_bandwidth, y_grid=grid)
+    default = cv_ls_conditional(x, y, conditional_bandwidth)
+
+    assert float(explicit) == pytest.approx(float(default))
+
+
+def test_least_squares_is_refused_for_a_density(conditional_sample):
+    x, y = conditional_sample
+
+    with pytest.raises(ValueError, match="selects for cdist"):
+        cdensity(x, y, "cv_ls")
+
+
+def test_a_categorical_response_needs_an_explicit_grid(conditional_sample, conditional_bandwidth):
+    x, _ = conditional_sample
+    codes = np.asarray(x.uno[:, 0])
+    y = MixedData.from_blocks(ordered=codes, ordered_levels=3)
+
+    with pytest.raises(ValueError, match="y_grid"):
+        cv_ls_conditional(x, y, conditional_bandwidth)
+
+
+def test_least_squares_differentiates_through_both_blocks(conditional_sample, conditional_bandwidth):
+    x, y = conditional_sample
+
+    grad = jax.grad(lambda bw: cv_ls_conditional(x, y, bw))(conditional_bandwidth)
+
     assert bool(jnp.all(jnp.isfinite(grad.x.h)))
     assert bool(jnp.all(jnp.isfinite(grad.y.h)))
     assert bool(jnp.all(jnp.isfinite(grad.x.lam_uno)))

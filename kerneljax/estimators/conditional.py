@@ -174,10 +174,11 @@ def cdist(
     y : MixedData or Array
         Response sample, with the same number of rows as ``x``.
     bw : ConditionalBandwidth, SelectionResult, ConditionalFit or str
-        The bandwidth, a selection to reuse, an earlier fit, or
-        ``"normal_reference"``. Likelihood selection is refused here because
-        the likelihood of a CDF value rewards oversmoothing without bound,
-        so select under :func:`cdensity` and hand its fit in.
+        The bandwidth, a selection to reuse, an earlier fit, or the name of
+        a selection rule, either ``"cv_ls"`` or ``"normal_reference"``.
+        Likelihood selection is refused here because the likelihood of a CDF
+        value rewards oversmoothing without bound, which is why np offers no
+        such method either.
     at_x : MixedData or Array, optional
         Conditioning evaluation points. Defaults to ``x``.
     at_y : MixedData or Array, optional
@@ -260,6 +261,70 @@ def cv_ml_conditional(
     return -jnp.mean(jnp.log(held_out))
 
 
+def cv_ls_conditional(
+    x_train: MixedData,
+    y_train: MixedData,
+    bandwidth: ConditionalBandwidth,
+    *,
+    kernels: KernelSet | None = None,
+    y_grid: MixedData | Array | None = None,
+    n_grid: int = 100,
+) -> ScalarFloat:
+    r"""Score a conditional bandwidth by least squares on the indicator.
+
+    The held-out conditional distribution is compared with the indicator of
+    the observed response across a grid of response values,
+
+    .. math::
+
+        \mathrm{CV}(h, \lambda) = \frac{1}{n G} \sum_{i=1}^{n} \sum_{g=1}^{G}
+            \bigl( \mathbf{1}(Y_i \le y_g)
+            - \hat F_{-i}(y_g \mid X_i) \bigr)^2 .
+
+    Unlike a likelihood, this loss is proper for a distribution function, so
+    it is the criterion behind ``cdist(x, y, "cv_ls")``.
+
+    Parameters
+    ----------
+    x_train : MixedData
+        Conditioning sample.
+    y_train : MixedData
+        Response sample.
+    bandwidth : ConditionalBandwidth
+        The bandwidth to score.
+    kernels : KernelSet, optional
+        Kernel families, one per column kind. Static.
+    y_grid : MixedData or Array, optional
+        Response values the indicator is compared on. Defaults to ``n_grid``
+        per column quantiles of the response, which requires a fully
+        continuous response.
+    n_grid : int
+        Size of the default quantile grid, matching np's ``ngrid``. Static.
+
+    Returns
+    -------
+    ScalarFloat
+        The criterion value, smaller being better.
+
+    References
+    ----------
+    .. [1] Li, Q., Lin, J., & Racine, J. S. (2013). "Optimal bandwidth
+           selection for nonparametric conditional distribution and quantile
+           functions." Journal of Business & Economic Statistics, 31, 57-65.
+    """
+    kernels = KernelSet() if kernels is None else kernels
+    grid = _response_grid(y_train, y_grid, n_grid)
+
+    weights_x = kweights(x_train, bandwidth.x, kernels=kernels)
+    accumulated = kweights(y_train, bandwidth.y, at=grid, kernels=kernels, op=Op.CDF)
+
+    keep = 1.0 - jnp.eye(x_train.n)
+    masked = weights_x * keep
+    held_out = (masked @ accumulated.T) / jnp.sum(masked, axis=1, keepdims=True)
+
+    return jnp.mean((_indicator(y_train, grid) - held_out) ** 2)
+
+
 def select_conditional_bandwidth(
     x: MixedData | Array,
     y: MixedData | Array,
@@ -267,13 +332,15 @@ def select_conditional_bandwidth(
     kernels: KernelSet | None = None,
     solver: Callable[..., tuple[Array, ScalarFloat, Array, Array]] | None = None,
     n_starts: int = 3,
+    method: Literal["cv_ml", "cv_ls"] = "cv_ml",
 ) -> SelectionResult:
-    """Select a conditional bandwidth by minimizing the leave-one-out likelihood."""
+    """Select a conditional bandwidth by held-out likelihood or least squares."""
     from kerneljax.selection.optimize import _multistart, lbfgs
 
     kernels = KernelSet() if kernels is None else kernels
     solver = lbfgs if solver is None else solver
     x_train, y_train = _as_points(x), _as_points(y)
+    criterion = cv_ml_conditional if method == "cv_ml" else cv_ls_conditional
 
     transform = _conditional_transform(x_train, y_train, kernels)
     start = _conditional_reference(x_train, y_train, kernels, search=True)
@@ -281,9 +348,9 @@ def select_conditional_bandwidth(
 
     def objective(z: Array) -> ScalarFloat:
         bandwidth = transform.from_unconstrained(z)
-        return cv_ml_conditional(x_train, y_train, bandwidth, kernels=kernels)
+        return criterion(x_train, y_train, bandwidth, kernels=kernels)
 
-    return _multistart(objective, transform, z0, solver, n_starts, cv_ml_conditional, kernels)
+    return _multistart(objective, transform, z0, solver, n_starts, criterion, kernels)
 
 
 def _conditional(
@@ -387,17 +454,24 @@ def _resolve_conditional(
     if bw == "normal_reference":
         return _conditional_reference(x_train, y_train, kernels, search=False), None
 
-    if bw != "cv_ml":
-        raise ValueError(f"bw must be 'cv_ml' or 'normal_reference', got {bw!r}")
+    if bw not in ("cv_ml", "cv_ls"):
+        raise ValueError(f"bw must be 'cv_ml', 'cv_ls' or 'normal_reference', got {bw!r}")
 
-    if target == "distribution":
+    if bw == "cv_ml" and target == "distribution":
         raise ValueError(
             "cv_ml cannot select a bandwidth for a conditional distribution, since the "
-            "likelihood of a CDF value rewards oversmoothing without bound. Select under "
-            "cdensity and hand its fit to cdist, or supply a ConditionalBandwidth"
+            "likelihood of a CDF value rewards oversmoothing without bound. Select with "
+            "cv_ls, reuse a cdensity fit, or supply a ConditionalBandwidth"
         )
 
-    selection = select_conditional_bandwidth(x_train, y_train, kernels=kernels, n_starts=n_starts)
+    if bw == "cv_ls" and target == "density":
+        raise ValueError(
+            "cv_ls scores the conditional distribution against the response indicator, "
+            "so it selects for cdist. Select a conditional density with cv_ml"
+        )
+
+    method = cast(Literal["cv_ml", "cv_ls"], bw)
+    selection = select_conditional_bandwidth(x_train, y_train, kernels=kernels, n_starts=n_starts, method=method)
     return cast(ConditionalBandwidth, selection.bandwidth), selection
 
 
@@ -415,3 +489,28 @@ def _conditional_transform(x_train: MixedData, y_train: MixedData, kernels: Kern
         x=BandwidthTransform(spec=x_train.spec, kernels=kernels),
         y=BandwidthTransform(spec=y_train.spec, kernels=kernels),
     )
+
+
+def _response_grid(y_train: MixedData, y_grid: MixedData | Array | None, n_grid: int) -> MixedData:
+    """Build the response values the indicator is compared on."""
+    if y_grid is not None:
+        return _as_points(y_grid, y_train.spec)
+    if y_train.spec.p_uno or y_train.spec.p_ord:
+        raise ValueError(
+            "the default quantile grid needs a fully continuous response, so pass the "
+            "response values to compare on through y_grid"
+        )
+    probs = jnp.linspace(0.0, 1.0, n_grid)
+    return MixedData.continuous(jnp.quantile(y_train.con, probs, axis=0))
+
+
+def _indicator(y_train: MixedData, grid: MixedData) -> Array:
+    """Compare every response with every grid point."""
+    if y_train.spec.p_uno:
+        raise ValueError("an unordered response has no ordering for the indicator to use")
+    below = jnp.ones((y_train.n, grid.n), dtype=y_train.con.dtype if y_train.spec.p_con else None)
+    if y_train.spec.p_con:
+        below = below * jnp.all(y_train.con[:, None, :] <= grid.con[None, :, :], axis=-1)
+    if y_train.spec.p_ord:
+        below = below * jnp.all(y_train.orde[:, None, :] <= grid.orde[None, :, :], axis=-1)
+    return below

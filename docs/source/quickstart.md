@@ -378,7 +378,7 @@ plt.show()
 
 The distribution at 25 years of experience is shifted toward higher wages relative to the distribution at 5 years. Unlike the regression, which summarizes this change through the conditional mean, the density lets us see how the entire distribution moves.
 
-`cdist` estimates the corresponding conditional distribution function with the same general interface. It refuses likelihood selection, since the likelihood of a CDF value rewards oversmoothing without bound, so select under `cdensity` as we did here and hand the fit to `cdist`.
+`cdist` estimates the corresponding conditional distribution function with the same general interface. It refuses likelihood selection, since the likelihood of a CDF value rewards oversmoothing without bound, and selects with `"cv_ls"` instead, a least squares criterion scored against the response indicator. A fit selected under `cdensity` can also be handed to `cdist` directly, as we did here.
 
 ## Choosing a bandwidth selector
 
@@ -390,7 +390,7 @@ We have used `"cv_ls"`, `"cv_ml"`, and `"cv_cdf"` without saying much about the 
 | {func}`~kerneljax.density`    | `"cv_ml"`, `"cv_ls"`, `"normal_reference"` |
 | {func}`~kerneljax.cdf`        | `"cv_cdf"`, `"normal_reference"`           |
 | {func}`~kerneljax.cdensity`   | `"cv_ml"`, `"normal_reference"`            |
-| {func}`~kerneljax.cdist`      | `"normal_reference"`                       |
+| {func}`~kerneljax.cdist`      | `"cv_ls"`, `"normal_reference"`            |
 
 `"normal_reference"` is the inexpensive option. It uses a closed-form plug-in rule based on a normal reference model and does not run numerical optimization.
 
