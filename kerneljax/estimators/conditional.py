@@ -81,9 +81,9 @@ def cdensity(
 ) -> ConditionalFit:
     r"""Estimate the conditional density of ``y`` given ``x``.
 
-    The estimate is the ratio of a joint density to a marginal one, which
-    reduces to the response kernel averaged under weights that the
-    conditioning sample normalizes,
+    Implements the conditional density estimator of [1]_ as the ratio of a
+    joint density to a marginal one, which reduces to the response kernel
+    averaged under weights that the conditioning sample normalizes,
 
     .. math::
 
@@ -112,6 +112,30 @@ def cdensity(
     -------
     ConditionalFit
         The estimate, the bandwidth behind it, and the selection if one ran.
+
+    Examples
+    --------
+    Estimate the density of a response that tracks its covariate, with the
+    bandwidth chosen by likelihood cross validation. The density is high at
+    response values the covariate makes likely and vanishes elsewhere.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import numpy as np
+           ...: import kerneljax as kj
+           ...:
+           ...: rng = np.random.default_rng(0)
+           ...: x = rng.normal(0.0, 1.0, 200)
+           ...: y = x + rng.normal(0.0, 0.4, 200)
+           ...: fit = kj.cdensity(x, y, "cv_ml", at_x=np.array([-1.0, -1.0, 1.0]), at_y=np.array([-1.0, 1.0, 1.0]))
+           ...: print(np.asarray(fit.value))
+
+    See Also
+    --------
+    cdist : Estimate a conditional cumulative distribution.
+    density : Estimate a mixed-type probability density.
+    summary : Measure how well a fitted estimator describes the sample it was fit on.
 
     References
     ----------
@@ -150,8 +174,10 @@ def cdist(
     y : MixedData or Array
         Response sample, with the same number of rows as ``x``.
     bw : ConditionalBandwidth, SelectionResult, ConditionalFit or str
-        The bandwidth, a selection to reuse, an earlier fit, or the name of
-        a selection rule, either ``"cv_ml"`` or ``"normal_reference"``.
+        The bandwidth, a selection to reuse, an earlier fit, or
+        ``"normal_reference"``. Likelihood selection is refused here because
+        the likelihood of a CDF value rewards oversmoothing without bound,
+        so select under :func:`cdensity` and hand its fit in.
     at_x : MixedData or Array, optional
         Conditioning evaluation points. Defaults to ``x``.
     at_y : MixedData or Array, optional
@@ -165,6 +191,32 @@ def cdist(
     -------
     ConditionalFit
         The estimate, the bandwidth behind it, and the selection if one ran.
+
+    Examples
+    --------
+    Select a bandwidth under the conditional density, then reuse it to read
+    the distribution of the response at a cut. Nearly all of the mass sits
+    below zero when the covariate is negative and almost none when it is
+    positive.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import numpy as np
+           ...: import kerneljax as kj
+           ...:
+           ...: rng = np.random.default_rng(0)
+           ...: x = rng.normal(0.0, 1.0, 200)
+           ...: y = x + rng.normal(0.0, 0.4, 200)
+           ...: fit = kj.cdensity(x, y, "cv_ml")
+           ...: F = kj.cdist(x, y, fit, at_x=np.array([-1.0, 1.0]), at_y=np.zeros(2))
+           ...: print(np.asarray(F.value))
+
+    See Also
+    --------
+    cdensity : Estimate a conditional probability density.
+    cdf : Estimate a mixed-type cumulative distribution.
+    summary : Measure how well a fitted estimator describes the sample it was fit on.
     """
     return _conditional(x, y, bw, at_x, at_y, kernels, n_starts, "distribution")
 
@@ -175,7 +227,6 @@ def cv_ml_conditional(
     bandwidth: ConditionalBandwidth,
     *,
     kernels: KernelSet | None = None,
-    target: Literal["density", "distribution"] = "density",
 ) -> ScalarFloat:
     r"""Score a conditional bandwidth by leave-one-out likelihood.
 
@@ -197,8 +248,6 @@ def cv_ml_conditional(
         The bandwidth to score.
     kernels : KernelSet, optional
         Kernel families, one per column kind. Static.
-    target : {"density", "distribution"}
-        Which estimate to score. Static.
 
     Returns
     -------
@@ -207,7 +256,7 @@ def cv_ml_conditional(
     """
     kernels = KernelSet() if kernels is None else kernels
     fold = jnp.arange(x_train.n)
-    held_out = _evaluate(x_train, y_train, x_train, y_train, bandwidth, kernels, target, fold=fold)
+    held_out = _evaluate(x_train, y_train, x_train, y_train, bandwidth, kernels, "density", fold=fold)
     return -jnp.mean(jnp.log(held_out))
 
 
@@ -218,7 +267,6 @@ def select_conditional_bandwidth(
     kernels: KernelSet | None = None,
     solver: Callable[..., tuple[Array, ScalarFloat, Array, Array]] | None = None,
     n_starts: int = 3,
-    target: Literal["density", "distribution"] = "density",
 ) -> SelectionResult:
     """Select a conditional bandwidth by minimizing the leave-one-out likelihood."""
     from kerneljax.selection.optimize import _multistart, lbfgs
@@ -233,7 +281,7 @@ def select_conditional_bandwidth(
 
     def objective(z: Array) -> ScalarFloat:
         bandwidth = transform.from_unconstrained(z)
-        return cv_ml_conditional(x_train, y_train, bandwidth, kernels=kernels, target=target)
+        return cv_ml_conditional(x_train, y_train, bandwidth, kernels=kernels)
 
     return _multistart(objective, transform, z0, solver, n_starts, cv_ml_conditional, kernels)
 
@@ -342,7 +390,14 @@ def _resolve_conditional(
     if bw != "cv_ml":
         raise ValueError(f"bw must be 'cv_ml' or 'normal_reference', got {bw!r}")
 
-    selection = select_conditional_bandwidth(x_train, y_train, kernels=kernels, n_starts=n_starts, target=target)
+    if target == "distribution":
+        raise ValueError(
+            "cv_ml cannot select a bandwidth for a conditional distribution, since the "
+            "likelihood of a CDF value rewards oversmoothing without bound. Select under "
+            "cdensity and hand its fit to cdist, or supply a ConditionalBandwidth"
+        )
+
+    selection = select_conditional_bandwidth(x_train, y_train, kernels=kernels, n_starts=n_starts)
     return cast(ConditionalBandwidth, selection.bandwidth), selection
 
 

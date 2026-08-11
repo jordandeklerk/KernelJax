@@ -42,8 +42,14 @@ naturally into the wider JAX ecosystem.
 
 ## Features
 
-- Density, cumulative distribution, and local polynomial regression over samples
-  mixing continuous, unordered categorical, and ordered categorical columns.
+- Estimators for samples mixing continuous, unordered categorical, and ordered
+  categorical columns.
+  - [Density](kerneljax/estimators/density.py) and
+    [cumulative distribution](kerneljax/estimators/distribution.py) estimation.
+  - [Conditional density and distribution](kerneljax/estimators/conditional.py) of a
+    response given mixed covariates.
+  - [Local polynomial regression](kerneljax/estimators/regression.py) with
+    derivatives and pointwise standard errors.
 - Bandwidths and categorical smoothing parameters selected jointly from the data by
   least squares or likelihood cross validation, a corrected AIC, or a closed-form
   plug-in rule.
@@ -72,7 +78,6 @@ import kerneljax as kj
 rng = np.random.default_rng(1)
 x = rng.uniform(size=200)
 y = np.sin(2 * np.pi * x) + rng.normal(0, 0.2, 200)
-
 fit = kj.local_poly(x, y, "cv_ls", degree=1)
 print(kj.summary(fit))
 ```
@@ -116,7 +121,6 @@ class Epanechnikov(kj.ContinuousKernel):
         return jnp.where(jnp.abs(u) <= 1.0, 0.75 * (1.0 - u * u), 0.0)
 
 epan = kj.local_poly(x, y, "cv_ls", degree=1, kernels=kj.KernelSet(continuous=Epanechnikov()))
-
 print(f"Epanechnikov  h={epan.bandwidth.h[0]:.6f}  r2={epan.r_squared:.6f}")
 print(f"Gaussian      h={fit.bandwidth.h[0]:.6f}  r2={fit.r_squared:.6f}")
 ```
@@ -146,7 +150,6 @@ class AbsoluteDeviation:
 
 squared = kj.select_bandwidth(x, kj.RegressionCriterion(method="cv_ls", degree=1), y=y)
 absolute = kj.select_bandwidth(x, AbsoluteDeviation(degree=1), y=y)
-
 print(f"squared error       h = {squared.bandwidth.h[0]:.4f}")
 print(f"absolute deviation  h = {absolute.bandwidth.h[0]:.4f}")
 ```

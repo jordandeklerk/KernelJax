@@ -115,6 +115,24 @@ def test_an_unknown_rule_name_is_refused(conditional_sample):
         cdensity(x, y, "cv_ls")
 
 
+def test_likelihood_selection_is_refused_for_a_distribution(conditional_sample):
+    x, y = conditional_sample
+
+    with pytest.raises(ValueError, match="oversmoothing"):
+        cdist(x, y, "cv_ml")
+
+
+def test_a_density_selection_carries_into_a_distribution(conditional_sample):
+    x, y = conditional_sample
+
+    fit = cdensity(x, y, "cv_ml", n_starts=1)
+    carried = cdist(x, y, fit)
+
+    assert carried.bandwidth is fit.bandwidth
+    assert bool(jnp.all(carried.value >= 0.0))
+    assert bool(jnp.all(carried.value <= 1.0))
+
+
 def test_the_fit_is_a_pytree_carrying_static_metadata(conditional_sample, conditional_bandwidth):
     x, y = conditional_sample
 

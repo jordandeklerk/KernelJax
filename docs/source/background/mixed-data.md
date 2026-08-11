@@ -32,7 +32,7 @@ eight times what the full sample would support. Looking back at our
 [table of rates](smoothing.md#how-fast-can-we-learn), this is
 not a comfortable position.
 
-The insight of Aitchison and Aitken (1976) is that the trade we already accepted for
+The insight of [Aitchison and Aitken (1976)](https://doi.org/10.1093/biomet/63.3.413) is that the trade we already accepted for
 continuous variables is available here too. Instead of discarding observations from other
 categories, we can *downweight* them. An observation from a neighboring region still tells
 us something about how wages vary with experience, and using it at reduced weight buys us
@@ -83,7 +83,7 @@ from the fitted value and is unnecessary, and a simpler variant is often used,
 
 $$
 L_\lambda(x, X_i) = \begin{cases} 1 & x = X_i \\ \lambda & x \neq X_i \end{cases}
-\qquad \text{with } \lambda \in [0, 1],
+\quad \text{with } \lambda \in [0, 1],
 $$
 
 which reaches complete smoothing at $\lambda = 1$ rather than at $(c-1)/c$ and needs no level
@@ -95,8 +95,8 @@ normalization that a regression discards.
 
 When the levels *are* ordered, as with an education level or a rating scale, the unordered
 kernel discards information by giving every non-matching level the same weight. We should
-prefer adjacent levels to count for more than distant ones. Wang and van Ryzin (1981)
-proposed
+prefer adjacent levels to count for more than distant ones.
+[Wang and van Ryzin (1981)](https://doi.org/10.1093/biomet/68.1.301) proposed
 
 $$
 L_\lambda(x, X_i) = \begin{cases}
@@ -123,12 +123,13 @@ therefore never lets go of an ordered variable, however large $\lambda$ grows, a
 $\lambda = 1$ exactly it does not smooth the variable away so much as annihilate the estimate,
 every weight being zero at once.
 
-The variant KernelJax uses by default repairs this. Li and Racine (2007) handle matching and
+The variant KernelJax uses by default repairs this. [Li and Racine (2007)](https://press.princeton.edu/books/hardcover/9780691121611/nonparametric-econometrics) handle
+matching and
 non-matching levels with a single expression,
 
 $$
 L_\lambda(x, X_i) = \frac{1 - \lambda}{1 + \lambda}\, \lambda^{|x - X_i|},
-\qquad \lambda \in [0, 1),
+\quad \lambda \in [0, 1),
 $$
 
 whose relative weights are $\lambda^{|x - X_i|}$ with no exception carved out for a match. As
@@ -180,8 +181,8 @@ on them would impose exactly the functional form we are trying to avoid.
 
 ## What the smoothing buys
 
-The asymptotic theory for the local constant version of this estimator is due to Racine and
-Li (2004), and it is worth stating carefully because it contains the entire justification for
+The asymptotic theory for the local constant version of this estimator is due to
+[Racine and Li (2004)](https://doi.org/10.1016/S0304-4076(03)00157-X), and it is worth stating carefully because it contains the entire justification for
 the approach.
 
 Two conventions come with the theorem. It is stated for a single $h$ shared by the $p$
@@ -259,7 +260,7 @@ the cross-validation objective gives $\lambda_0 = B_2 h_0^2 / (2 B_3)$ for const
 $B_2, B_3$ depending on the design, and solving for the pair yields
 
 $$
-h_0 = c_1\, n^{-1/(4+p)}, \qquad \lambda_0 = c_2\, n^{-2/(4+p)} .
+h_0 = c_1\, n^{-1/(4+p)}, \quad \lambda_0 = c_2\, n^{-2/(4+p)} .
 $$
 
 So the optimal smoothing parameter of a relevant categorical variable goes to zero at twice
