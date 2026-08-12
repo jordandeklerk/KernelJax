@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from kerneljax.estimators.conditional import cdensity, cdist, cquantile
+from kerneljax.estimators.conditional import cdensity, cdist, cmode, cquantile
 from kerneljax.estimators.density import density
 from kerneljax.estimators.regression import local_poly
 from kerneljax.kernels import KernelSet
@@ -222,3 +222,13 @@ def test_a_quantile_summary_names_its_level(conditional_sample, conditional_band
     assert "tau 0.75" in text
     assert "Response" in text
     assert "Conditioning" in text
+
+
+def test_a_mode_summary_reports_classification(categorical_response):
+    x, y, bandwidth = categorical_response
+
+    report = summary(cmode(x, y, bandwidth))
+    text = repr(report)
+
+    assert "Conditional mode estimate" in text
+    assert "Correct classification" in text

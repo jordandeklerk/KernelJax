@@ -892,3 +892,18 @@ def conditional_bandwidth():
         x=Bandwidth(h=jnp.array([0.55]), lam_uno=jnp.array([0.25]), lam_ord=jnp.zeros(0)),
         y=Bandwidth(h=jnp.array([0.35]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0)),
     )
+
+
+@pytest.fixture
+def categorical_response():
+    rng = np.random.default_rng(7)
+    n = 60
+    score = rng.normal(size=n)
+    group = np.clip(np.digitize(score + rng.normal(0, 0.6, n), [-0.7, 0.7]), 0, 2)
+    x = MixedData.continuous(score)
+    y = MixedData.from_blocks(unordered=group, unordered_levels=3)
+    bandwidth = ConditionalBandwidth(
+        x=Bandwidth(h=jnp.array([0.4]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0)),
+        y=Bandwidth(h=jnp.zeros(0), lam_uno=jnp.array([0.25]), lam_ord=jnp.zeros(0)),
+    )
+    return x, y, bandwidth
