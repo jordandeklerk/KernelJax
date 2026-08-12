@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import dataclasses
-from functools import partial
 from typing import Literal, cast
 
-import jax
 import jax.numpy as jnp
-from jaxtyping import Float
 
 from kerneljax.bandwidth import Bandwidth, SelectionResult, _require_usable, normal_reference
-from kerneljax.data import ColumnSpec, MixedData, _as_points
+from kerneljax.data import MixedData, _as_points
+from kerneljax.estimators.fit import DensityFit
 from kerneljax.kernels import KernelSet
 from kerneljax.kernels._checks import _check_conv_matches, _check_grad_diagonal, _check_value_mass
 from kerneljax.kernels.sets import _resolve_kernels
@@ -21,40 +18,6 @@ from kerneljax.selection.optimize import select_bandwidth
 from kerneljax.typing import Array
 
 __all__ = ["DensityFit", "density"]
-
-
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=["value", "bandwidth", "selection"],
-    meta_fields=["kernels", "spec", "n_train"],
-)
-@dataclasses.dataclass(frozen=True)
-class DensityFit:
-    """Result of a mixed-type density estimate.
-
-    Attributes
-    ----------
-    value : Float[Array, " n_eval"]
-        The density estimate at each evaluation point.
-    bandwidth : Bandwidth
-        The bandwidth used to produce ``value``.
-    selection : SelectionResult, optional
-        The selection that produced ``bandwidth``, or ``None`` when the
-        bandwidth was supplied directly.
-    kernels : KernelSet
-        Kernel families the estimate was produced with. Static.
-    spec : ColumnSpec, optional
-        Column metadata of the training sample. Static.
-    n_train : int
-        Number of training points. Static.
-    """
-
-    value: Float[Array, " n_eval"]
-    bandwidth: Bandwidth
-    selection: SelectionResult | None = None
-    kernels: KernelSet = dataclasses.field(default_factory=KernelSet)
-    spec: ColumnSpec | None = None
-    n_train: int = 0
 
 
 def density(

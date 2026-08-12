@@ -146,31 +146,36 @@ def lbfgs(
     tol: float = 1e-8,
     history: int = 10,
 ) -> tuple[Array, ScalarFloat, Array, Array]:
-    r"""Minimize ``fun`` from ``z0`` with limited-memory BFGS.
+    r"""Minimize a differentiable scalar objective with limited-memory BFGS.
+
+    The whole solve is a fixed shape JAX loop, so it can sit inside ``jit``, ``vmap``, or a
+    larger differentiable program and compile once. It is the solver behind
+    :func:`~kerneljax.select_bandwidth`, and any callable that accepts ``(fun, z0)`` and
+    returns the same four values can replace it there through the ``solver`` argument.
 
     Limited-memory BFGS builds an implicit approximation to the inverse Hessian from the
-    ``history`` most recent curvature pairs, following [1]_ and [2]_.
+    ``history`` most recent curvature pairs, following [1]_ and [2]_,
 
     .. math::
 
-        s_k = z_{k+1} - z_k, \qquad y_k = g_{k+1} - g_k
+        s_k = z_{k+1} - z_k, \quad y_k = g_{k+1} - g_k,
 
-    Here :math:`s_k` and :math:`y_k` are the step and gradient differences between
-    consecutive iterates. The search direction is recovered from these pairs by the two loop
-    recursion, without ever forming the Hessian.
-
-    A step length :math:`\alpha` is accepted once backtracking from :math:`\alpha = 1`
-    satisfies the Armijo condition
+    the step and gradient differences between consecutive iterates. The two loop recursion
+    turns these pairs into a search direction without ever forming a Hessian, and a pair is
+    stored only when :math:`s_k^{\top} y_k` is positive, which keeps the approximation well
+    defined. A step length :math:`\alpha` is accepted once backtracking from
+    :math:`\alpha = 1` satisfies the Armijo condition
 
     .. math::
 
-        f(z + \alpha p) \le f(z) + c_1 \alpha\, p^{\top} g
+        f(z + \alpha p) \le f(z) + c_1 \alpha\, p^{\top} g,
 
-    with :math:`p` the search direction and :math:`g` the gradient at :math:`z`. A step
-    whose objective value comes back non-finite is rejected.
+    with :math:`p` the search direction and :math:`g` the gradient at :math:`z`, and a step
+    whose objective comes back non-finite is rejected outright.
 
-    A curvature pair is stored only when :math:`s_k^{\top} y_k` is positive, keeping the
-    inverse Hessian approximation well defined.
+    Before iterating, the objective is divided by its magnitude at ``z0``, so ``tol`` reads
+    on a relative scale and one setting behaves comparably across differently scaled
+    problems.
 
     Parameters
     ----------
@@ -192,6 +197,20 @@ def lbfgs(
         ``(z, value, n_iter, converged)``, the minimizer, the objective
         value there, the number of iterations used and whether ``tol`` was
         reached before ``max_iter``.
+
+    Examples
+    --------
+    Minimize a shifted quadratic. The solver reaches the minimizer in a
+    handful of iterations and reports convergence.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import jax.numpy as jnp
+           ...: import kerneljax as kj
+           ...:
+           ...: z, value, n_iter, converged = kj.lbfgs(lambda z: jnp.sum((z - 3.0) ** 2), jnp.zeros(2))
+           ...: print(z, f"iterations={int(n_iter)}", f"converged={bool(converged)}")
 
     References
     ----------

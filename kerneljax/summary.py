@@ -11,9 +11,7 @@ import jax.numpy as jnp
 
 from kerneljax.bandwidth import Bandwidth
 from kerneljax.data import ColumnSpec, Kind
-from kerneljax.estimators.conditional import ConditionalFit, ModeFit, QuantileFit
-from kerneljax.estimators.density import DensityFit
-from kerneljax.estimators.regression import LocalPolyFit
+from kerneljax.estimators.fit import ConditionalFit, DensityFit, LocalPolyFit, ModeFit, QuantileFit
 from kerneljax.kernels import KernelSet
 from kerneljax.typing import Array, ScalarFloat
 

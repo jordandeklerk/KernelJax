@@ -17,7 +17,7 @@ __all__ = ["AitchisonAitken", "LiRacine", "WangVanRyzin"]
 @jax.tree_util.register_static
 @dataclasses.dataclass(frozen=True)
 class AitchisonAitken(UnorderedKernel):
-    """Aitchison and Aitken (1976) unordered categorical kernel."""
+    """Aitchison and Aitken unordered categorical kernel."""
 
     def value(self, x: IntArray, y: IntArray, lam: FloatArray, levels: int) -> FloatArray:
         r"""Evaluate the kernel.
@@ -99,7 +99,7 @@ class AitchisonAitken(UnorderedKernel):
 @jax.tree_util.register_static
 @dataclasses.dataclass(frozen=True)
 class WangVanRyzin(OrderedKernel):
-    """Wang and van Ryzin (1981) ordered categorical kernel."""
+    """Wang and van Ryzin ordered categorical kernel."""
 
     def value(self, x: IntArray, y: IntArray, lam: FloatArray, levels: int) -> FloatArray:
         r"""Evaluate the kernel.

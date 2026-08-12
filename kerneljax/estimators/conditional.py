@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import dataclasses
 from collections.abc import Callable
-from functools import partial
 from typing import Literal, cast
 
 import jax
 import jax.numpy as jnp
-from jaxtyping import Float, Int
 
 from kerneljax.bandwidth import (
     BandwidthTransform,
@@ -20,138 +17,14 @@ from kerneljax.bandwidth import (
     _search_start,
     normal_reference,
 )
-from kerneljax.data import ColumnSpec, MixedData, _as_points
+from kerneljax.data import MixedData, _as_points
+from kerneljax.estimators.fit import ConditionalFit, ModeFit, QuantileFit
 from kerneljax.kernels import KernelSet, Op
 from kerneljax.kernels.sets import _resolve_kernels
 from kerneljax.ksum import kweights
 from kerneljax.typing import Array, ScalarFloat
 
 __all__ = ["ConditionalFit", "ModeFit", "QuantileFit", "cdensity", "cdist", "cmode", "cquantile"]
-
-
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=["value", "bandwidth", "selection"],
-    meta_fields=["kernels", "x_spec", "y_spec", "n_train", "target"],
-)
-@dataclasses.dataclass(frozen=True)
-class ConditionalFit:
-    """Result of a conditional density or conditional distribution estimate.
-
-    Attributes
-    ----------
-    value : Float[Array, " n_eval"]
-        The estimate at each evaluation pair.
-    bandwidth : ConditionalBandwidth
-        The bandwidth used to produce ``value``, one block per sample.
-    selection : SelectionResult, optional
-        The selection that produced ``bandwidth``, or ``None`` when the
-        bandwidth was supplied directly.
-    kernels : KernelSet
-        Kernel families the estimate was produced with. Static.
-    x_spec : ColumnSpec, optional
-        Column metadata of the conditioning sample. Static.
-    y_spec : ColumnSpec, optional
-        Column metadata of the response sample. Static.
-    n_train : int
-        Number of training points. Static.
-    target : {"density", "distribution"}
-        Which estimate ``value`` holds. Static.
-    """
-
-    value: Float[Array, " n_eval"]
-    bandwidth: ConditionalBandwidth
-    selection: SelectionResult | None = None
-    kernels: KernelSet = dataclasses.field(default_factory=KernelSet)
-    x_spec: ColumnSpec | None = None
-    y_spec: ColumnSpec | None = None
-    n_train: int = 0
-    target: Literal["density", "distribution"] = "density"
-
-
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=["value", "bandwidth", "selection"],
-    meta_fields=["tau", "kernels", "x_spec", "y_spec", "n_train"],
-)
-@dataclasses.dataclass(frozen=True)
-class QuantileFit:
-    """Result of a conditional quantile regression.
-
-    Attributes
-    ----------
-    value : Float[Array, " n_eval"]
-        The conditional quantile at each evaluation point, clamped to the
-        observed response range where the distribution never crosses ``tau``.
-    bandwidth : ConditionalBandwidth
-        The bandwidth used to produce ``value``, one block per sample.
-    tau : float
-        The quantile level the fit inverts at. Static.
-    selection : SelectionResult, optional
-        The selection that produced ``bandwidth``, or ``None`` when the
-        bandwidth was supplied directly.
-    kernels : KernelSet
-        Kernel families the estimate was produced with. Static.
-    x_spec : ColumnSpec, optional
-        Column metadata of the conditioning sample. Static.
-    y_spec : ColumnSpec, optional
-        Column metadata of the response sample. Static.
-    n_train : int
-        Number of training points. Static.
-    """
-
-    value: Float[Array, " n_eval"]
-    bandwidth: ConditionalBandwidth
-    tau: float = 0.5
-    selection: SelectionResult | None = None
-    kernels: KernelSet = dataclasses.field(default_factory=KernelSet)
-    x_spec: ColumnSpec | None = None
-    y_spec: ColumnSpec | None = None
-    n_train: int = 0
-
-
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=["value", "density", "bandwidth", "accuracy", "selection"],
-    meta_fields=["kernels", "x_spec", "y_spec", "n_train"],
-)
-@dataclasses.dataclass(frozen=True)
-class ModeFit:
-    """Result of a conditional mode estimate over a categorical response.
-
-    Attributes
-    ----------
-    value : Int[Array, " n_eval"]
-        The modal response level at each evaluation point, as a level code.
-    density : Float[Array, " n_eval"]
-        The conditional density at the modal level.
-    bandwidth : ConditionalBandwidth
-        The bandwidth used to produce ``value``, one block per sample.
-    accuracy : ScalarFloat, optional
-        Share of training observations whose modal level matches the
-        observed response, or ``None`` when the fit was evaluated elsewhere.
-    selection : SelectionResult, optional
-        The selection that produced ``bandwidth``, or ``None`` when the
-        bandwidth was supplied directly.
-    kernels : KernelSet
-        Kernel families the estimate was produced with. Static.
-    x_spec : ColumnSpec, optional
-        Column metadata of the conditioning sample. Static.
-    y_spec : ColumnSpec, optional
-        Column metadata of the response sample. Static.
-    n_train : int
-        Number of training points. Static.
-    """
-
-    value: Int[Array, " n_eval"]
-    density: Float[Array, " n_eval"]
-    bandwidth: ConditionalBandwidth
-    accuracy: ScalarFloat | None = None
-    selection: SelectionResult | None = None
-    kernels: KernelSet = dataclasses.field(default_factory=KernelSet)
-    x_spec: ColumnSpec | None = None
-    y_spec: ColumnSpec | None = None
-    n_train: int = 0
 
 
 def cdensity(
