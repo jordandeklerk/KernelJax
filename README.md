@@ -36,19 +36,15 @@ composable, differentiable building blocks. Its kernels, bandwidth selectors, an
 smoothers run natively on CPUs, GPUs, and TPUs through JAX and XLA, and fit
 naturally into the wider JAX ecosystem.
 
-> [!WARNING]
-> KernelJax is in early development and has not been released to PyPI. The API is
-> unstable and may change without notice.
-
 ## Features
 
 - Estimators for samples mixing continuous, unordered categorical, and ordered
   categorical columns.
-  - [Density](kerneljax/estimators/density.py) and
-    [cumulative distribution](kerneljax/estimators/distribution.py) estimation.
+  - [Density](https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/estimators/density.py) and
+    [cumulative distribution](https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/estimators/distribution.py) estimation.
   - [Conditional density, distribution, quantiles, and
-    modes](kerneljax/estimators/conditional.py) given mixed covariates.
-  - [Local polynomial regression](kerneljax/estimators/regression.py) with
+    modes](https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/estimators/conditional.py) given mixed covariates.
+  - [Local polynomial regression](https://github.com/jordandeklerk/KernelJax/blob/main/kerneljax/estimators/regression.py) with
     derivatives and pointwise standard errors.
 - Bandwidths and categorical smoothing parameters selected jointly from the data by
   least squares or likelihood cross validation, a corrected AIC, or a closed-form
@@ -62,7 +58,7 @@ naturally into the wider JAX ecosystem.
 ## Installation
 
 ```bash
-uv pip install git+https://github.com/jordandeklerk/KernelJax.git
+uv pip install kerneljax
 ```
 
 JAX itself is not pinned, so install the build matching your hardware first. The
