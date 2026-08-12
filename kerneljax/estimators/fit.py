@@ -1,4 +1,4 @@
-"""Result containers the estimators hand back."""
+"""Result containers for estimators."""
 
 from __future__ import annotations
 
