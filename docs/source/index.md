@@ -23,7 +23,11 @@ documentation using the same concepts exposed by the API.
 
 ## Installation
 
-KernelJax has not been released to PyPI yet, so install it from the repository.
+```bash
+uv pip install kerneljax
+```
+
+The latest development version installs straight from the repository.
 
 ```bash
 uv pip install git+https://github.com/jordandeklerk/KernelJax.git

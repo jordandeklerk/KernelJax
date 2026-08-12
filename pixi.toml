@@ -4,7 +4,7 @@ description = "Low-level JAX interface for nonparametric kernel smoothing of mix
 channels = ["conda-forge"]
 name = "kerneljax"
 platforms = ["linux-64", "osx-arm64", "osx-64"]
-version = "0.0.1"
+version = "0.1.0"
 
 [tasks]
 
