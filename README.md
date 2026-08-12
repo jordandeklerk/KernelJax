@@ -36,9 +36,6 @@ composable, differentiable building blocks. Its kernels, bandwidth selectors, an
 smoothers run natively on CPUs, GPUs, and TPUs through JAX and XLA, and fit
 naturally into the wider JAX ecosystem.
 
-> **Warning.** KernelJax is in early development. The API may change between
-> releases without notice.
-
 ## Features
 
 - Estimators for samples mixing continuous, unordered categorical, and ordered
@@ -62,12 +59,6 @@ naturally into the wider JAX ecosystem.
 
 ```bash
 uv pip install kerneljax
-```
-
-The latest development version installs straight from the repository.
-
-```bash
-uv pip install git+https://github.com/jordandeklerk/KernelJax.git
 ```
 
 JAX itself is not pinned, so install the build matching your hardware first. The
