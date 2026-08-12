@@ -46,8 +46,8 @@ naturally into the wider JAX ecosystem.
   categorical columns.
   - [Density](kerneljax/estimators/density.py) and
     [cumulative distribution](kerneljax/estimators/distribution.py) estimation.
-  - [Conditional density, distribution, and quantile
-    regression](kerneljax/estimators/conditional.py) given mixed covariates.
+  - [Conditional density, distribution, quantiles, and
+    modes](kerneljax/estimators/conditional.py) given mixed covariates.
   - [Local polynomial regression](kerneljax/estimators/regression.py) with
     derivatives and pointwise standard errors.
 - Bandwidths and categorical smoothing parameters selected jointly from the data by

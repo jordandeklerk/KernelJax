@@ -11,7 +11,7 @@ import jax.numpy as jnp
 
 from kerneljax.bandwidth import Bandwidth
 from kerneljax.data import ColumnSpec, Kind
-from kerneljax.estimators.conditional import ConditionalFit, QuantileFit
+from kerneljax.estimators.conditional import ConditionalFit, ModeFit, QuantileFit
 from kerneljax.estimators.density import DensityFit
 from kerneljax.estimators.regression import LocalPolyFit
 from kerneljax.kernels import KernelSet
@@ -28,6 +28,7 @@ __all__ = ["Summary", "summary"]
         "converged",
         "n_iter",
         "r_squared",
+        "accuracy",
         "residual_se",
         "log_likelihood",
         "response_bandwidth",
@@ -67,6 +68,9 @@ class Summary:
         Whether the selection solver stopped because its progress stalled.
     n_iter : Array, optional
         Number of solver iterations used by the selection.
+    accuracy : ScalarFloat, optional
+        Share of observations whose modal level matches the response, set
+        only for a conditional mode estimate.
     r_squared : ScalarFloat, optional
         Squared correlation between fitted and observed responses.
     residual_se : ScalarFloat, optional
@@ -93,6 +97,7 @@ class Summary:
     r_squared: ScalarFloat | None
     residual_se: ScalarFloat | None
     log_likelihood: ScalarFloat | None
+    accuracy: ScalarFloat | None = None
     response_spec: ColumnSpec | None = None
     response_bandwidth: Bandwidth | None = None
 
@@ -126,6 +131,7 @@ class Summary:
         measures = [
             ("Residual standard error", self.residual_se),
             ("R-squared", self.r_squared),
+            ("Correct classification", self.accuracy),
             ("Log likelihood", self.log_likelihood),
         ]
         shown = [_row(name, value) for name, value in measures if value is not None]
@@ -144,7 +150,7 @@ class Summary:
         return "\n".join(rows)
 
 
-def summary(fit: ConditionalFit | DensityFit | LocalPolyFit | QuantileFit) -> Summary:
+def summary(fit: ConditionalFit | DensityFit | LocalPolyFit | ModeFit | QuantileFit) -> Summary:
     r"""Measure how well a fitted estimator describes the sample it was fit on.
 
     For a regression the report carries the squared correlation between fitted
@@ -205,7 +211,7 @@ def summary(fit: ConditionalFit | DensityFit | LocalPolyFit | QuantileFit) -> Su
     local_poly : Fit a local polynomial regression.
     density : Estimate a mixed-type probability density.
     """
-    if isinstance(fit, (ConditionalFit, QuantileFit)):
+    if isinstance(fit, (ConditionalFit, ModeFit, QuantileFit)):
         return _conditional_summary(fit)
 
     fitted = fit.mean if isinstance(fit, LocalPolyFit) else fit.value
@@ -327,7 +333,7 @@ def _column_rows(spec: ColumnSpec, bandwidth: Bandwidth) -> list[str]:
     return [f"  {n:<14}{k.name.lower():<14}{_number(widths[i]):>12}" for i, (n, k) in enumerate(paired)]
 
 
-def _conditional_summary(fit: ConditionalFit | QuantileFit) -> Summary:
+def _conditional_summary(fit: ConditionalFit | ModeFit | QuantileFit) -> Summary:
     """Report a conditional estimate."""
     if fit.x_spec is None or fit.y_spec is None:
         raise ValueError("summary needs a conditional fit that recorded the column metadata of both samples")
@@ -341,6 +347,9 @@ def _conditional_summary(fit: ConditionalFit | QuantileFit) -> Summary:
     selection = fit.selection
     if isinstance(fit, QuantileFit):
         label = f"Conditional quantile estimate at tau {fit.tau:g}"
+        density = False
+    elif isinstance(fit, ModeFit):
+        label = "Conditional mode estimate"
         density = False
     else:
         label = f"Conditional {fit.target} estimate"
@@ -360,6 +369,7 @@ def _conditional_summary(fit: ConditionalFit | QuantileFit) -> Summary:
         r_squared=None,
         residual_se=None,
         log_likelihood=jnp.sum(jnp.log(fit.value)) if density else None,
+        accuracy=fit.accuracy if isinstance(fit, ModeFit) else None,
         response_spec=fit.y_spec,
         response_bandwidth=fit.bandwidth.y,
     )

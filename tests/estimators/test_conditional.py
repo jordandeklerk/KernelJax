@@ -9,9 +9,11 @@ from kerneljax.bandwidth import ConditionalBandwidth
 from kerneljax.data import MixedData
 from kerneljax.estimators.conditional import (
     ConditionalFit,
+    ModeFit,
     QuantileFit,
     cdensity,
     cdist,
+    cmode,
     cquantile,
     cv_ls_conditional,
     cv_ml_conditional,
@@ -124,11 +126,12 @@ def test_an_unknown_rule_name_is_refused(conditional_sample):
         cdensity(x, y, "cv_ls")
 
 
-def test_likelihood_selection_is_refused_for_a_distribution(conditional_sample):
+@pytest.mark.parametrize("estimator", [cdist, cquantile])
+def test_likelihood_selection_is_refused_for_a_distribution(conditional_sample, estimator):
     x, y = conditional_sample
 
     with pytest.raises(ValueError, match="oversmoothing"):
-        cdist(x, y, "cv_ml")
+        estimator(x, y, "cv_ml")
 
 
 def test_a_density_selection_carries_into_a_distribution(conditional_sample):
@@ -260,14 +263,13 @@ def test_quantiles_increase_with_tau(conditional_sample, conditional_bandwidth):
     assert bool(jnp.all(middle <= upper))
 
 
-def test_extreme_levels_clamp_to_the_response_range(conditional_sample, conditional_bandwidth):
+@pytest.mark.parametrize(("tau", "pick", "bound"), [(0.001, jnp.min, jnp.min), (0.999, jnp.max, jnp.max)])
+def test_extreme_levels_clamp_to_the_response_range(conditional_sample, conditional_bandwidth, tau, pick, bound):
     x, y = conditional_sample
 
-    bottom = cquantile(x, y, conditional_bandwidth, tau=0.001).value
-    top = cquantile(x, y, conditional_bandwidth, tau=0.999).value
+    value = cquantile(x, y, conditional_bandwidth, tau=tau).value
 
-    assert bool(jnp.all(bottom >= jnp.min(y.con)))
-    assert bool(jnp.all(top <= jnp.max(y.con)))
+    assert float(pick(value)) == pytest.approx(float(bound(y.con)))
 
 
 def test_a_distribution_fit_hands_its_bandwidth_to_the_quantile(conditional_sample):
@@ -278,13 +280,6 @@ def test_a_distribution_fit_hands_its_bandwidth_to_the_quantile(conditional_samp
 
     assert fit.bandwidth is selected.bandwidth
     assert fit.selection is selected.selection
-
-
-def test_likelihood_selection_is_refused_for_quantiles(conditional_sample):
-    x, y = conditional_sample
-
-    with pytest.raises(ValueError, match="oversmoothing"):
-        cquantile(x, y, "cv_ml")
 
 
 def test_a_multicolumn_response_is_refused_by_the_quantile(conditional_sample, conditional_bandwidth):
@@ -311,6 +306,74 @@ def test_the_quantile_fit_is_a_pytree(conditional_sample, conditional_bandwidth)
     assert isinstance(fit, QuantileFit)
     assert all(isinstance(leaf, jax.Array) for leaf in leaves)
     assert fit.tau == 0.5
+
+
+def test_the_mode_is_the_argmax_of_the_conditional_density(categorical_response, conditional_bandwidth):
+    x, y, bandwidth = categorical_response
+
+    fit = cmode(x, y, bandwidth)
+
+    stacked = jnp.stack(
+        [
+            cdensity(
+                x,
+                y,
+                bandwidth,
+                at_x=x,
+                at_y=MixedData.from_blocks(unordered=jnp.full(x.n, level), unordered_levels=3),
+            ).value
+            for level in range(3)
+        ],
+        axis=1,
+    )
+
+    assert bool(jnp.all(fit.value == jnp.argmax(stacked, axis=1)))
+    assert jnp.allclose(fit.density, jnp.max(stacked, axis=1), rtol=1e-6)
+
+
+def test_the_mode_reports_its_training_accuracy(categorical_response, conditional_bandwidth):
+    x, y, bandwidth = categorical_response
+
+    fit = cmode(x, y, bandwidth)
+    observed = y.uno[:, 0]
+
+    assert float(fit.accuracy) == pytest.approx(float(jnp.mean((fit.value == observed) * 1.0)))
+
+
+def test_evaluating_the_mode_elsewhere_leaves_accuracy_unset(categorical_response, conditional_bandwidth):
+    x, y, bandwidth = categorical_response
+
+    head = jax.tree.map(lambda a: a[:7], x)
+    fit = cmode(x, y, bandwidth, at_x=head)
+
+    assert fit.accuracy is None
+    assert fit.value.shape == (7,)
+
+
+def test_a_continuous_response_is_refused_by_the_mode(conditional_sample, conditional_bandwidth):
+    x, y = conditional_sample
+
+    with pytest.raises(ValueError, match="unordered or ordered"):
+        cmode(x, y, conditional_bandwidth)
+
+
+def test_the_mode_fit_is_a_pytree(categorical_response):
+    x, y, bandwidth = categorical_response
+
+    fit = cmode(x, y, bandwidth)
+    leaves = jax.tree_util.tree_leaves(fit)
+
+    assert isinstance(fit, ModeFit)
+    assert all(isinstance(leaf, jax.Array) for leaf in leaves)
+
+
+def test_the_mode_selects_under_likelihood(categorical_response):
+    x, y, _ = categorical_response
+
+    fit = cmode(x, y, "cv_ml", n_starts=1)
+
+    assert fit.selection is not None
+    assert bool(jnp.isfinite(fit.selection.value))
 
 
 def _pin_first(x, rows):

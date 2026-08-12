@@ -9,7 +9,7 @@ from typing import Literal, cast
 
 import jax
 import jax.numpy as jnp
-from jaxtyping import Float
+from jaxtyping import Float, Int
 
 from kerneljax.bandwidth import (
     BandwidthTransform,
@@ -26,7 +26,7 @@ from kerneljax.kernels.sets import _resolve_kernels
 from kerneljax.ksum import kweights
 from kerneljax.typing import Array, ScalarFloat
 
-__all__ = ["ConditionalFit", "QuantileFit", "cdensity", "cdist", "cquantile"]
+__all__ = ["ConditionalFit", "ModeFit", "QuantileFit", "cdensity", "cdist", "cmode", "cquantile"]
 
 
 @partial(
@@ -103,6 +103,50 @@ class QuantileFit:
     value: Float[Array, " n_eval"]
     bandwidth: ConditionalBandwidth
     tau: float = 0.5
+    selection: SelectionResult | None = None
+    kernels: KernelSet = dataclasses.field(default_factory=KernelSet)
+    x_spec: ColumnSpec | None = None
+    y_spec: ColumnSpec | None = None
+    n_train: int = 0
+
+
+@partial(
+    jax.tree_util.register_dataclass,
+    data_fields=["value", "density", "bandwidth", "accuracy", "selection"],
+    meta_fields=["kernels", "x_spec", "y_spec", "n_train"],
+)
+@dataclasses.dataclass(frozen=True)
+class ModeFit:
+    """Result of a conditional mode estimate over a categorical response.
+
+    Attributes
+    ----------
+    value : Int[Array, " n_eval"]
+        The modal response level at each evaluation point, as a level code.
+    density : Float[Array, " n_eval"]
+        The conditional density at the modal level.
+    bandwidth : ConditionalBandwidth
+        The bandwidth used to produce ``value``, one block per sample.
+    accuracy : ScalarFloat, optional
+        Share of training observations whose modal level matches the
+        observed response, or ``None`` when the fit was evaluated elsewhere.
+    selection : SelectionResult, optional
+        The selection that produced ``bandwidth``, or ``None`` when the
+        bandwidth was supplied directly.
+    kernels : KernelSet
+        Kernel families the estimate was produced with. Static.
+    x_spec : ColumnSpec, optional
+        Column metadata of the conditioning sample. Static.
+    y_spec : ColumnSpec, optional
+        Column metadata of the response sample. Static.
+    n_train : int
+        Number of training points. Static.
+    """
+
+    value: Int[Array, " n_eval"]
+    density: Float[Array, " n_eval"]
+    bandwidth: ConditionalBandwidth
+    accuracy: ScalarFloat | None = None
     selection: SelectionResult | None = None
     kernels: KernelSet = dataclasses.field(default_factory=KernelSet)
     x_spec: ColumnSpec | None = None
@@ -218,8 +262,7 @@ def cdist(
         The bandwidth, a selection to reuse, an earlier fit, or the name of
         a selection rule, either ``"cv_ls"`` or ``"normal_reference"``.
         Likelihood selection is refused here because the likelihood of a CDF
-        value rewards oversmoothing without bound, which is why np offers no
-        such method either.
+        value rewards oversmoothing without bound.
     at_x : MixedData or Array, optional
         Conditioning evaluation points. Defaults to ``x``.
     at_y : MixedData or Array, optional
@@ -284,7 +327,7 @@ def cquantile(
         \hat q_\tau(x) = \inf \{\, y : \hat F(y \mid x) \ge \tau \,\},
 
     with evaluation points whose distribution never reaches ``tau`` clamped
-    to the nearest end of that range, following np.
+    to the nearest end of that range.
 
     Parameters
     ----------
@@ -394,6 +437,123 @@ def cquantile(
     )
 
 
+def cmode(
+    x: MixedData | Array,
+    y: MixedData | Array,
+    bw: ConditionalBandwidth | SelectionResult | ConditionalFit | str,
+    *,
+    at_x: MixedData | Array | None = None,
+    kernels: KernelSet | None = None,
+    n_starts: int = 3,
+) -> ModeFit:
+    r"""Estimate the conditional mode of a categorical response.
+
+    The conditional density is evaluated at every response level and the
+    level with the largest density wins,
+
+    .. math::
+
+        \hat m(x) = \arg\max_{\ell} \hat f(\ell \mid x),
+
+    with ties resolved toward the lowest level.
+
+    Parameters
+    ----------
+    x : MixedData or Array
+        Conditioning sample.
+    y : MixedData or Array
+        Response sample, a single unordered or ordered column.
+    bw : ConditionalBandwidth, SelectionResult, ConditionalFit or str
+        The bandwidth, a selection to reuse, an earlier fit, or the name of
+        a selection rule, either ``"cv_ml"`` or ``"normal_reference"``. The
+        bandwidth is the one a conditional density uses.
+    at_x : MixedData or Array, optional
+        Conditioning evaluation points. Defaults to ``x``, in which case the
+        fit also reports the share of observations it classifies correctly.
+    kernels : KernelSet, optional
+        Kernel families, one per column kind. Static.
+    n_starts : int
+        Number of restarts when a rule name asks for a search. Static.
+
+    Returns
+    -------
+    ModeFit
+        The modal levels, the density behind each, and the selection if one
+        ran.
+
+    Examples
+    --------
+    Recover the dominant group along a covariate. The modal level switches
+    as the covariate crosses the group boundary.
+
+    .. ipython::
+        :okwarning:
+
+        In [1]: import numpy as np
+           ...: import kerneljax as kj
+           ...:
+           ...: rng = np.random.default_rng(0)
+           ...: x = rng.uniform(-2.0, 2.0, 300)
+           ...: y = (x + rng.normal(0.0, 0.5, 300) > 0.0).astype(int)
+           ...: data = kj.MixedData.continuous(x)
+           ...: labels = kj.MixedData.from_blocks(unordered=y, unordered_levels=2)
+           ...: fit = kj.cmode(data, labels, "normal_reference", at_x=np.array([-1.5, 0.0, 1.5]))
+           ...: print(np.asarray(fit.value))
+
+    See Also
+    --------
+    cdensity : Estimate a conditional probability density.
+    cquantile : Estimate a conditional quantile.
+    """
+    kernels = _resolve_kernels(kernels, getattr(bw, "kernels", None))
+    x_train, y_train = _as_points(x), _as_points(y)
+
+    if x_train.n != y_train.n:
+        raise ValueError(
+            f"x and y must describe the same sample, got {x_train.n} conditioning rows "
+            f"against {y_train.n} response rows"
+        )
+    if y_train.spec.p != 1 or y_train.spec.p_con:
+        raise ValueError("cmode ranks response levels, so y must be a single unordered or ordered column")
+
+    bandwidth, selection = _resolve_conditional(x_train, y_train, bw, kernels, n_starts, "density")
+    _require_usable(bandwidth.x)
+    _require_usable(bandwidth.y)
+
+    x_eval = x_train if at_x is None else _as_points(at_x, x_train.spec)
+    weights_x = kweights(x_train, bandwidth.x, at=x_eval, kernels=kernels)
+
+    n_levels = (y_train.spec.uno_levels + y_train.spec.ord_levels)[0]
+    codes = jnp.arange(n_levels)
+    if y_train.spec.p_uno:
+        candidates = MixedData.from_blocks(unordered=codes, unordered_levels=n_levels)
+    else:
+        candidates = MixedData.from_blocks(ordered=codes, ordered_levels=n_levels)
+
+    per_level = kweights(y_train, bandwidth.y, at=candidates, kernels=kernels)
+    probabilities = (weights_x @ per_level.T) / jnp.sum(weights_x, axis=1, keepdims=True)
+
+    value = jnp.argmax(probabilities, axis=1)
+    density = jnp.max(probabilities, axis=1)
+
+    accuracy = None
+    if at_x is None:
+        observed = (y_train.uno if y_train.spec.p_uno else y_train.orde)[:, 0]
+        accuracy = jnp.mean((value == observed).astype(density.dtype))
+
+    return ModeFit(
+        value=value,
+        density=density,
+        accuracy=accuracy,
+        bandwidth=bandwidth,
+        selection=selection,
+        kernels=kernels,
+        x_spec=x_train.spec,
+        y_spec=y_train.spec,
+        n_train=x_train.n,
+    )
+
+
 def cv_ml_conditional(
     x_train: MixedData,
     y_train: MixedData,
@@ -471,7 +631,7 @@ def cv_ls_conditional(
         per column quantiles of the response, which requires a fully
         continuous response.
     n_grid : int
-        Size of the default quantile grid, matching np's ``ngrid``. Static.
+        Size of the default quantile grid. Static.
 
     Returns
     -------
