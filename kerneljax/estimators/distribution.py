@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-import dataclasses
 from functools import partial
 from typing import cast
 
 import jax
 import jax.numpy as jnp
-from jaxtyping import Float
 
 from kerneljax.bandwidth import Bandwidth, SelectionResult, _require_usable, normal_reference
-from kerneljax.data import ColumnSpec, MixedData, _as_points
+from kerneljax.data import MixedData, _as_points
+from kerneljax.estimators.fit import DistributionFit
 from kerneljax.kernels import KernelSet, Op
 from kerneljax.kernels._checks import _check_cdf_limits, _check_grad_diagonal
 from kerneljax.kernels.sets import _resolve_kernels
@@ -21,43 +20,6 @@ from kerneljax.selection.optimize import select_bandwidth
 from kerneljax.typing import Array
 
 __all__ = ["DistributionFit", "cdf"]
-
-
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=["value", "se", "bandwidth", "selection"],
-    meta_fields=["kernels", "spec", "n_train"],
-)
-@dataclasses.dataclass(frozen=True)
-class DistributionFit:
-    """Result of a mixed-type cumulative distribution estimate.
-
-    Attributes
-    ----------
-    value : Float[Array, " n_eval"]
-        The distribution estimate at each evaluation point.
-    se : Float[Array, " n_eval"]
-        The standard error of the estimate at each evaluation point.
-    bandwidth : Bandwidth
-        The bandwidth used to produce ``value``.
-    selection : SelectionResult, optional
-        The selection that produced ``bandwidth``, or ``None`` when the
-        bandwidth was supplied directly.
-    kernels : KernelSet
-        Kernel families the estimate was produced with. Static.
-    spec : ColumnSpec, optional
-        Column metadata of the training sample. Static.
-    n_train : int
-        Number of training points. Static.
-    """
-
-    value: Float[Array, " n_eval"]
-    se: Float[Array, " n_eval"]
-    bandwidth: Bandwidth
-    selection: SelectionResult | None = None
-    kernels: KernelSet = dataclasses.field(default_factory=KernelSet)
-    spec: ColumnSpec | None = None
-    n_train: int = 0
 
 
 def cdf(

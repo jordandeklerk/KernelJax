@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 from functools import partial
 from typing import Literal, cast
 
@@ -12,7 +11,8 @@ from jaxtyping import Float
 
 from kerneljax.bandwidth import Bandwidth, SelectionResult, _require_usable, broadcast_h, normal_reference
 from kerneljax.basis import LocalPolyBasis
-from kerneljax.data import ColumnSpec, MixedData, _as_points
+from kerneljax.data import MixedData, _as_points
+from kerneljax.estimators.fit import LocalPolyFit
 from kerneljax.kernels import KernelSet
 from kerneljax.kernels._checks import _check_conv_at_zero, _check_grad_diagonal
 from kerneljax.kernels.sets import _resolve_kernels
@@ -20,82 +20,9 @@ from kerneljax.ksum import _pad_index, _pad_rows, kweights
 from kerneljax.linalg import wls
 from kerneljax.selection.criteria import RegressionCriterion
 from kerneljax.selection.optimize import select_bandwidth
-from kerneljax.typing import Array, FloatArray, ScalarFloat
+from kerneljax.typing import Array, FloatArray
 
 __all__ = ["LocalPolyFit", "local_poly"]
-
-
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=["mean", "grad", "coef", "rcond", "bandwidth", "se", "selection", "r_squared", "residual_se"],
-    meta_fields=["degree", "kernels", "spec", "n_train"],
-)
-@dataclasses.dataclass(frozen=True)
-class LocalPolyFit:
-    r"""Result of a local polynomial regression fit.
-
-    The basis is centered at each evaluation point :math:`x`, so the fitted coefficients
-    read off directly,
-
-    .. math::
-
-        \hat m(x) = \beta_0, \qquad
-        \frac{\partial \hat m}{\partial x_j}(x) = \frac{\beta_j}{h_j}
-
-    with :math:`\beta_j` the coefficient of the first order term in column :math:`j` and
-    :math:`h_j` its bandwidth.
-
-    Attributes
-    ----------
-    mean : Float[Array, " n_eval"]
-        The fitted regression value at every evaluation point.
-    grad : Float[Array, "n_eval p_con"] or None
-        The gradient of the fitted value with respect to every
-        continuous column at every evaluation point, or ``None`` when
-        the fit did not request one.
-    coef : Float[Array, "n_eval k"]
-        The full coefficient vector at every evaluation point, in
-        bandwidth units.
-    rcond : Float[Array, " n_eval"]
-        The reciprocal condition number of the weighted moment system
-        at every evaluation point, from :func:`~kerneljax.wls`.
-    bandwidth : Bandwidth
-        The bandwidth used to produce the fit.
-    se : Float[Array, " n_eval"] or None
-        The standard error of the fitted mean at every evaluation
-        point, or ``None`` when the fit did not request one.
-    selection : SelectionResult, optional
-        The selection that produced ``bandwidth``, or ``None`` when the
-        bandwidth was supplied directly.
-    degree : int
-        Total degree of the local polynomial basis. Static.
-    kernels : KernelSet
-        Kernel families the fit was produced with. Static.
-    spec : ColumnSpec, optional
-        Column metadata of the training sample. Static.
-    n_train : int
-        Number of training points. Static.
-    r_squared : ScalarFloat, optional
-        Squared correlation between the fitted and observed responses,
-        or ``None`` when the fit was evaluated away from its training
-        points and there is nothing to compare against.
-    residual_se : ScalarFloat, optional
-        Root mean squared residual, on the same terms as ``r_squared``.
-    """
-
-    mean: Float[Array, " n_eval"]
-    grad: Float[Array, "n_eval p_con"] | None
-    coef: Float[Array, "n_eval k"]
-    rcond: Float[Array, " n_eval"]
-    bandwidth: Bandwidth
-    se: Float[Array, " n_eval"] | None
-    selection: SelectionResult | None = None
-    degree: int = 1
-    kernels: KernelSet = dataclasses.field(default_factory=KernelSet)
-    spec: ColumnSpec | None = None
-    n_train: int = 0
-    r_squared: ScalarFloat | None = None
-    residual_se: ScalarFloat | None = None
 
 
 def local_poly(

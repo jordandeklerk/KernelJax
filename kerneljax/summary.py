@@ -11,9 +11,7 @@ import jax.numpy as jnp
 
 from kerneljax.bandwidth import Bandwidth
 from kerneljax.data import ColumnSpec, Kind
-from kerneljax.estimators.conditional import ConditionalFit, ModeFit, QuantileFit
-from kerneljax.estimators.density import DensityFit
-from kerneljax.estimators.regression import LocalPolyFit
+from kerneljax.estimators.fit import ConditionalFit, DensityFit, LocalPolyFit, ModeFit, QuantileFit
 from kerneljax.kernels import KernelSet
 from kerneljax.typing import Array, ScalarFloat
 
@@ -292,9 +290,10 @@ def _criterion_name(criterion: object) -> str | None:
     method = getattr(criterion, "method", None)
     if isinstance(method, str):
         return method
-    if inspect.isfunction(criterion):
-        return criterion.__name__
-    return type(criterion).__name__
+    name = criterion.__name__ if inspect.isfunction(criterion) else type(criterion).__name__
+    for suffix in ("_conditional_density", "_conditional_distribution", "_conditional"):
+        name = name.removesuffix(suffix)
+    return name
 
 
 def _estimator_name(degree: int) -> str:

@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import dataclasses
 from collections.abc import Callable
-from functools import partial
 from typing import Literal, cast
 
 import jax
 import jax.numpy as jnp
-from jaxtyping import Float, Int
 
 from kerneljax.bandwidth import (
     BandwidthTransform,
@@ -20,138 +17,14 @@ from kerneljax.bandwidth import (
     _search_start,
     normal_reference,
 )
-from kerneljax.data import ColumnSpec, MixedData, _as_points
+from kerneljax.data import MixedData, _as_points
+from kerneljax.estimators.fit import ConditionalFit, ModeFit, QuantileFit
 from kerneljax.kernels import KernelSet, Op
 from kerneljax.kernels.sets import _resolve_kernels
 from kerneljax.ksum import kweights
 from kerneljax.typing import Array, ScalarFloat
 
 __all__ = ["ConditionalFit", "ModeFit", "QuantileFit", "cdensity", "cdist", "cmode", "cquantile"]
-
-
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=["value", "bandwidth", "selection"],
-    meta_fields=["kernels", "x_spec", "y_spec", "n_train", "target"],
-)
-@dataclasses.dataclass(frozen=True)
-class ConditionalFit:
-    """Result of a conditional density or conditional distribution estimate.
-
-    Attributes
-    ----------
-    value : Float[Array, " n_eval"]
-        The estimate at each evaluation pair.
-    bandwidth : ConditionalBandwidth
-        The bandwidth used to produce ``value``, one block per sample.
-    selection : SelectionResult, optional
-        The selection that produced ``bandwidth``, or ``None`` when the
-        bandwidth was supplied directly.
-    kernels : KernelSet
-        Kernel families the estimate was produced with. Static.
-    x_spec : ColumnSpec, optional
-        Column metadata of the conditioning sample. Static.
-    y_spec : ColumnSpec, optional
-        Column metadata of the response sample. Static.
-    n_train : int
-        Number of training points. Static.
-    target : {"density", "distribution"}
-        Which estimate ``value`` holds. Static.
-    """
-
-    value: Float[Array, " n_eval"]
-    bandwidth: ConditionalBandwidth
-    selection: SelectionResult | None = None
-    kernels: KernelSet = dataclasses.field(default_factory=KernelSet)
-    x_spec: ColumnSpec | None = None
-    y_spec: ColumnSpec | None = None
-    n_train: int = 0
-    target: Literal["density", "distribution"] = "density"
-
-
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=["value", "bandwidth", "selection"],
-    meta_fields=["tau", "kernels", "x_spec", "y_spec", "n_train"],
-)
-@dataclasses.dataclass(frozen=True)
-class QuantileFit:
-    """Result of a conditional quantile regression.
-
-    Attributes
-    ----------
-    value : Float[Array, " n_eval"]
-        The conditional quantile at each evaluation point, clamped to the
-        observed response range where the distribution never crosses ``tau``.
-    bandwidth : ConditionalBandwidth
-        The bandwidth used to produce ``value``, one block per sample.
-    tau : float
-        The quantile level the fit inverts at. Static.
-    selection : SelectionResult, optional
-        The selection that produced ``bandwidth``, or ``None`` when the
-        bandwidth was supplied directly.
-    kernels : KernelSet
-        Kernel families the estimate was produced with. Static.
-    x_spec : ColumnSpec, optional
-        Column metadata of the conditioning sample. Static.
-    y_spec : ColumnSpec, optional
-        Column metadata of the response sample. Static.
-    n_train : int
-        Number of training points. Static.
-    """
-
-    value: Float[Array, " n_eval"]
-    bandwidth: ConditionalBandwidth
-    tau: float = 0.5
-    selection: SelectionResult | None = None
-    kernels: KernelSet = dataclasses.field(default_factory=KernelSet)
-    x_spec: ColumnSpec | None = None
-    y_spec: ColumnSpec | None = None
-    n_train: int = 0
-
-
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=["value", "density", "bandwidth", "accuracy", "selection"],
-    meta_fields=["kernels", "x_spec", "y_spec", "n_train"],
-)
-@dataclasses.dataclass(frozen=True)
-class ModeFit:
-    """Result of a conditional mode estimate over a categorical response.
-
-    Attributes
-    ----------
-    value : Int[Array, " n_eval"]
-        The modal response level at each evaluation point, as a level code.
-    density : Float[Array, " n_eval"]
-        The conditional density at the modal level.
-    bandwidth : ConditionalBandwidth
-        The bandwidth used to produce ``value``, one block per sample.
-    accuracy : ScalarFloat, optional
-        Share of training observations whose modal level matches the
-        observed response, or ``None`` when the fit was evaluated elsewhere.
-    selection : SelectionResult, optional
-        The selection that produced ``bandwidth``, or ``None`` when the
-        bandwidth was supplied directly.
-    kernels : KernelSet
-        Kernel families the estimate was produced with. Static.
-    x_spec : ColumnSpec, optional
-        Column metadata of the conditioning sample. Static.
-    y_spec : ColumnSpec, optional
-        Column metadata of the response sample. Static.
-    n_train : int
-        Number of training points. Static.
-    """
-
-    value: Int[Array, " n_eval"]
-    density: Float[Array, " n_eval"]
-    bandwidth: ConditionalBandwidth
-    accuracy: ScalarFloat | None = None
-    selection: SelectionResult | None = None
-    kernels: KernelSet = dataclasses.field(default_factory=KernelSet)
-    x_spec: ColumnSpec | None = None
-    y_spec: ColumnSpec | None = None
-    n_train: int = 0
 
 
 def cdensity(
@@ -183,7 +56,7 @@ def cdensity(
         Response sample, with the same number of rows as ``x``.
     bw : ConditionalBandwidth, SelectionResult, ConditionalFit or str
         The bandwidth, a selection to reuse, an earlier fit, or the name of
-        a selection rule, either ``"cv_ml"`` or ``"normal_reference"``.
+        a selection rule, ``"cv_ml"``, ``"cv_ls"`` or ``"normal_reference"``.
     at_x : MixedData or Array, optional
         Conditioning evaluation points. Defaults to ``x``.
     at_y : MixedData or Array, optional
@@ -465,8 +338,8 @@ def cmode(
         Response sample, a single unordered or ordered column.
     bw : ConditionalBandwidth, SelectionResult, ConditionalFit or str
         The bandwidth, a selection to reuse, an earlier fit, or the name of
-        a selection rule, either ``"cv_ml"`` or ``"normal_reference"``. The
-        bandwidth is the one a conditional density uses.
+        a selection rule, ``"cv_ml"``, ``"cv_ls"`` or ``"normal_reference"``.
+        The bandwidth is the one a conditional density uses.
     at_x : MixedData or Array, optional
         Conditioning evaluation points. Defaults to ``x``, in which case the
         fit also reports the share of observations it classifies correctly.
@@ -593,7 +466,70 @@ def cv_ml_conditional(
     return -jnp.mean(jnp.log(held_out))
 
 
-def cv_ls_conditional(
+def cv_ls_conditional_density(
+    x_train: MixedData,
+    y_train: MixedData,
+    bandwidth: ConditionalBandwidth,
+    *,
+    kernels: KernelSet | None = None,
+) -> ScalarFloat:
+    r"""Score a conditional bandwidth by least squares on the density.
+
+    The criterion estimates the integrated squared error of the conditional
+    density through two terms,
+
+    .. math::
+
+        \mathrm{CV}(h, \lambda) = \frac{1}{n} \sum_{i=1}^{n} \Biggl(
+            \frac{\sum_{j,k} K_x(X_i, X_j) K_x(X_i, X_k)
+                  \, (K_y \ast K_y)(Y_j, Y_k)}
+                 {\bigl( \sum_j K_x(X_i, X_j) \bigr)^2}
+            - 2 \hat f_{-i}(Y_i \mid X_i) \Biggr),
+
+    the first integrating the squared conditional density over the response
+    with every observation kept, the second a leave-one-out fit at the
+    observed pair. The response kernel enters the first term through its
+    self-convolution, so the response kernels must implement ``conv``.
+
+    Parameters
+    ----------
+    x_train : MixedData
+        Conditioning sample.
+    y_train : MixedData
+        Response sample.
+    bandwidth : ConditionalBandwidth
+        The bandwidth to score.
+    kernels : KernelSet, optional
+        Kernel families, one per column kind. Static.
+
+    Returns
+    -------
+    ScalarFloat
+        The criterion value, smaller being better.
+
+    References
+    ----------
+    .. [1] Hall, P., Racine, J. S., & Li, Q. (2004). "Cross-validation and
+           the estimation of conditional probability densities." Journal of
+           the American Statistical Association, 99, 1015-1026.
+    """
+    kernels = KernelSet() if kernels is None else kernels
+
+    weights_x = kweights(x_train, bandwidth.x, kernels=kernels)
+    convolved = kweights(y_train, bandwidth.y, kernels=kernels, op=Op.CONV)
+    values = kweights(y_train, bandwidth.y, kernels=kernels)
+    scale = jnp.prod(bandwidth.y.h) if y_train.spec.p_con else 1.0
+
+    full_sum = jnp.sum(weights_x, axis=1)
+    integrated = jnp.sum((weights_x @ convolved) * weights_x, axis=1) / (full_sum**2 * scale)
+
+    masked = weights_x * (1.0 - jnp.eye(x_train.n))
+    cross = jnp.sum(masked * values, axis=1) / (jnp.sum(masked, axis=1) * scale)
+
+    return jnp.mean(integrated - 2.0 * cross)
+
+
+def cv_ls_conditional_distribution(
     x_train: MixedData,
     y_train: MixedData,
     bandwidth: ConditionalBandwidth,
@@ -665,6 +601,7 @@ def select_conditional_bandwidth(
     solver: Callable[..., tuple[Array, ScalarFloat, Array, Array]] | None = None,
     n_starts: int = 3,
     method: Literal["cv_ml", "cv_ls"] = "cv_ml",
+    target: Literal["density", "distribution"] = "density",
 ) -> SelectionResult:
     """Select a conditional bandwidth by held-out likelihood or least squares."""
     from kerneljax.selection.optimize import _multistart, lbfgs
@@ -672,7 +609,12 @@ def select_conditional_bandwidth(
     kernels = KernelSet() if kernels is None else kernels
     solver = lbfgs if solver is None else solver
     x_train, y_train = _as_points(x), _as_points(y)
-    criterion = cv_ml_conditional if method == "cv_ml" else cv_ls_conditional
+    if method == "cv_ml":
+        if target == "distribution":
+            raise ValueError("cv_ml cannot select for a distribution, use cv_ls")
+        criterion = cv_ml_conditional
+    else:
+        criterion = cv_ls_conditional_density if target == "density" else cv_ls_conditional_distribution
 
     transform = _conditional_transform(x_train, y_train, kernels)
     start = _conditional_reference(x_train, y_train, kernels, search=True)
@@ -796,14 +738,10 @@ def _resolve_conditional(
             "cv_ls, reuse a cdensity fit, or supply a ConditionalBandwidth"
         )
 
-    if bw == "cv_ls" and target == "density":
-        raise ValueError(
-            "cv_ls scores the conditional distribution against the response indicator, "
-            "so it selects for cdist. Select a conditional density with cv_ml"
-        )
-
     method = cast(Literal["cv_ml", "cv_ls"], bw)
-    selection = select_conditional_bandwidth(x_train, y_train, kernels=kernels, n_starts=n_starts, method=method)
+    selection = select_conditional_bandwidth(
+        x_train, y_train, kernels=kernels, n_starts=n_starts, method=method, target=target
+    )
     return cast(ConditionalBandwidth, selection.bandwidth), selection
 
 

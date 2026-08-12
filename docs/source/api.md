@@ -3,6 +3,20 @@
 Everything below is exported from the top-level `kerneljax` namespace. The
 [Quickstart](quickstart.md) walks through the first few sections, which cover most use.
 
+## Data
+
+Mixed-type samples and the evaluation grids built from them.
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated
+   :nosignatures:
+
+   kerneljax.MixedData
+   kerneljax.grid
+   kerneljax.quantile_grid
+```
+
 ## Estimators
 
 The entry points. Each takes training data and a bandwidth rule, and returns a fit object.
@@ -21,7 +35,7 @@ The entry points. Each takes training data and a bandwidth rule, and returns a f
    kerneljax.cmode
 ```
 
-Once we've ran an estimator, we can pass the fit object to {func}`~kerneljax.summary`. It reads a density, regression, conditional, quantile or mode fit back and renders the report shown throughout these docs.
+Any fit passes to {func}`~kerneljax.summary` for the report shown throughout these docs.
 
 ```{eval-rst}
 .. autosummary::
@@ -31,40 +45,15 @@ Once we've ran an estimator, we can pass the fit object to {func}`~kerneljax.sum
    kerneljax.summary
 ```
 
-## Kernels
-
-One kernel per column kind, collected into a {class}`~kerneljax.KernelSet` and passed to any
-estimator through the `kernels` argument. The defaults are a second-order Gaussian for continuous
-columns, Aitchison-Aitken for unordered ones and Wang-van Ryzin for ordered ones.
-
-```{eval-rst}
-.. autosummary::
-   :toctree: generated
-   :nosignatures:
-
-   kerneljax.KernelSet
-   kerneljax.Gaussian
-   kerneljax.AitchisonAitken
-   kerneljax.WangVanRyzin
-   kerneljax.LiRacine
-```
-
 ## Bandwidth selection
 
-Passing a string to an estimator covers the common case. These are for selecting once and
-reusing the result, fixing a bandwidth by hand, or swapping the solver.
-{class}`~kerneljax.Bandwidth` is the container the rest of this section produces and every
-estimator consumes, holding one smoothing parameter per column. A conditional estimator
-smooths two samples at once, so {func}`~kerneljax.cdensity` and {func}`~kerneljax.cdist`
-take a {class}`~kerneljax.ConditionalBandwidth` instead, one block per sample.
+Selecting once to reuse the result, starting from a plug-in rule, or swapping the solver.
 
 ```{eval-rst}
 .. autosummary::
    :toctree: generated
    :nosignatures:
 
-   kerneljax.Bandwidth
-   kerneljax.ConditionalBandwidth
    kerneljax.select_bandwidth
    kerneljax.normal_reference
    kerneljax.lbfgs
@@ -72,8 +61,7 @@ take a {class}`~kerneljax.ConditionalBandwidth` instead, one block per sample.
 
 ### Criteria
 
-What selection minimizes. The classes configure a method and are what you hand to
-{func}`~kerneljax.select_bandwidth`.
+What selection minimizes, configured and handed to {func}`~kerneljax.select_bandwidth`.
 
 ```{eval-rst}
 .. autosummary::
@@ -85,8 +73,7 @@ What selection minimizes. The classes configure a method and are what you hand t
    kerneljax.DistributionCriterion
 ```
 
-Underneath each is an ordinary differentiable function, callable directly and usable inside
-a larger JAX program.
+Underneath each is an ordinary differentiable function, callable directly.
 
 ```{eval-rst}
 .. autosummary::
@@ -100,27 +87,37 @@ a larger JAX program.
    kerneljax.cv_cdf_distribution
 ```
 
-## Data
+## Kernels
 
-Mixed-type samples and the evaluation grids built from them. A column's kind determines
-which kernel applies to it.
+One kernel per column kind, collected into a {class}`~kerneljax.KernelSet`.
 
 ```{eval-rst}
 .. autosummary::
    :toctree: generated
    :nosignatures:
 
-   kerneljax.MixedData
-   kerneljax.grid
-   kerneljax.quantile_grid
+   kerneljax.KernelSet
+   kerneljax.Gaussian
+   kerneljax.AitchisonAitken
+   kerneljax.WangVanRyzin
+   kerneljax.LiRacine
 ```
 
-## Fit objects
+## Containers
 
-What the estimators and solvers hand back. You read these rather than construct them, so
-the pages below are mostly attribute listings. Each pairs with a callable listed elsewhere,
-so {func}`~kerneljax.local_poly` returns a {class}`~kerneljax.LocalPolyFit` and
-{func}`~kerneljax.wls` returns a {class}`~kerneljax.WLS`.
+Smoothing parameters, one per column, with the conditional form carrying one block per
+sample.
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated
+   :nosignatures:
+
+   kerneljax.Bandwidth
+   kerneljax.ConditionalBandwidth
+```
+
+The results estimators and solvers hand back, read rather than constructed.
 
 ```{eval-rst}
 .. autosummary::
@@ -140,9 +137,7 @@ so {func}`~kerneljax.local_poly` returns a {class}`~kerneljax.LocalPolyFit` and
 
 ## Primitives
 
-The kernel weight matrix, the contraction underneath every estimator, and the weighted least
-squares solver behind local polynomial regression. Build estimators that no entry point
-above covers directly from these.
+The pieces every estimator above is built from.
 
 ```{eval-rst}
 .. autosummary::
@@ -157,8 +152,7 @@ above covers directly from these.
 
 ## Extension points
 
-Subclass these to add a kernel of your own. A kernel must be elementwise and differentiable
-in its smoothing parameter.
+Subclass these to add a kernel of your own.
 
 ```{eval-rst}
 .. autosummary::
