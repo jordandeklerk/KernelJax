@@ -245,20 +245,3 @@ There are no flags to bypass these checks. A refusal a user can switch off is a 
 warnings train people to ignore them. The checks follow one placement rule. They run when a
 feature first depends on the property they verify, not before, so everything that was
 already correct stays out of their way.
-
-## Held to the literature
-
-Every estimator and criterion in KernelJax is checked numerically against the R package
-[np](https://cran.r-project.org/package=np), which has been the reference implementation of
-mixed-type kernel smoothing for two decades. The standard is machine precision at matched
-inputs, not statistical closeness, and the difference matters. A criterion that agrees with
-the reference to within half a percent is easily close enough to pass a statistical eye, yet
-a gap that size can hide a structural difference in which observations enter which sum.
-Agreement to ten digits is not pedantry. It is how a formula transcribed from a paper is
-distinguished from the formula the reference actually computes. The
-[contributing](contributing.md) page describes how the comparison is run.
-
-The same standard extends to the documentation. Every number printed on these pages is
-produced by executing the page, and every error message shown is the message the library
-actually raises, verified on every documentation build. The blocks above are no exception.
-A claim that cannot survive being executed does not ship.
