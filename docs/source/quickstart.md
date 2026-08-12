@@ -335,7 +335,7 @@ Conditional density estimate
 
   Log likelihood               -217.261520
 
-  Selection                 cv_ml_conditional
+  Selection                          cv_ml
   Criterion value                 0.955425
   Solver iterations                     30
   Converged                           True
@@ -389,10 +389,10 @@ We have used `"cv_ls"`, `"cv_ml"`, and `"cv_cdf"` without saying much about the 
 | {func}`~kerneljax.local_poly` | `"cv_ls"`, `"aic"`, `"normal_reference"`   |
 | {func}`~kerneljax.density`    | `"cv_ml"`, `"cv_ls"`, `"normal_reference"` |
 | {func}`~kerneljax.cdf`        | `"cv_cdf"`, `"normal_reference"`           |
-| {func}`~kerneljax.cdensity`   | `"cv_ml"`, `"normal_reference"`            |
+| {func}`~kerneljax.cdensity`   | `"cv_ml"`, `"cv_ls"`, `"normal_reference"` |
 | {func}`~kerneljax.cdist`      | `"cv_ls"`, `"normal_reference"`            |
 | {func}`~kerneljax.cquantile`  | `"cv_ls"`, `"normal_reference"`            |
-| {func}`~kerneljax.cmode`      | `"cv_ml"`, `"normal_reference"`            |
+| {func}`~kerneljax.cmode`      | `"cv_ml"`, `"cv_ls"`, `"normal_reference"` |
 
 `"normal_reference"` is the inexpensive option. It uses a closed-form plug-in rule based on a normal reference model and does not run numerical optimization.
 

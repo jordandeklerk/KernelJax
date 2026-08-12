@@ -56,7 +56,7 @@ def cdensity(
         Response sample, with the same number of rows as ``x``.
     bw : ConditionalBandwidth, SelectionResult, ConditionalFit or str
         The bandwidth, a selection to reuse, an earlier fit, or the name of
-        a selection rule, either ``"cv_ml"`` or ``"normal_reference"``.
+        a selection rule, ``"cv_ml"``, ``"cv_ls"`` or ``"normal_reference"``.
     at_x : MixedData or Array, optional
         Conditioning evaluation points. Defaults to ``x``.
     at_y : MixedData or Array, optional
@@ -338,8 +338,8 @@ def cmode(
         Response sample, a single unordered or ordered column.
     bw : ConditionalBandwidth, SelectionResult, ConditionalFit or str
         The bandwidth, a selection to reuse, an earlier fit, or the name of
-        a selection rule, either ``"cv_ml"`` or ``"normal_reference"``. The
-        bandwidth is the one a conditional density uses.
+        a selection rule, ``"cv_ml"``, ``"cv_ls"`` or ``"normal_reference"``.
+        The bandwidth is the one a conditional density uses.
     at_x : MixedData or Array, optional
         Conditioning evaluation points. Defaults to ``x``, in which case the
         fit also reports the share of observations it classifies correctly.
@@ -466,7 +466,70 @@ def cv_ml_conditional(
     return -jnp.mean(jnp.log(held_out))
 
 
-def cv_ls_conditional(
+def cv_ls_conditional_density(
+    x_train: MixedData,
+    y_train: MixedData,
+    bandwidth: ConditionalBandwidth,
+    *,
+    kernels: KernelSet | None = None,
+) -> ScalarFloat:
+    r"""Score a conditional bandwidth by least squares on the density.
+
+    The criterion estimates the integrated squared error of the conditional
+    density through two terms,
+
+    .. math::
+
+        \mathrm{CV}(h, \lambda) = \frac{1}{n} \sum_{i=1}^{n} \Biggl(
+            \frac{\sum_{j,k} K_x(X_i, X_j) K_x(X_i, X_k)
+                  \, (K_y \ast K_y)(Y_j, Y_k)}
+                 {\bigl( \sum_j K_x(X_i, X_j) \bigr)^2}
+            - 2 \hat f_{-i}(Y_i \mid X_i) \Biggr),
+
+    the first integrating the squared conditional density over the response
+    with every observation kept, the second a leave-one-out fit at the
+    observed pair. The response kernel enters the first term through its
+    self-convolution, so the response kernels must implement ``conv``.
+
+    Parameters
+    ----------
+    x_train : MixedData
+        Conditioning sample.
+    y_train : MixedData
+        Response sample.
+    bandwidth : ConditionalBandwidth
+        The bandwidth to score.
+    kernels : KernelSet, optional
+        Kernel families, one per column kind. Static.
+
+    Returns
+    -------
+    ScalarFloat
+        The criterion value, smaller being better.
+
+    References
+    ----------
+    .. [1] Hall, P., Racine, J. S., & Li, Q. (2004). "Cross-validation and
+           the estimation of conditional probability densities." Journal of
+           the American Statistical Association, 99, 1015-1026.
+    """
+    kernels = KernelSet() if kernels is None else kernels
+
+    weights_x = kweights(x_train, bandwidth.x, kernels=kernels)
+    convolved = kweights(y_train, bandwidth.y, kernels=kernels, op=Op.CONV)
+    values = kweights(y_train, bandwidth.y, kernels=kernels)
+    scale = jnp.prod(bandwidth.y.h) if y_train.spec.p_con else 1.0
+
+    full_sum = jnp.sum(weights_x, axis=1)
+    integrated = jnp.sum((weights_x @ convolved) * weights_x, axis=1) / (full_sum**2 * scale)
+
+    masked = weights_x * (1.0 - jnp.eye(x_train.n))
+    cross = jnp.sum(masked * values, axis=1) / (jnp.sum(masked, axis=1) * scale)
+
+    return jnp.mean(integrated - 2.0 * cross)
+
+
+def cv_ls_conditional_distribution(
     x_train: MixedData,
     y_train: MixedData,
     bandwidth: ConditionalBandwidth,
@@ -538,6 +601,7 @@ def select_conditional_bandwidth(
     solver: Callable[..., tuple[Array, ScalarFloat, Array, Array]] | None = None,
     n_starts: int = 3,
     method: Literal["cv_ml", "cv_ls"] = "cv_ml",
+    target: Literal["density", "distribution"] = "density",
 ) -> SelectionResult:
     """Select a conditional bandwidth by held-out likelihood or least squares."""
     from kerneljax.selection.optimize import _multistart, lbfgs
@@ -545,7 +609,12 @@ def select_conditional_bandwidth(
     kernels = KernelSet() if kernels is None else kernels
     solver = lbfgs if solver is None else solver
     x_train, y_train = _as_points(x), _as_points(y)
-    criterion = cv_ml_conditional if method == "cv_ml" else cv_ls_conditional
+    if method == "cv_ml":
+        if target == "distribution":
+            raise ValueError("cv_ml cannot select for a distribution, use cv_ls")
+        criterion = cv_ml_conditional
+    else:
+        criterion = cv_ls_conditional_density if target == "density" else cv_ls_conditional_distribution
 
     transform = _conditional_transform(x_train, y_train, kernels)
     start = _conditional_reference(x_train, y_train, kernels, search=True)
@@ -669,14 +738,10 @@ def _resolve_conditional(
             "cv_ls, reuse a cdensity fit, or supply a ConditionalBandwidth"
         )
 
-    if bw == "cv_ls" and target == "density":
-        raise ValueError(
-            "cv_ls scores the conditional distribution against the response indicator, "
-            "so it selects for cdist. Select a conditional density with cv_ml"
-        )
-
     method = cast(Literal["cv_ml", "cv_ls"], bw)
-    selection = select_conditional_bandwidth(x_train, y_train, kernels=kernels, n_starts=n_starts, method=method)
+    selection = select_conditional_bandwidth(
+        x_train, y_train, kernels=kernels, n_starts=n_starts, method=method, target=target
+    )
     return cast(ConditionalBandwidth, selection.bandwidth), selection
 
 
