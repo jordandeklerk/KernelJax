@@ -1,9 +1,8 @@
 # Density and distribution
 
-{func}`~kerneljax.density` and {func}`~kerneljax.cdf` describe a sample on its own
-terms, where its mass concentrates and what fraction lies below any cut. Both are built
-from the same smoothing machinery as the regression, and both select their bandwidths from
-the data.
+{func}`~kerneljax.density` and {func}`~kerneljax.cdf` describe the distribution of a sample directly. A density shows where probability mass is concentrated, while a cumulative distribution function gives the probability of falling at or below an evaluation point.
+
+Both use the same mixed-type kernel machinery as regression, but they combine those kernels differently and use criteria suited to the quantity being estimated.
 
 The setup is the shared wage example from [Working with data](data.md).
 
@@ -30,21 +29,87 @@ data = kj.MixedData.from_blocks(
 )
 ```
 
-Regression asks how the conditional mean of a response changes with its covariates. KernelJax also exposes density and distribution estimators built from the same smoothing machinery.
-
-First, put wage into a `MixedData` object and create a grid over its range.
+Regression asks how the conditional mean of one variable changes with others. Here we instead treat wage itself as the sample whose distribution we want to estimate.
 
 ```python
-wage_data = kj.MixedData.from_blocks(continuous=wage, names=("wage",))
+wage_data = kj.MixedData.from_blocks(
+    continuous=wage,
+    names=("wage",),
+)
+
 wage_grid = np.linspace(wage.min(), wage.max(), 200)
 wage_points = kj.MixedData.continuous(wage_grid)
 ```
 
-A density and CDF differ mainly in the criterion used to select their bandwidths.
+## Density and distribution estimates
+
+For a mixed sample, write $\mathcal{C}$, $\mathcal{U}$, and $\mathcal{O}$ for the continuous, unordered, and ordered columns. KernelJax forms the unscaled product-kernel weight
+
+$$
+W_i(x)
+=
+\prod_{d\in\mathcal{C}}
+k_d\left(
+\frac{x_d - X_{id}}{h_d}
+\right)
+\prod_{d\in\mathcal{U}}
+L_d^{\mathrm{uno}}(x_d, X_{id}; \lambda_d)
+\prod_{d\in\mathcal{O}}
+L_d^{\mathrm{ord}}(x_d, X_{id}; \lambda_d).
+$$
+
+The continuous kernel values here do not contain their $1/h_d$ scale factors. A density applies those factors once after forming the product,
+
+$$
+\hat f(x)
+=
+\frac{1}{n \prod_{d\in\mathcal{C}} h_d}
+\sum_{i=1}^{n}
+W_i(x).
+$$
+
+The [Kernel smoothing](../background/smoothing.md#building-a-density-estimator) page develops this estimator from the one-dimensional case, while [Mixed-type data](../background/mixed-data.md#the-product-kernel) introduces the product kernel used across column types.
+
+A cumulative distribution replaces each kernel value with its cumulative counterpart. For supported column types,
+
+$$
+\hat F(x)
+=
+\frac{1}{n}
+\sum_{i=1}^{n}
+G_{h, \lambda}(x, X_i),
+$$
+
+with
+
+$$
+G_{h, \lambda}(x, X_i)
+=
+\prod_d G_d(x_d, X_{id}).
+$$
+
+For a continuous Gaussian kernel,
+
+$$
+G_d(x_d, X_{id})
+=
+\Phi\left(
+\frac{x_d - X_{id}}{h_d}
+\right),
+$$
+
+where $\Phi$ is the standard normal distribution function. Integrating the scaled density kernel absorbs the $1/h_d$ factor, so no bandwidth divisor remains in the CDF.
+
+For an ordered categorical column, $G_d$ instead sums the ordered kernel over levels at or below the requested value. Each observation therefore contributes a smooth analogue of the step that it would contribute to the empirical distribution function.
+
+An unordered category has no notion of “at or below.” For that reason, {func}`~kerneljax.cdf` supports continuous and ordered columns but not unordered ones.
+
+For the one-dimensional wage sample, both estimators are straightforward.
 
 ```python
 dens = kj.density(wage_data, "cv_ml", at=wage_points)
 dist = kj.cdf(wage_data, "cv_cdf", at=wage_points)
+
 print(f"density       h={dens.bandwidth.h[0]:.6f}")
 print(f"distribution  h={dist.bandwidth.h[0]:.6f}")
 ```
@@ -56,26 +121,96 @@ distribution  h=0.443713
 
 ```python
 fig, (left, right) = plt.subplots(1, 2, figsize=(9.6, 3.6))
+
 left.hist(wage, bins=30, density=True, color="#8a8f98", alpha=0.35)
 left.plot(wage_grid, dens.value, color="#4c78a8", lw=2.2)
 left.set_title("density")
 left.set_xlabel("wage")
+
 right.plot(wage_grid, dist.value, color="#54a24b", lw=2.2)
 right.set_title("distribution")
 right.set_xlabel("wage")
+
 fig.tight_layout()
 plt.show()
 ```
 
 ![Density and distribution of wage](../_static/figures/quickstart-3.svg)
 
-The density tells us where wages are concentrated. The distribution function tells us what fraction lies below any given wage.
+The density shows where wages are concentrated. The distribution gives the estimated fraction of the population lying at or below any particular wage.
+
+The bandwidths happen to be similar here, but they solve different optimization problems. There is no reason for density and distribution bandwidths to agree in general.
+
+## Selecting a density bandwidth
+
+The density above uses likelihood cross-validation through `"cv_ml"`.
+
+At a candidate bandwidth, observation $i$ is removed from its own density estimate,
+
+$$
+\hat f_{-i}(X_i)
+=
+\frac{1}
+{(n-1)\prod_{d\in\mathcal{C}} h_d}
+\sum_{k\ne i}
+W_k(X_i),
+$$
+
+and the criterion is the negative leave-one-out log likelihood
+
+$$
+\operatorname{CV}_{\mathrm{ML}}(h, \lambda)
+=
+- \sum_{i=1}^{n}
+\log \hat f_{-i}(X_i).
+$$
+
+Minimizing this criterion asks the rest of the sample to place high density at each held-out observation. The [Bandwidth selection](../background/selection.md#likelihood-cross-validation) page relates the population version of this objective to Kullback-Leibler divergence.
+
+KernelJax also supports least-squares cross-validation for densities through `"cv_ls"`. The two criteria estimate density fit in different ways, so they need not choose the same bandwidth.
+
+## Selecting a distribution bandwidth
+
+A CDF requires a different objective.
+
+Using the CDF value itself as though it were a likelihood does not produce a useful smoothing criterion. Instead, KernelJax compares the smoothed distribution estimate with the indicator that an empirical CDF is trying to estimate.
+
+For evaluation points $x_1, \ldots, x_N$,
+
+$$
+\operatorname{CV}_{\mathrm{CDF}}(h, \lambda)
+=
+\frac{1}{nN}
+\sum_{j=1}^{N}
+\sum_{i=1}^{n}
+\left[
+\mathbf{1}\{ X_i \le x_j \}
+-
+\hat F_{-i}(x_j)
+\right]^2,
+$$
+
+where
+
+$$
+\hat F_{-i}(x_j)
+=
+\frac{1}{n-1}
+\sum_{k \ne i}
+G_{h, \lambda}(x_j, X_k).
+$$
+
+For multiple continuous or ordered columns, $\mathbf{1}\{ X_i \le x_j \}$ is one only when observation $i$ lies at or below evaluation point $x_j$ in every column.
+
+By default, the criterion evaluates this loss at $N=100$ points from {func}`~kerneljax.quantile_grid`. In the one-dimensional wage example, those are 100 sample quantiles spanning the observed distribution.
+
+Each squared term therefore compares a leave-one-out smooth CDF with the step indicator it is meant to reproduce. This plays the same role for distribution estimation that held-out prediction error plays in regression.
 
 ## Mixed-type density
 
-Nothing restricts a density to continuous columns. The joint density of the full sample
-smooths experience by distance, region by level match, and education by level distance,
-and every smoothing parameter is selected jointly.
+Density estimation does not require every column to be continuous. The joint density of the full sample combines a continuous kernel for experience, an unordered kernel for region, and an ordered kernel for education, with all three smoothing parameters selected jointly.
+
+More precisely, the result is a density with respect to the product of Lebesgue measure on the continuous coordinates and counting measure on the categorical coordinates.
 
 ```python
 joint = kj.density(data, "cv_ml")
@@ -106,24 +241,53 @@ Mixed-type density estimate
   Converged                           True
 ```
 
-The categorical smoothing parameters read the same way as in the regression. A value near
-zero keeps a variable's levels distinct, and a value at the kernel's upper bound pools them
-completely.
+The categorical smoothing parameters have the same interpretation they did in regression. Values near zero preserve distinctions between levels, while values approaching the kernel's upper bound increasingly pool across them.
+
+Region is again essentially at the Aitchison–Aitken upper bound of $0.75$, so its levels receive nearly equal weight. Education is at the opposite extreme, with a smoothing parameter effectively equal to zero, so its ordered levels remain distinct in the estimated joint density.
+
+These bandwidths describe the **joint distribution of the covariates**, not their relationship with wage. Their interpretation should therefore remain tied to the density criterion being optimized rather than read as a general statement of variable importance.
 
 ## Distribution standard errors
 
-Every distribution fit carries pointwise standard errors, no extra argument needed, and
-they are largest near the median where the binomial variance of an empirical proportion
-peaks.
+Every {func}`~kerneljax.cdf` fit also carries a pointwise standard error.
+
+KernelJax treats the estimated CDF value as a sample proportion and uses the plug-in expression
+
+$$
+\widehat{\operatorname{se}}\left(\hat F(x)\right)
+=
+\sqrt{\frac{
+\hat F(x) \bigl(1 - \hat F(x)\bigr)
+}{n}},
+$$
+
+where $n$ is the number of training observations.
+
+Under this formula, the variance term $\hat F(x)\bigl(1 - \hat F(x)\bigr)$ is largest when $\hat F(x) = 1/2$. The standard error is therefore bounded above by $\frac{1}{2\sqrt{n}}$.
+
+With $n = 300$,
+
+$$
+\frac{1}{2\sqrt{300}}
+\approx 0.0289.
+$$
+
+The standard error is largest near the middle of the estimated distribution and shrinks toward the tails as $\hat F(x)$ approaches zero or one.
+
+It is important to read this as the plug-in approximation KernelJax reports. It treats $\hat F(x)$ like an ordinary empirical proportion and does not separately account for smoothing bias, bandwidth-selection uncertainty, or other effects introduced by estimating the smoothed CDF.
+
+We can compare a point near the lower tail with the sample median.
 
 ```python
-dist_se = kj.cdf(wage_data, "cv_cdf", at=wage_points)
-middle = wage_grid.size // 2
-print(f"se at the low end={float(dist_se.se[0]):.4f}")
-print(f"se near the median={float(dist_se.se[middle]):.4f}")
+median_idx = np.argmin(np.abs(wage_grid - np.median(wage)))
+
+print(f"se at the low end={float(dist.se[0]):.4f}")
+print(f"se near the median={float(dist.se[median_idx]):.4f}")
 ```
 
 ```text
 se at the low end=0.0025
-se near the median=0.0273
+se near the median=0.0289
 ```
+
+Near the sample median, $\hat F(x)$ is close to one half and the standard error approaches its maximum. Near the lower end of the observed range, the estimated CDF is much closer to zero, so the plug-in standard error is correspondingly smaller.

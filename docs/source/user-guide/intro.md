@@ -51,9 +51,57 @@ Local polynomial regression
 
 Nothing in that call was tuned by hand. `"cv_ls"` selects both smoothing parameters jointly by least-squares cross-validation. KernelJax minimizes that differentiable criterion with gradient-based optimization, and the report keeps the selection diagnostics alongside the goodness-of-fit statistics.
 
-This is the central idea behind the library. Criteria, kernels, and estimators remain ordinary JAX computations, so selection can use gradients, fits can run under `jit`, and bandwidths can participate in larger differentiable models.
+Two of those statistics describe the fit itself. The reported residual standard error is the root mean squared residual
 
-The categorical column also required no dummy encoding or separate per-group fits. {class}`~kerneljax.MixedData` records which variables are continuous, unordered, or ordered, and each kind is smoothed with an appropriate kernel. Its smoothing parameter is selected jointly with the continuous bandwidths, so a categorical variable carrying no information about the response can be smoothed away automatically.
+$$
+\operatorname{RSE} = \left[
+\frac{1}{n}
+\sum_{i=1}^{n}
+\bigl(Y_i - \hat m(X_i)\bigr)^2
+\right]^{1/2},
+$$
+
+where $Y_i$ is the response at observation $i$, $\hat m(X_i)$ is its fitted value, and $n$ is the sample size. Despite the name in the report, this is the root mean squared residual rather than a degrees-of-freedom adjusted estimate of the error standard deviation. The [background page on regression](../background/regression.md#the-smoother-matrix) explains why KernelJax uses $n$ in the denominator.
+
+The reported $R^2$ is also slightly different from the familiar linear-model definition. KernelJax measures both the response and the fitted values relative to the response mean $\bar Y$ and takes their squared cosine,
+
+$$
+R^2 = \frac{
+\left[
+\sum_{i=1}^{n}
+(Y_i-\bar Y)
+\bigl(\hat m(X_i)-\bar Y\bigr)
+\right]^2
+}{
+\left[
+\sum_{i=1}^{n}(Y_i-\bar Y)^2
+\right]
+\left[
+\sum_{i=1}^{n}\bigl(\hat m(X_i)-\bar Y\bigr)^2
+\right]
+},
+\qquad
+\bar Y = \frac{1}{n}\sum_{i=1}^{n}Y_i.
+$$
+
+This is not, in general, the squared Pearson correlation because the fitted values are centered at $\bar Y$ rather than at their own sample mean. Whenever the denominator is nonzero, the Cauchy-Schwarz inequality keeps the statistic in $[0, 1]$.
+
+The more familiar definition
+
+$$
+1 -
+\frac{
+\sum_i \bigl(Y_i-\hat m(X_i)\bigr)^2
+}{
+\sum_i (Y_i-\bar Y)^2
+}
+$$
+
+agrees with the statistic above when the residuals are orthogonal to the fitted deviations $\hat m(X_i)-\bar Y$. An ordinary least-squares projection with an intercept has that property. A local polynomial smoother does not generally have it, so the two definitions need not coincide.
+
+This is the central idea behind the library. Criteria, kernels, and estimators remain ordinary JAX computations, so selection can use automatic differentiation, fits can run under `jit`, and bandwidths can participate directly in larger JAX programs.
+
+The categorical column also required no dummy encoding or separate per-group fits. {class}`~kerneljax.MixedData` records which variables are continuous, unordered, or ordered, and each kind is smoothed with an appropriate kernel. Its smoothing parameter is selected jointly with the continuous bandwidths, so a categorical variable carrying little useful information can be smoothed toward its maximum-smoothing limit automatically.
 
 ## Reading a fit
 
@@ -137,7 +185,33 @@ So far, we have used KernelJax from the outside. The rest of this page looks und
 
 Every estimator is a thin layer over the same small set of operations. {func}`~kerneljax.kweights` builds the matrix of kernel weights between evaluation and training points, and {func}`~kerneljax.ksum` contracts those weights against whatever the estimator needs.
 
-A density uses only the weights themselves.
+For a mixed sample, an entry of the weight matrix can be written as
+
+$$
+W(x,X_i) = \prod_{d\in\mathcal C}
+k\!\left(
+\frac{x_d-X_{id}}{h_d}
+\right)
+\prod_{d\in\mathcal U}
+L_d^{\mathrm{uno}}(x_d,X_{id};\lambda_d)
+\prod_{d\in\mathcal O}
+L_d^{\mathrm{ord}}(x_d,X_{id};\lambda_d),
+$$
+
+where $\mathcal C$, $\mathcal U$, and $\mathcal O$ index the continuous, unordered, and ordered columns. The continuous kernel is $k$, $h_d$ is its bandwidth, and the categorical kernels use smoothing parameters $\lambda_d$.
+
+The important detail is that {func}`~kerneljax.kweights` leaves out the continuous $1/h_d$ scale factors. Categorical kernels have no corresponding bandwidth divisor, and leaving the continuous factors unscaled lets each estimator apply the normalization it needs exactly once.
+
+For a density estimate, that normalization gives
+
+$$
+\hat f(x) = \frac{1}{
+n\prod_{d\in\mathcal C}h_d
+}
+\sum_{i=1}^{n} W(x,X_i).
+$$
+
+The reconstruction below is exactly that calculation.
 
 ```python
 import jax
@@ -164,7 +238,7 @@ The primitives are public for the same reason. An estimator that KernelJax does 
 
 ## Keep the full path differentiable
 
-Bandwidth selection is where KernelJax's use of JAX matters most. Traditional implementations generally treat the selection criterion as a black box and optimize it with derivative-free methods. KernelJax keeps the criterion itself differentiable with respect to the bandwidth.
+Bandwidth selection is where KernelJax's use of JAX matters most. Many traditional implementations treat the selection criterion as a black box and optimize it with derivative-free methods. KernelJax keeps the criterion itself differentiable with respect to the bandwidth.
 
 The same least-squares criterion used in the opening example can be differentiated directly.
 
@@ -181,11 +255,50 @@ print(f"d/dh={float(gradient.h[0]):+.4f}  d/dlam={float(gradient.lam_uno[0]):+.4
 d/dh=+0.3965  d/dlam=+0.0542
 ```
 
-The solver iterations reported by the opening fit are optimization steps driven by this gradient. In practice, that lets bandwidth selection reach a solution in far fewer criterion evaluations than a derivative-free search. The [primitives guide](primitives.md) evaluates the same gradient at a plug-in starting point and at the selected solution.
+These are derivatives with respect to the bandwidths in their natural constrained scale. The optimizer itself works in unconstrained coordinates, so it sees these derivatives through the transformation that maps an unconstrained vector back to a valid bandwidth.
 
-Differentiability also constrains how the optimization is parameterized. Continuous bandwidths are represented through a softplus transform, while categorical smoothing parameters use a scaled logistic transform. Optimization therefore happens over unconstrained coordinates while the transformed values remain inside their valid domains.
+Write $z_d$ for the unconstrained coordinate associated with column $d$. Continuous bandwidths use the softplus map
 
-The same geometry explains why categorical smoothing parameters do not initialize exactly at zero. Under the logistic transform, zero lies in a flat tail where the gradient has little leverage, so optimization starts slightly inside the admissible region instead.
+$$
+h_d = \operatorname{softplus}(z_d) = \log\bigl(1+e^{z_d}\bigr),
+$$
+
+while categorical smoothing parameters use a scaled logistic map
+
+$$
+\lambda_d = \bar\lambda_d\,\sigma(z_d),
+\qquad
+\sigma(z) = \frac{1}{1+e^{-z}},
+$$
+
+where $\bar\lambda_d$ is the upper bound imposed by the categorical kernel. For the default Aitchison-Aitken kernel on an unordered variable with $c$ levels, that bound is $\bar\lambda_d = (c-1)/c$.
+
+The softplus maps the real line onto $(0,\infty)$, while the scaled logistic maps it onto $(0,\bar\lambda_d)$. The optimizer can therefore move freely in $z$ without stepping outside the admissible bandwidth region.
+
+The chain rule gives the gradient that the optimizer actually follows. For a continuous coordinate,
+
+$$
+\frac{\partial \mathrm{CV}}{\partial z_d}
+= \frac{\partial \mathrm{CV}}{\partial h_d}\,\sigma(z_d),
+$$
+
+because the derivative of the softplus is the logistic function. For a categorical coordinate,
+
+$$
+\frac{\partial \mathrm{CV}}{\partial z_d}
+= \frac{\partial \mathrm{CV}}{\partial \lambda_d}\,\bar\lambda_d\,
+\sigma(z_d)\bigl(1-\sigma(z_d)\bigr).
+$$
+
+The solver iterations reported by the opening fit are driven by these transformed gradients rather than by the natural-scale gradient printed above. This lets the optimizer use automatic derivatives of the criterion while keeping every candidate bandwidth valid.
+
+The same geometry explains the categorical starting rule. The boundary value $\lambda_d=0$ corresponds to $z_d\to-\infty$, where
+
+$$
+\sigma(z_d)\bigl(1-\sigma(z_d)\bigr)\to 0.
+$$
+
+Starting at that boundary would therefore leave almost no gradient in the unconstrained coordinate. KernelJax instead starts categorical parameters at $\lambda_d = \bar\lambda_d / 2$, which corresponds to $z_d=0$, where the logistic derivative is largest and the search has room to move in either direction.
 
 ## Separate structure from values
 
@@ -205,7 +318,7 @@ A {class}`~kerneljax.SelectionResult` remembers the criterion and kernels it was
 
 The earlier prediction example relied on exactly this behavior. Passing `fit` as the bandwidth rule reused the selected bandwidth and its settings without running selection again.
 
-Provenance is only useful if it cannot be silently overridden. An explicitly supplied setting therefore has to agree with the one carried by the result.
+That context is only useful if it cannot be silently overridden. An explicitly supplied setting therefore has to agree with the one carried by the result.
 
 ```python
 kj.local_poly(data, y, fit, degree=2)

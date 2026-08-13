@@ -26,53 +26,61 @@ __all__ = ["ConditionalFit", "DensityFit", "DistributionFit", "LocalPolyFit", "M
 class LocalPolyFit:
     r"""Result of a local polynomial regression fit.
 
-    The basis is centered at each evaluation point :math:`x`, so the fitted coefficients
-    read off directly,
+    The polynomial basis is centered and scaled at each evaluation point
+    :math:`x`, so the intercept gives the fitted value directly and the
+    first-order coefficients recover derivatives after rescaling by the
+    bandwidth,
 
     .. math::
 
         \hat m(x) = \beta_0, \qquad
-        \frac{\partial \hat m}{\partial x_j}(x) = \frac{\beta_j}{h_j}
+        \frac{\partial \hat m}{\partial x_j}(x) = \frac{\beta_j}{h_j}.
 
-    with :math:`\beta_j` the coefficient of the first order term in column :math:`j` and
-    :math:`h_j` its bandwidth.
+    Here :math:`\beta_j` is the coefficient of the first-order term for
+    continuous column :math:`j`, and :math:`h_j` is its bandwidth.
 
     Attributes
     ----------
     mean : Float[Array, " n_eval"]
-        The fitted regression value at every evaluation point.
+        Fitted regression value at every evaluation point.
     grad : Float[Array, "n_eval p_con"] or None
-        The gradient of the fitted value with respect to every
-        continuous column at every evaluation point, or ``None`` when
-        the fit did not request one.
+        Gradient of the fitted value with respect to every continuous
+        column at every evaluation point, or ``None`` when gradients were
+        not requested.
     coef : Float[Array, "n_eval k"]
-        The full coefficient vector at every evaluation point, in
-        bandwidth units.
+        Full local polynomial coefficient vector at every evaluation point,
+        expressed in bandwidth-scaled coordinates.
     rcond : Float[Array, " n_eval"]
-        The reciprocal condition number of the weighted moment system
-        at every evaluation point, from :func:`~kerneljax.wls`.
+        Reciprocal condition number of the weighted moment system at every
+        evaluation point, from :func:`~kerneljax.wls`.
     bandwidth : Bandwidth
-        The bandwidth used to produce the fit.
+        Bandwidth used to produce the fit.
     se : Float[Array, " n_eval"] or None
-        The standard error of the fitted mean at every evaluation
-        point, or ``None`` when the fit did not request one.
+        Standard error of the fitted mean at every evaluation point, or
+        ``None`` when standard errors were not requested.
     selection : SelectionResult, optional
-        The selection that produced ``bandwidth``, or ``None`` when the
+        Selection result that produced ``bandwidth``, or ``None`` when the
         bandwidth was supplied directly.
     degree : int
         Total degree of the local polynomial basis. Static.
     kernels : KernelSet
-        Kernel families the fit was produced with. Static.
+        Kernel families used to produce the fit. Static.
     spec : ColumnSpec, optional
         Column metadata of the training sample. Static.
     n_train : int
         Number of training points. Static.
     r_squared : ScalarFloat, optional
-        Squared correlation between the fitted and observed responses,
-        or ``None`` when the fit was evaluated away from its training
-        points and there is nothing to compare against.
+        Squared cosine between the observed and fitted responses after both
+        are centered at the sample mean of the observed response. Lies in
+        ``[0, 1]`` when defined. This is not generally the squared Pearson
+        correlation because the fitted values are not centered at their own
+        sample mean. ``None`` when the fit was evaluated away from its
+        training points.
     residual_se : ScalarFloat, optional
-        Root mean squared residual, on the same terms as ``r_squared``.
+        Root mean squared residual, ``sqrt(mean((y - mean) ** 2))``. This
+        uses ``n`` in the denominator rather than a degrees-of-freedom
+        correction. ``None`` when the fit was evaluated away from its
+        training points.
     """
 
     mean: Float[Array, " n_eval"]

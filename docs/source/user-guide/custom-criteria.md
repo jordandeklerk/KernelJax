@@ -10,6 +10,20 @@ This page builds a regression criterion first, uses it in bandwidth selection, a
 
 The built-in least-squares cross-validation criterion chooses the bandwidth that minimizes held-out squared prediction error. We can replace squared error with absolute deviation in a few lines.
 
+Written out, the built-in criterion averages the squared leave-one-out residuals,
+
+$$
+\mathrm{CV}_{ls}(h, \lambda) = \frac{1}{n} \sum_{i=1}^{n} \bigl(Y_i - \hat m_{-i}(X_i)\bigr)^2,
+$$
+
+over the $n$ observed pairs $(X_i, Y_i)$, where $\hat m_{-i}$ is the local polynomial fit evaluated at $X_i$ and formed without the observation sitting there, $h$ collects the continuous bandwidths, and $\lambda$ collects the categorical smoothing parameters. Replacing the square by an absolute value leaves every other part of that expression alone,
+
+$$
+\mathrm{CV}_{\mathrm{lad}}(h, \lambda) = \frac{1}{n} \sum_{i=1}^{n} \bigl| Y_i - \hat m_{-i}(X_i) \bigr|,
+$$
+
+and that one change is the whole of the criterion below. [Bandwidth selection](../background/selection.md#cross-validation-for-regression) derives the squared version and says what it targets.
+
 First, create a small regression problem with a handful of large outliers.
 
 ```python
@@ -211,6 +225,18 @@ Even when your criterion does not use them directly, include `kernels=None` and 
 
 The same interface works for density estimation. For example, the built-in likelihood criterion uses leave-one-out density estimates. We can instead write a five-fold version.
 
+The objective the class below returns is the leave-one-out log likelihood with a fold in place of the single point. Writing $F_i$ for the fold label of observation $i$,
+
+$$
+\begin{aligned}
+\mathrm{CV}^{(F)}_{ml}(h, \lambda) &= -\sum_{i=1}^{n} \log \hat f_{-F_i}(X_i), \\
+\hat f_{-F_i}(X_i) &= \frac{1}{n_i} \sum_{j \,:\, F_j \neq F_i} K_{h,\lambda}(X_i, X_j), \\
+n_i &= \#\{\, j \,:\, F_j \neq F_i \,\},
+\end{aligned}
+$$
+
+where $K_{h,\lambda}$ is the [product kernel](../background/mixed-data.md#the-product-kernel) across the columns, already carrying a factor $1/h_d$ for each continuous column, and $n_i$ counts the observations that survive the exclusion at row $i$. The built-in `cv_ml` criterion is the same expression with every label distinct, so its divisor is $n - 1$ at every row while the five-fold version divides by roughly $4n/5$. KernelJax forms $n_i$ itself, which is why the class never touches the denominator, and [Bandwidth selection](../background/selection.md#likelihood-cross-validation) explains what the leave-one-out form is estimating.
+
 ```python
 @dataclasses.dataclass(frozen=True)
 class KFoldLikelihood:
@@ -244,6 +270,24 @@ The important API point is that density criteria are not a separate extension me
 ## Holding observations out
 
 KernelJax estimators expose fold assignment directly rather than treating leave-one-out as a special mode. {func}`~kerneljax.ksum`, {func}`~kerneljax.local_poly`, and {func}`~kerneljax.density` accept a `fold` array containing one label per observation. Pairs with matching evaluation and training labels are excluded.
+
+Every estimator that accepts folds restricts its sum to the retained pairs, so a quantity evaluated at $X_i$ is built from
+
+$$
+\sum_{j \,:\, F_j \neq F_i} W(X_i, X_j)\, v_j ,
+$$
+
+where $F_i$ is again the label the `fold` array gives training point $i$, and $v_j$ is whatever the estimator contracts those weights against, a column of ones for a density and the response for a regression. A local polynomial applies the same restriction one level up, to the weighted least squares problem itself,
+
+$$
+\begin{aligned}
+\hat\beta_{-F_i}(X_i) &= \arg\min_{\beta} \sum_{j \,:\, F_j \neq F_i}
+K_{h,\lambda}(X_i, X_j)\bigl(Y_j - \beta^\top b\bigl((X_j - X_i) / h\bigr)\bigr)^2, \\
+\hat m_{-F_i}(X_i) &= e_1^\top \hat\beta_{-F_i}(X_i),
+\end{aligned}
+$$
+
+with $b$ the local polynomial basis centered at the evaluation point and $e_1$ the first standard basis vector, so that the intercept is again the fitted mean.
 
 For leave-one-out, every observation receives its own label.
 

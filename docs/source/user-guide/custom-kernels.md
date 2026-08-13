@@ -193,6 +193,20 @@ For a continuous kernel used in a density, two things must hold.
 1. `value` must integrate to one in standardized $u$-space.
 2. `value` must not include its own $1/h$ factor.
 
+One line of algebra says why both conditions are needed and why only a density notices them. Write $g$ for whatever `value` returns, $u = (x - y)/h$ for the scaled separation, and $X_1, \dots, X_n$ for the training sample. KernelJax supplies the factor $1/h$ itself, so for a single continuous column the estimate is
+
+$$
+\hat f(x) = \frac{1}{nh} \sum_{i=1}^{n} g\!\left(\frac{x - X_i}{h}\right).
+$$
+
+Substituting $u = (x - X_i)/h$, so that $dx = h\, du$ and the $1/h$ cancels, leaves
+
+$$
+\int \hat f(x)\, dx = \int g(u)\, du \quad \text{for every } h.
+$$
+
+The total mass of the estimate is exactly the $u$ integral of `value`, whatever bandwidth is in force. A kernel returning half the mass produces a density scaled by one half at every bandwidth, while a kernel returning $g(u)/h$ integrates to $1/h$, which is one at $h = 1$ and one half at $h = 2$. Those are the two numbers the checks below report.
+
 KernelJax applies the bandwidth normalization itself. Our Epanechnikov implementation satisfies both conditions.
 
 ```python
@@ -225,6 +239,19 @@ def value(self, x, y, h):
 KernelJax divides by the continuous bandwidths exactly once when the estimator requires it.
 
 The same convention applies to `value`, `conv`, and `cdf`. The exception is `deriv`, which differentiates with respect to the original evaluation coordinate and therefore carries the corresponding chain-rule factor.
+
+Written out, with $k$ the kernel in $u$ units, $k'$ its derivative in $u$, and $u = (x - y)/h$ the scaled separation, the four operators return
+
+$$
+\begin{aligned}
+\texttt{value} &= k(u), \\[2pt]
+\texttt{cdf} &= \int_{-\infty}^{u} k(t)\, dt, \\[2pt]
+\texttt{conv} &= (k * k)(u) = \int k(t)\, k(u - t)\, dt, \\[2pt]
+\texttt{deriv} &= \frac{\partial}{\partial x}\, k\!\left(\frac{x - y}{h}\right) = \frac{1}{h}\, k'(u).
+\end{aligned}
+$$
+
+The first three are functions of $u$ alone and mention no bandwidth. Only `deriv` carries one, because differentiating in $x$ rather than in $u$ brings down a factor $1/h$ from the chain rule. Returning $k'(u)$ without that factor is the usual mistake, and it scales every reported derivative by the bandwidth. For why least squares selection is the criterion that consumes a self-convolution, see [Bandwidth selection](../background/selection.md#least-squares-cross-validation).
 
 ### Normalization is checked when it matters
 
@@ -280,11 +307,7 @@ Categorical kernels use the same general extension pattern and add one method,
 
 ### Unordered categories
 
-For the default Aitchison-Aitken kernel with $c$ categories, complete pooling occurs at
-
-$$
-\lambda = \frac{c-1}{c}.
-$$
+For the default Aitchison-Aitken kernel with $c$ categories, complete pooling occurs at $\lambda = (c-1)/c$.
 
 Suppose instead we use the simpler parameterization that assigns weight 1 to a match and $\lambda$ otherwise.
 
@@ -454,6 +477,18 @@ For regression standard errors, only the continuous kernel's convolution is requ
 particular, $(k * k)(0) = \int k(u)^2 \, du = R(k)$, which is the kernel quantity entering
 the variance calculation.
 
+The number printed above is worth unpacking, since a standard error is only as readable as the variance behind it. Write $w_i$ for the product kernel weight attaching training point $i$ to the evaluation point $x$, the same weight the fit $\hat m(x)$ is built from and carrying no $1/h$ factor, $Y_i$ for the response at that point, and $p$ for the number of continuous columns. KernelJax reports
+
+$$
+\hat\sigma^2(x) = \frac{\sum_i w_i Y_i^2}{\sum_i w_i}
+  - \left(\frac{\sum_i w_i Y_i}{\sum_i w_i}\right)^{2},
+\quad
+\widehat{\operatorname{se}}\bigl(\hat m(x)\bigr)
+  = \sqrt{\frac{\hat\sigma^2(x)\, R(k)^{p}}{\sum_i w_i}}.
+$$
+
+Here $\hat\sigma^2(x)$ is a locally weighted variance of the response about its locally weighted mean, formed from the constant row of the basis whatever degree is being fitted. Beyond the weights themselves, the kernel enters only through $R(k)$, which is why a standard error asks for `conv` and no other optional method. With $n$ the sample size, $\sigma^2(x)$ the conditional error variance and $f(x)$ the covariate density, the expression is the sample counterpart of the asymptotic variance $R(k)\, \sigma^2(x) / (n h f(x))$ derived in [Kernel regression](../background/regression.md#why-local-linear-is-the-default), since the weight sum $\sum_i w_i$ equals $n$ times the product of the continuous bandwidths times the kernel density estimate at $x$.
+
 ## Bandwidth selection and gradients
 
 Optimization-based bandwidth selectors differentiate their criterion through the kernel. That means a custom `value` can return perfectly reasonable numbers and still fail during selection if its gradient contains a `nan`. A common source is `jnp.where`. Consider the sinc function.
@@ -520,13 +555,7 @@ A kernel can satisfy the KernelJax interface and still be a poor match for a par
 
 ### Likelihood cross validation needs positive densities
 
-Likelihood cross validation contains a term of the form
-
-$$
-\log \hat f_{-i}(X_i).
-$$
-
-The leave-one-out density therefore needs to remain strictly positive at every training observation. A compactly supported kernel can easily assign zero density to an isolated observation. Even a Gaussian kernel can underflow to exactly zero far enough into its tail in single precision.
+Likelihood cross validation contains a term of the form $\log \hat f_{-i}(X_i)$, so the leave-one-out density needs to remain strictly positive at every training observation. A compactly supported kernel can easily assign zero density to an isolated observation. Even a Gaussian kernel can underflow to exactly zero far enough into its tail in single precision.
 
 Higher-order kernels introduce another problem. Because they can take negative values, a leave-one-out density estimate can itself become nonpositive.
 
