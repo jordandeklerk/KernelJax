@@ -49,9 +49,7 @@ When `v` has several columns, the contraction is performed for each one. Leaving
 
 One convention is important before using those sums. Continuous kernel factors in $W$ contain no $1/h_d$ term, and `ksum` applies no $1/n$ normalization by default. The matrix therefore contains the product-kernel values themselves rather than all of the scale factors needed by a particular estimator.
 
-For example, a density with continuous columns $\mathcal{C}$ needs the additional factor $1/(n \prod_{d \in \mathcal{C}} h_d)$. Regression does not, because a common scale factor cancels between its numerator and denominator.
-
-That difference is deliberate. The primitive computes the reusable contraction, while the estimator decides what normalization gives that contraction its statistical meaning.
+For example, a density with continuous columns $\mathcal{C}$ needs the additional factor $1/(n \prod_{d \in \mathcal{C}} h_d)$. Regression does not, because a common scale factor cancels between its numerator and denominator. That difference is deliberate. The primitive computes the reusable contraction, while the estimator decides what normalization gives that contraction its statistical meaning.
 
 ## Rebuilding local constant regression
 
@@ -88,7 +86,7 @@ print(f"largest gap to local_poly={gap:.3e}")
 largest gap to local_poly=1.335e-05
 ```
 
-Algebraically, these are the same estimator:
+Algebraically, these are the same estimator.
 
 $$
 \hat m(x) =
@@ -136,9 +134,7 @@ plug-in   d/dh=-3.008e-02  d/dlam_uno=-3.304e+00  d/dlam_ord=+3.895e-07
 selected  d/dh=+2.045e-07  d/dlam_uno=-6.394e-05  d/dlam_ord=+1.146e-06
 ```
 
-The gradient has the same pytree structure as the bandwidth itself, including one derivative for each categorical smoothing parameter.
-
-These numbers are derivatives with respect to the bandwidths in their **natural constrained scale**. They are not exactly the gradients seen by the bandwidth optimizer. As described in the [introduction](intro.md#keep-the-full-path-differentiable), selection works in unconstrained coordinates and differentiates through the transformation back to $h$ and $\lambda$.
+The gradient has the same pytree structure as the bandwidth itself, including one derivative for each categorical smoothing parameter. These numbers are derivatives with respect to the bandwidths in their **natural constrained scale**. They are not exactly the gradients seen by the bandwidth optimizer. As described in the [introduction](intro.md#keep-the-full-path-differentiable), selection works in unconstrained coordinates and differentiates through the transformation back to $h$ and $\lambda$.
 
 For the interior parameters, the natural-scale derivatives at the selected solution are already close to zero. Region is different. Its unordered smoothing parameter is at the Aitchison-Aitken upper bound, so a constrained optimum does not require $\partial \mathrm{CV} / \partial \lambda$ itself to vanish. In fact, a negative derivative at the upper boundary says that the criterion would prefer still more smoothing if the admissible range allowed it.
 
@@ -151,9 +147,7 @@ $$
 \, b\, \sigma(z)\bigl(1-\sigma(z)\bigr),
 $$
 
-so the transformed gradient can be close to zero even when the natural-scale derivative is not exactly zero.
-
-This is the optimization view of the same statistical result seen in [Local polynomial regression](regression.md#reading-the-bandwidths): region has been smoothed to its maximum-smoothing limit.
+so the transformed gradient can be close to zero even when the natural-scale derivative is not exactly zero. This is the optimization view of the same statistical result seen in [Local polynomial regression](regression.md#reading-the-bandwidths), where region has been smoothed to its maximum-smoothing limit.
 
 The lower-level interface is useful precisely because none of these pieces are hidden. Kernels, bandwidths, contractions, and criteria can be inspected or recombined into estimators beyond the ones KernelJax ships directly.
 
@@ -175,9 +169,7 @@ print(weights.shape)
 (200, 300)
 ```
 
-By default, every column contributes its ordinary kernel value. The `op` argument lets that interpretation change.
-
-A single string applies one operator to every column. A mapping can choose an operator by column kind, and a tuple specifies one operator per column in the sample's original column order.
+By default, every column contributes its ordinary kernel value. The `op` argument lets that interpretation change. A single string applies one operator to every column. A mapping can choose an operator by column kind, and a tuple specifies one operator per column in the sample's original column order.
 
 For a continuous column, let
 
@@ -196,9 +188,7 @@ K_d^{\mathrm{conv}}(x_{jd}, X_{id})    &= (k * k)(u).
 \end{aligned}
 $$
 
-`value`, `cdf`, and `conv` contain no external bandwidth divisor. `deriv` is different because differentiation is with respect to the evaluation coordinate $x_{jd}$, so the chain rule contributes $1/h_d$.
-
-For the default Gaussian kernel, `cdf` is $\Phi(u)$ and `conv` is the Gaussian self-convolution, equivalently the normal density with variance two evaluated at $u$.
+`value`, `cdf`, and `conv` contain no external bandwidth divisor. `deriv` is different because differentiation is with respect to the evaluation coordinate $x_{jd}$, so the chain rule contributes $1/h_d$. For the default Gaussian kernel, `cdf` is $\Phi(u)$ and `conv` is the Gaussian self-convolution, equivalently the normal density with variance two evaluated at $u$.
 
 Categorical kernels use the same operator interface where the operation is meaningful. An unordered kernel has no natural cumulative ordering, so the default Aitchison-Aitken kernel provides `value` and `conv` but not `cdf`. An ordered kernel can provide a `cdf` by summing its mass over integer levels at or below the evaluation level. Its convolution similarly sums the overlap of two kernel functions over the integer lattice.
 
@@ -247,8 +237,6 @@ $$
 \sum_{i=1}^n W_{ji}^{(\mathrm{cdf},\,\mathrm{value},\,\mathrm{value})}.
 $$
 
-It is useful to think of $\hat H$ as **cumulative in experience and pointwise in the two categorical coordinates**. It is not the full multivariate CDF returned by {func}`~kerneljax.cdf`, and with an unordered column in the sample there is no full joint CDF for KernelJax to construct through a cumulative operator in every coordinate.
-
-The first quantity is likewise a density estimate evaluated at the bandwidth selected for the regression, not at a bandwidth selected specifically for density estimation. The primitives do not attach a statistical interpretation on their own. That interpretation comes from the operator choices, normalization, bandwidths, and contraction assembled around them.
+It is useful to think of $\hat H$ as **cumulative in experience and pointwise in the two categorical coordinates**. It is not the full multivariate CDF returned by {func}`~kerneljax.cdf`, and with an unordered column in the sample there is no full joint CDF for KernelJax to construct through a cumulative operator in every coordinate. The first quantity is likewise a density estimate evaluated at the bandwidth selected for the regression, not at a bandwidth selected specifically for density estimation. The primitives do not attach a statistical interpretation on their own. That interpretation comes from the operator choices, normalization, bandwidths, and contraction assembled around them.
 
 That separation is the point of the primitive interface. Changing an operator can change the mathematical object being estimated, while the underlying machinery for constructing and contracting kernel weights stays the same.

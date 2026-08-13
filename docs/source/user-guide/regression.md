@@ -62,9 +62,7 @@ Local polynomial regression
   Converged                           True
 ```
 
-There are two important choices in that call.
-
-`degree=1` asks for a local linear fit. Rather than fitting one line to the entire sample, KernelJax fits a weighted line around every point where the regression function is evaluated.
+There are two important choices in that call. `degree=1` asks for a local linear fit. Rather than fitting one line to the entire sample, KernelJax fits a weighted line around every point where the regression function is evaluated.
 
 `"cv_ls"` asks KernelJax to select the bandwidths by least-squares cross-validation. At each candidate bandwidth, every observation is left out of its own local fit and predicted from the remaining sample. The selected bandwidth minimizes the resulting mean squared prediction error.
 
@@ -231,9 +229,7 @@ This ability to smooth across uninformative variables is particularly useful in 
 
 ## Predicting on a grid
 
-Next, we can inspect the fitted relationship with experience.
-
-The model contains three covariates, so plotting its entire regression surface is not useful. Instead, we vary experience while holding region and education at representative values.
+Next, we can inspect the fitted relationship with experience. The model contains three covariates, so plotting its entire regression surface is not useful. Instead, we vary experience while holding region and education at representative values.
 
 {func}`~kerneljax.grid` constructs those evaluation points.
 
@@ -254,9 +250,7 @@ exper varies over 200 points from 0.01 to 29.92
 region pinned at 2, educ pinned at 2
 ```
 
-By default, `grid` holds continuous variables at their median, unordered variables at their most common level, and ordered variables at the first level whose cumulative sample share reaches the median probability.
-
-Passing `fit` back to {func}`~kerneljax.local_poly` reuses its selected bandwidths, kernels, and polynomial degree. Setting `se=True` additionally returns a pointwise plug-in standard error for the fitted mean.
+By default, `grid` holds continuous variables at their median, unordered variables at their most common level, and ordered variables at the first level whose cumulative sample share reaches the median probability. Passing `fit` back to {func}`~kerneljax.local_poly` reuses its selected bandwidths, kernels, and polynomial degree. Setting `se=True` additionally returns a pointwise plug-in standard error for the fitted mean.
 
 ### Pointwise standard errors
 
@@ -274,17 +268,13 @@ $$
 
 The denominator reflects the amount of local information available around $x$. With one continuous covariate and an unnormalized kernel weight, its leading behavior is proportional to $n h f(x)$, so fewer observations near an evaluation point produce a larger standard error.
 
-There are several qualifications to keep in mind.
-
-First, the variance estimate above is formed from the locally weighted response moments associated with the constant basis term. It does not use residuals from the fitted degree-one polynomial. With `degree >= 1`, variation in the regression function within the local neighborhood can therefore enter $\hat\sigma^2(x)$ along with the noise.
+There are several qualifications to keep in mind. First, the variance estimate above is formed from the locally weighted response moments associated with the constant basis term. It does not use residuals from the fitted degree-one polynomial. With `degree >= 1`, variation in the regression function within the local neighborhood can therefore enter $\hat\sigma^2(x)$ along with the noise.
 
 Second, the returned standard error applies only to the fitted mean. It does not provide uncertainty for `grad`.
 
 Third, a curve such as $\hat m(x)\pm 2\,\widehat{\operatorname{se}}(\hat m(x))$ is a pointwise standard-error band, not a simultaneous confidence band over the entire regression function.
 
-Finally, the calculation does not explicitly correct smoothing bias. A local linear estimate has bias that is typically of order $h^2$ away from special cases, so the band describes sampling variation around the smoothed estimator rather than automatically producing exact coverage for the true conditional mean $m(x)$.
-
-[Kernel regression](../background/regression.md#why-local-linear-is-the-default) develops the variance approximation and the role of smoothing bias in more detail.
+Finally, the calculation does not explicitly correct smoothing bias. A local linear estimate has bias that is typically of order $h^2$ away from special cases, so the band describes sampling variation around the smoothed estimator rather than automatically producing exact coverage for the true conditional mean $m(x)$. [Kernel regression](../background/regression.md#why-local-linear-is-the-default) develops the variance approximation and the role of smoothing bias in more detail.
 
 ```python
 fig, ax = plt.subplots()
@@ -310,9 +300,7 @@ plt.show()
 
 ![Fit at the modal region and median education](../_static/figures/quickstart-1.svg)
 
-The fitted curve recovers the nonlinear relationship even though we never specified a quadratic, spline basis, or other global functional form.
-
-The standard-error band widens near the edge of the sample, where less local information is available to support the fit.
+The fitted curve recovers the nonlinear relationship even though we never specified a quadratic, spline basis, or other global functional form. The standard-error band widens near the edge of the sample, where less local information is available to support the fit.
 
 ## Derivatives
 

@@ -1,8 +1,6 @@
 # Conditional estimation
 
-Regression describes how the **conditional mean** of a response changes with its covariates. An unconditional density describes the response across the sample as a whole. Conditional estimation combines those two views by allowing the entire response distribution to change with the covariates.
-
-{func}`~kerneljax.cdensity` estimates a conditional density, {func}`~kerneljax.cdist` its cumulative distribution, {func}`~kerneljax.cquantile` selected quantiles of that distribution, and {func}`~kerneljax.cmode` the most likely level of a categorical response.
+Regression describes how the **conditional mean** of a response changes with its covariates. An unconditional density describes the response across the sample as a whole. Conditional estimation combines those two views by allowing the entire response distribution to change with the covariates. {func}`~kerneljax.cdensity` estimates a conditional density, {func}`~kerneljax.cdist` its cumulative distribution, {func}`~kerneljax.cquantile` selected quantiles of that distribution, and {func}`~kerneljax.cmode` the most likely level of a categorical response.
 
 The setup is the shared wage example from [Working with data](data.md), with wage now treated as the response.
 
@@ -75,9 +73,7 @@ Conditional density estimate
   Converged                           True
 ```
 
-A conditional fit has two bandwidth blocks. One controls smoothing across the conditioning variables $x$, and the other controls smoothing across the response $y$.
-
-Write $W_i^x(x) = K_{h_x, \lambda_x}(x, X_i)$ for the unscaled product-kernel weight contributed by the conditioning variables and $W_i^y(y) = K_{h_y, \lambda_y}(y, Y_i)$ for the corresponding response-kernel value.
+A conditional fit has two bandwidth blocks. One controls smoothing across the conditioning variables $x$, and the other controls smoothing across the response $y$. Write $W_i^x(x) = K_{h_x, \lambda_x}(x, X_i)$ for the unscaled product-kernel weight contributed by the conditioning variables and $W_i^y(y) = K_{h_y, \lambda_y}(y, Y_i)$ for the corresponding response-kernel value.
 
 If $\mathcal{C}_y$ indexes the continuous response columns, KernelJax estimates
 
@@ -107,9 +103,7 @@ $$
 
 remains in the conditional density.
 
-Read another way, the estimator is a weighted average of response kernels. Every observed response places a small kernel bump around itself, while $W_i^x(x)$ determines how much observation $i$ contributes at the conditioning point $x$. The response bandwidth controls the width of those bumps, while the conditioning bandwidths determine which observations are treated as locally relevant.
-
-[Mixed-type data](../background/mixed-data.md#the-product-kernel) develops the product kernel column by column.
+Read another way, the estimator is a weighted average of response kernels. Every observed response places a small kernel bump around itself, while $W_i^x(x)$ determines how much observation $i$ contributes at the conditioning point $x$. The response bandwidth controls the width of those bumps, while the conditioning bandwidths determine which observations are treated as locally relevant. [Mixed-type data](../background/mixed-data.md#the-product-kernel) develops the product kernel column by column.
 
 The selected fit can be reused at new evaluation points without selecting the bandwidths again. Here we fix education and region and compare the wage distribution at five and twenty-five years of experience.
 
@@ -199,9 +193,7 @@ $$
 G_{h_y}(y, Y_i) = \Phi\left( \frac{y - Y_i}{h_y} \right).
 $$
 
-Integrating the response density kernel absorbs its $1/h_y$ scale factor. The result is therefore a weighted average of cumulative kernel values rather than a density.
-
-Each observation contributes a smooth version of the step it would contribute to an empirical conditional distribution. The conditioning weights remain unchanged, so the same conditional bandwidth object can be reused between density and distribution estimators.
+Integrating the response density kernel absorbs its $1/h_y$ scale factor. The result is therefore a weighted average of cumulative kernel values rather than a density. Each observation contributes a smooth version of the step it would contribute to an empirical conditional distribution. The conditioning weights remain unchanged, so the same conditional bandwidth object can be reused between density and distribution estimators.
 
 Bandwidth **selection**, however, uses a different objective when the target is a distribution. KernelJax does not allow `"cv_ml"` to select a conditional CDF bandwidth because treating CDF values as likelihood contributions rewards excessive smoothing. Instead, `"cv_ls"` compares the leave-one-out conditional distribution with the indicator it is estimating.
 
@@ -357,6 +349,4 @@ $$
 \right\}
 $$
 
-Here the fitted mode agrees with the observed education level for 79% of the sample.
-
-This is an in-sample classification rate, not a held-out measure of predictive performance. A confusion matrix would break the same predictions down by observed and predicted level, while `accuracy` reports only their overall agreement.
+Here the fitted mode agrees with the observed education level for 79% of the sample. This is an in-sample classification rate, not a held-out measure of predictive performance. A confusion matrix would break the same predictions down by observed and predicted level, while `accuracy` reports only their overall agreement.

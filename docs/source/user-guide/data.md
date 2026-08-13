@@ -110,9 +110,7 @@ x_j = x_{\min} + \frac{j-1}{n-1} \left(x_{\max} - x_{\min}\right),
 j=1,\ldots,n.
 $$
 
-A positive `trim` replaces those endpoints with inner sample quantiles. For example, `trim=0.1` sweeps from the tenth to the ninetieth percentile. A negative value extends the sweep beyond the observed range.
-
-If the swept column is categorical, `grid` instead visits each of its levels once and ignores `n`.
+A positive `trim` replaces those endpoints with inner sample quantiles. For example, `trim=0.1` sweeps from the tenth to the ninetieth percentile. A negative value extends the sweep beyond the observed range. If the swept column is categorical, `grid` instead visits each of its levels once and ignores `n`.
 
 Every column not being swept is pinned at a representative value. Write $q$ for the `quantile` argument, which defaults to $1/2$, $\hat F_d^{-1}$ for the sample quantile function of continuous column $d$, and $\hat p_{ds}$ for the observed share at level $s$ of categorical column $d$. The pinned value is
 
@@ -144,9 +142,7 @@ print(f"region pinned at {line.uno[0, 0]}, educ pinned at {line.orde[0, 0]}")
 region pinned at 2, educ pinned at 2
 ```
 
-Education has sample shares $0.233$, $0.233$, $0.283$, and $0.250$ across its four levels, so its cumulative shares are $0.233$, $0.467$, $0.750$, and $1$, and level $2$ is the first to reach the default quantile $q=0.5$.
-
-Region is also pinned at level $2$, but for a different reason. It is unordered, so `grid` uses the mode, and level $2$ happens to be the most common region with 84 of the 300 observations.
+Education has sample shares $0.233$, $0.233$, $0.283$, and $0.250$ across its four levels, so its cumulative shares are $0.233$, $0.467$, $0.750$, and $1$, and level $2$ is the first to reach the default quantile $q=0.5$. Region is also pinned at level $2$, but for a different reason. It is unordered, so `grid` uses the mode, and level $2$ happens to be the most common region with 84 of the 300 observations.
 
 ### Following the sample quantiles
 
@@ -188,14 +184,10 @@ print(np.asarray(spread.con[:, 0]).round(2))
 [1.000e-02 8.980e+00 1.683e+01 2.431e+01 2.992e+01]
 ```
 
-The two vectors differ because {func}`~kerneljax.grid` and {func}`~kerneljax.quantile_grid` space the continuous column differently. `grid` places experience evenly over its observed range, so its middle point is the range midpoint at $14.96$. `quantile_grid` places it evenly in probability, so its middle point is the sample median at $16.83$.
-
-They agree at the endpoints because the sample quantiles at probabilities zero and one are the smallest and largest observed values.
+The two vectors differ because {func}`~kerneljax.grid` and {func}`~kerneljax.quantile_grid` space the continuous column differently. `grid` places experience evenly over its observed range, so its middle point is the range midpoint at $14.96$. `quantile_grid` places it evenly in probability, so its middle point is the sample median at $16.83$. They agree at the endpoints because the sample quantiles at probabilities zero and one are the smallest and largest observed values.
 
 ## Purely continuous data
 
-You do not need to construct a `MixedData` object when every column is continuous. A raw array is interpreted as a purely continuous sample, and a one-dimensional array is promoted to a single continuous column.
-
-That is why small examples elsewhere in the guide can pass arrays such as `wage` directly.
+You do not need to construct a `MixedData` object when every column is continuous. A raw array is interpreted as a purely continuous sample, and a one-dimensional array is promoted to a single continuous column. That is why small examples elsewhere in the guide can pass arrays such as `wage` directly.
 
 Raw arrays are not interchangeable with `MixedData` when categorical columns are part of the sample. In that case, the column kinds and level counts are needed to interpret the data, so evaluation points must preserve the corresponding `MixedData` structure.

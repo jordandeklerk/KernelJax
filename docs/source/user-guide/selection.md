@@ -1,8 +1,6 @@
 # Bandwidth selection
 
-How much to smooth is usually the most consequential choice in kernel estimation. KernelJax can select that smoothing automatically, and every estimator exposes the selection rule through the same bandwidth argument.
-
-The rules differ statistically rather than just computationally. They optimize different criteria, so choosing between them means choosing what kind of error the bandwidth should trade off.
+How much to smooth is usually the most consequential choice in kernel estimation. KernelJax can select that smoothing automatically, and every estimator exposes the selection rule through the same bandwidth argument. The rules differ statistically rather than just computationally. They optimize different criteria, so choosing between them means choosing what kind of error the bandwidth should trade off.
 
 The setup is the shared wage example from [Working with data](data.md), with the local linear fit from [Local polynomial regression](regression.md).
 
@@ -135,9 +133,7 @@ For this example, the reference and cross-validated continuous bandwidths happen
 
 ## Why KernelJax uses multiple starts
 
-The optimization-based selectors use L-BFGS from several starting points. KernelJax uses three starts by default, and the estimators expose `n_starts` when you want to change that.
-
-The search takes place in the unconstrained coordinates described in the [introduction](intro.md#keep-the-full-path-differentiable). The first start comes from the reference rule, with categorical coordinates moved to the middle of their admissible ranges. Additional starts perturb that unconstrained vector before running the solver again.
+The optimization-based selectors use L-BFGS from several starting points. KernelJax uses three starts by default, and the estimators expose `n_starts` when you want to change that. The search takes place in the unconstrained coordinates described in the [introduction](intro.md#keep-the-full-path-differentiable). The first start comes from the reference rule, with categorical coordinates moved to the middle of their admissible ranges. Additional starts perturb that unconstrained vector before running the solver again.
 
 Multiple starts matter because bandwidth-selection criteria are not generally convex. Two runs can both satisfy the optimizer's stopping rule while ending at different local solutions.
 
@@ -181,9 +177,7 @@ for label, run in [("1 start", one_start), ("3 starts", three_starts)]:
 3 starts  h= 33.5028  criterion=0.984698  converged=True
 ```
 
-Because `y_noise` contains no systematic relationship with `x_noise`, there is little reason to fit a strongly local curve. The much larger bandwidth found by the three-start search is therefore plausible.
-
-The large-bandwidth limit makes that interpretation precise.
+Because `y_noise` contains no systematic relationship with `x_noise`, there is little reason to fit a strongly local curve. The much larger bandwidth found by the three-start search is therefore plausible. The large-bandwidth limit makes that interpretation precise.
 
 For a one-dimensional local linear regression, the fit at $x$ solves a weighted regression on
 
@@ -304,13 +298,9 @@ $$
 
 with a finite final objective and gradient.
 
-It does **not** mean that the gradient criterion specifically was met, and it does not imply that the returned point is the global minimum. The noise example above shows why those distinctions matter.
+It does **not** mean that the gradient criterion specifically was met, and it does not imply that the returned point is the global minimum. The noise example above shows why those distinctions matter. `n_iter` reports the number of iterations taken by the selected run, while `criterion` is the original, unscaled objective evaluated at its chosen bandwidth.
 
-`n_iter` reports the number of iterations taken by the selected run, while `criterion` is the original, unscaled objective evaluated at its chosen bandwidth.
-
-The bandwidth itself is a JAX pytree. Here, `h_axis='shared'` means one continuous bandwidth is shared across all evaluation and training points rather than varying by row.
-
-The arrays inside the bandwidth are traced JAX values, so bandwidths and selection results can participate naturally in JAX computations. Structural information such as the criterion and kernels remains attached as static metadata.
+The bandwidth itself is a JAX pytree. Here, `h_axis='shared'` means one continuous bandwidth is shared across all evaluation and training points rather than varying by row. The arrays inside the bandwidth are traced JAX values, so bandwidths and selection results can participate naturally in JAX computations. Structural information such as the criterion and kernels remains attached as static metadata.
 
 ## Selecting once and reusing
 
@@ -337,8 +327,6 @@ print(
 degree=1 recovered, r_squared=0.9084
 ```
 
-The degree is recovered from the criterion carried by the selection, so it does not have to be stated again.
-
-The same principle applies to kernels. A selection is meaningful only together with the configuration under which it was obtained, so KernelJax carries that context forward rather than silently falling back to defaults.
+The degree is recovered from the criterion carried by the selection, so it does not have to be stated again. The same principle applies to kernels. A selection is meaningful only together with the configuration under which it was obtained, so KernelJax carries that context forward rather than silently falling back to defaults.
 
 If a setting is restated explicitly, it must agree with the one already attached to the result. A contradiction raises rather than allowing one configuration to silently override the other. The [introduction](intro.md#preserve-selection-context) shows that guard directly.
