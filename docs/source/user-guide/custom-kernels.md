@@ -32,11 +32,7 @@ import kerneljax as kj
 class Epanechnikov(kj.ContinuousKernel):
     def value(self, x, y, h):
         u = (x - y) / h
-        return jnp.where(
-            jnp.abs(u) <= 1.0,
-            0.75 * (1.0 - u * u),
-            0.0,
-        )
+        return jnp.where(jnp.abs(u) <= 1.0, 0.75 * (1.0 - u * u), 0.0)
 ```
 
 It can be used immediately in a regression.
@@ -48,20 +44,8 @@ y = np.sin(2 * np.pi * x) + rng.normal(0, 0.2, 200)
 
 kernels = kj.KernelSet(continuous=Epanechnikov())
 
-epan = kj.local_poly(
-    x,
-    y,
-    "cv_ls",
-    degree=1,
-    kernels=kernels,
-)
-
-gauss = kj.local_poly(
-    x,
-    y,
-    "cv_ls",
-    degree=1,
-)
+epan = kj.local_poly(x, y, "cv_ls", degree=1, kernels=kernels)
+gauss = kj.local_poly(x, y, "cv_ls", degree=1)
 
 print(f"Epanechnikov  h={epan.bandwidth.h[0]:.6f}  r2={epan.r_squared:.6f}")
 print(f"Gaussian      h={gauss.bandwidth.h[0]:.6f}  r2={gauss.r_squared:.6f}")
@@ -112,11 +96,7 @@ The Epanechnikov implementation does exactly that.
 class Epanechnikov(kj.ContinuousKernel):
     def value(self, x, y, h):
         u = (x - y) / h
-        return jnp.where(
-            jnp.abs(u) <= 1.0,
-            0.75 * (1.0 - u * u),
-            0.0,
-        )
+        return jnp.where(jnp.abs(u) <= 1.0, 0.75 * (1.0 - u * u), 0.0)
 ```
 
 This implementation does not.
@@ -136,9 +116,7 @@ class Reducing(kj.ContinuousKernel):
 On a sample with two continuous columns, it collapses the column axis before KernelJax has a chance to form the product kernel.
 
 ```python
-two_columns = kj.MixedData.continuous(
-    np.column_stack([x, x**2])
-)
+two_columns = kj.MixedData.continuous(np.column_stack([x, x**2]))
 
 wide = kj.Bandwidth(
     h=jnp.array([0.2, 0.2]),
@@ -147,11 +125,7 @@ wide = kj.Bandwidth(
 )
 
 kj.local_poly(
-    two_columns,
-    y,
-    wide,
-    degree=1,
-    kernels=kj.KernelSet(continuous=Reducing()),
+    two_columns, y, wide, degree=1, kernels=kj.KernelSet(continuous=Reducing())
 )
 ```
 
@@ -205,11 +179,7 @@ A mutable dataclass is not.
 class Mutable(kj.ContinuousKernel):
     def value(self, x, y, h):
         u = (x - y) / h
-        return jnp.where(
-            jnp.abs(u) <= 1.0,
-            0.75 * (1.0 - u * u),
-            0.0,
-        )
+        return jnp.where(jnp.abs(u) <= 1.0, 0.75 * (1.0 - u * u), 0.0)
 
 
 kj.KernelSet(continuous=Mutable())
@@ -252,11 +222,7 @@ Regression is different. Multiplying all of its local weights by the same consta
 Our Epanechnikov implementation already has unit mass.
 
 ```python
-dens = kj.density(
-    x,
-    "cv_ml",
-    kernels=kernels,
-)
+dens = kj.density(x, "cv_ml", kernels=kernels)
 
 print(f"h={dens.bandwidth.h[0]:.6f}")
 ```
@@ -272,11 +238,7 @@ The correct implementation returns only the kernel in standardized units.
 ```python
 def value(self, x, y, h):
     u = (x - y) / h
-    return jnp.where(
-        jnp.abs(u) <= 1.0,
-        0.75 * (1.0 - u * u),
-        0.0,
-    )
+    return jnp.where(jnp.abs(u) <= 1.0, 0.75 * (1.0 - u * u), 0.0)
 ```
 
 It should not return
@@ -284,11 +246,7 @@ It should not return
 ```python
 def value(self, x, y, h):
     u = (x - y) / h
-    return jnp.where(
-        jnp.abs(u) <= 1.0,
-        0.75 * (1.0 - u * u) / h,
-        0.0,
-    )
+    return jnp.where(jnp.abs(u) <= 1.0, 0.75 * (1.0 - u * u) / h, 0.0)
 ```
 
 because the density estimator would then divide by the bandwidth twice.
@@ -322,11 +280,7 @@ class HalfMass(kj.ContinuousKernel):
 It can still produce a regression fit, but density estimation rejects it.
 
 ```python
-kj.density(
-    x,
-    "cv_ml",
-    kernels=kj.KernelSet(continuous=HalfMass()),
-)
+kj.density(x, "cv_ml", kernels=kj.KernelSet(continuous=HalfMass()))
 ```
 
 ```text
@@ -345,11 +299,7 @@ class SelfNormalizing(kj.ContinuousKernel):
 ```
 
 ```python
-kj.density(
-    x,
-    "cv_ml",
-    kernels=kj.KernelSet(continuous=SelfNormalizing()),
-)
+kj.density(x, "cv_ml", kernels=kj.KernelSet(continuous=SelfNormalizing()))
 ```
 
 ```text
@@ -414,19 +364,9 @@ plain = Plain()
 aitchison = kj.AitchisonAitken()
 
 custom = kj.local_poly(
-    data,
-    wage,
-    "cv_ls",
-    degree=1,
-    kernels=kj.KernelSet(unordered=plain),
+    data, wage, "cv_ls", degree=1, kernels=kj.KernelSet(unordered=plain)
 )
-
-shipped = kj.local_poly(
-    data,
-    wage,
-    "cv_ls",
-    degree=1,
-)
+shipped = kj.local_poly(data, wage, "cv_ls", degree=1)
 
 print(
     f"Plain            "
@@ -486,13 +426,7 @@ Categorical columns are represented internally by contiguous, zero-based integer
 
 and a custom kernel receives those codes rather than the original labels.
 
-For an ordered variable, the code order must therefore agree with the category order. An expression such as
-
-```python
-jnp.abs(x - y)
-```
-
-then measures the number of coded levels separating two categories.
+For an ordered variable, the code order must therefore agree with the category order. An expression such as `jnp.abs(x - y)` then measures the number of coded levels separating two categories.
 
 {func}`~kerneljax.MixedData.from_blocks` validates the codes against the declared level counts. The `levels` argument passed to a kernel is an ordinary Python integer and can safely participate in static Python control flow. The smoothing parameter `lam` may be traced by JAX, so calculations depending on its value should use JAX operations.
 
@@ -519,15 +453,7 @@ If a requested operation calls a method your kernel does not implement, KernelJa
 Our first Epanechnikov kernel does not implement `conv`. Regression standard errors therefore cannot yet obtain the kernel roughness they need.
 
 ```python
-kj.local_poly(
-    x,
-    y,
-    "cv_ls",
-    degree=1,
-    kernels=kernels,
-    se=True,
-    n_starts=1,
-)
+kj.local_poly(x, y, "cv_ls", degree=1, kernels=kernels, se=True, n_starts=1)
 ```
 
 ```text
@@ -551,12 +477,7 @@ and zero outside that support.
 class EpanechnikovConv(Epanechnikov):
     def conv(self, x, y, h):
         u = jnp.abs(x - y) / h
-        piece = (
-            3.0
-            / 160.0
-            * (2.0 - u) ** 3
-            * (u * u + 6.0 * u + 4.0)
-        )
+        piece = 3.0 / 160.0 * (2.0 - u) ** 3 * (u * u + 6.0 * u + 4.0)
 
         return jnp.where(u <= 2.0, piece, 0.0)
 ```
@@ -564,25 +485,11 @@ class EpanechnikovConv(Epanechnikov):
 Now density least-squares cross-validation and regression standard errors can use the kernel.
 
 ```python
-conv_kernels = kj.KernelSet(
-    continuous=EpanechnikovConv()
-)
+conv_kernels = kj.KernelSet(continuous=EpanechnikovConv())
 
-dens = kj.density(
-    x,
-    "cv_ls",
-    kernels=conv_kernels,
-    n_starts=1,
-)
-
+dens = kj.density(x, "cv_ls", kernels=conv_kernels, n_starts=1)
 fit = kj.local_poly(
-    x,
-    y,
-    "cv_ls",
-    degree=1,
-    kernels=conv_kernels,
-    se=True,
-    n_starts=1,
+    x, y, "cv_ls", degree=1, kernels=conv_kernels, se=True, n_starts=1
 )
 
 print(f"density     h={dens.bandwidth.h[0]:.6f}")
@@ -644,11 +551,7 @@ A common source is an unsafe expression hidden inside `jnp.where`.
 
 ```python
 def unsafe(u):
-    return jnp.where(
-        u == 0.0,
-        1.0,
-        jnp.sin(u) / u,
-    )
+    return jnp.where(u == 0.0, 1.0, jnp.sin(u) / u)
 ```
 
 The selected value at zero is finite, but the other branch still contains a division by zero that can contaminate automatic differentiation.
@@ -657,32 +560,17 @@ Guard the unsafe expression itself.
 
 ```python
 def safe(u):
-    nonzero_u = jnp.where(
-        u == 0.0,
-        1.0,
-        u,
-    )
+    nonzero_u = jnp.where(u == 0.0, 1.0, u)
 
-    return jnp.where(
-        u == 0.0,
-        1.0,
-        jnp.sin(nonzero_u) / nonzero_u,
-    )
+    return jnp.where(u == 0.0, 1.0, jnp.sin(nonzero_u) / nonzero_u)
 ```
 
 ```python
 unsafe_value, unsafe_grad = jax.value_and_grad(unsafe)(0.0)
 safe_value, safe_grad = jax.value_and_grad(safe)(0.0)
 
-print(
-    f"unsafe  value={unsafe_value:.4f}  "
-    f"d/du={unsafe_grad:.4f}"
-)
-
-print(
-    f"safe    value={safe_value:.4f}  "
-    f"d/du={safe_grad:.4f}"
-)
+print(f"unsafe  value={unsafe_value:.4f}  d/du={unsafe_grad:.4f}")
+print(f"safe    value={safe_value:.4f}  d/du={safe_grad:.4f}")
 ```
 
 ```text
@@ -703,25 +591,13 @@ KernelJax proactively probes the bandwidth derivative of a continuous `value` at
 class Sinc(kj.ContinuousKernel):
     def value(self, x, y, h):
         u = (x - y) / h
-        return jnp.where(
-            u == 0.0,
-            1.0,
-            jnp.sin(u) / u,
-        )
+        return jnp.where(u == 0.0, 1.0, jnp.sin(u) / u)
 ```
 
 ```python
-sinc_kernels = kj.KernelSet(
-    continuous=Sinc()
-)
+sinc_kernels = kj.KernelSet(continuous=Sinc())
 
-kj.local_poly(
-    x,
-    y,
-    "cv_ls",
-    degree=1,
-    kernels=sinc_kernels,
-)
+kj.local_poly(x, y, "cv_ls", degree=1, kernels=sinc_kernels)
 ```
 
 ```text
@@ -748,13 +624,7 @@ In those settings, least-squares cross-validation is usually the more natural nu
 
 `normal_reference` also deserves care with custom continuous kernels. It reads an `order` attribute when the kernel provides one and otherwise assumes order two.
 
-For optimization-based selectors, the reference rule primarily supplies a starting scale. With
-
-```python
-bw = "normal_reference"
-```
-
-there is no optimization, so that reference bandwidth becomes the final answer.
+For optimization-based selectors, the reference rule primarily supplies a starting scale. Passing `"normal_reference"` as the bandwidth runs no optimization at all, so that reference bandwidth becomes the final answer.
 
 The constants used by KernelJax are Gaussian reference constants rather than constants recalibrated for every custom kernel family. A substantially different kernel can therefore make `normal_reference` a useful rough benchmark without making it a kernel-specific optimal bandwidth. If the order of a custom continuous kernel is meaningful and differs from two, exposing it explicitly helps KernelJax choose the appropriate reference rate.
 
