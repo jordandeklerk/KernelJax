@@ -54,12 +54,9 @@ naturally into the wider JAX ecosystem.
   model rather than fixed by a derivative-free search.
 - Composable primitives (`kweights`, `ksum`, the kernel base classes) are public,
   so estimators the high-level interface does not ship can be built directly.
-- [Custom kernels](https://kerneljax.readthedocs.io/en/latest/user-guide/custom-kernels.html)
-  subclass a kernel base class and implement `value`, and every estimator and
-  selection rule then runs through them.
-- [Custom selection criteria](https://kerneljax.readthedocs.io/en/latest/user-guide/custom-criteria.html)
-  are any JAX callable returning one scalar, which the optimizer differentiates the
-  same way it differentiates the built-in objectives.
+- Custom [kernels](https://kerneljax.readthedocs.io/en/latest/user-guide/custom-kernels.html)
+  and [bandwidth selection criteria](https://kerneljax.readthedocs.io/en/latest/user-guide/custom-criteria.html)
+  plug into the same interfaces the built-in ones use.
 
 ## Installation
 
