@@ -17,7 +17,8 @@ Check the install with `python -c 'import kerneljax; print(kerneljax.__version__
 
 ## GPU and TPU support
 
-JAX is not pinned, so install the build that matches your hardware before KernelJax. The
+KernelJax does not choose a hardware build for you. Install the build that matches your
+hardware before KernelJax. The
 [JAX installation guide](https://docs.jax.dev/en/latest/installation.html) covers the CPU,
 CUDA and TPU wheels.
 
