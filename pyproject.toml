@@ -45,7 +45,7 @@ test = [
     "pytest-timeout",
 ]
 doc = [
-    "sphinx>=9.0",
+    "sphinx>=8,<9",
     "sphinx-immaterial>=0.13.9",
     "myst-parser[linkify]>=5.0",
     "myst-nb>=1.4",
@@ -90,6 +90,16 @@ ignore = [
 "kerneljax/__init__.py" = ["I", "F401", "E402", "F403"]
 "kerneljax/**/__init__.py" = ["I", "F401", "E402", "F403"]
 "tests/**/*" = ["D", "E402"]
+
+[tool.ruff.lint.flake8-bugbear]
+# The default kernels are frozen dataclasses, so constructing one in a dataclass
+# default is shared immutable state rather than the mutable default the rule guards
+# against. Naming them keeps the rendered signature showing the real defaults.
+extend-immutable-calls = [
+    "kerneljax.kernels.continuous.Gaussian",
+    "kerneljax.kernels.discrete.AitchisonAitken",
+    "kerneljax.kernels.discrete.LiRacine",
+]
 
 [tool.ruff.lint.isort]
 known-third-party = ["jax", "jaxlib", "jaxtyping", "numpy", "scipy"]

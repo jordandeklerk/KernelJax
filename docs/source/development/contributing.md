@@ -1,20 +1,16 @@
 # Contributing
 
-Welcome to KernelJax. Whether you are fixing a bug, adding an estimator, improving the
-documentation or reviewing code, contributions are welcome.
+Welcome to KernelJax. Whether you are fixing a bug, adding an estimator, improving the documentation, or reviewing code, contributions are welcome.
 
-If you have a question or run into trouble, open an issue on
-[GitHub](https://github.com/jordandeklerk/KernelJax).
+If you have a question or run into trouble, open an issue on [GitHub](https://github.com/jordandeklerk/KernelJax).
 
 ## Development process
 
-**1. Set up your environment.**
+### 1. Set up your environment
 
-We use [pixi](https://pixi.sh/) to manage development environments. Pixi handles Python,
-conda and PyPI dependencies in one lockfile, so every contributor gets an identical setup.
+We use [pixi](https://pixi.sh/) to manage development environments. It keeps the Python, conda, and PyPI dependencies in one lockfile so contributors work from the same setup.
 
-[Install pixi](https://pixi.sh/latest/#installation) if you do not have it, fork the
-repository on GitHub, then clone your fork.
+[Install pixi](https://pixi.sh/latest/#installation) if you do not already have it, fork the repository on GitHub, then clone your fork.
 
 ```bash
 git clone https://github.com/your-username/KernelJax.git
@@ -23,8 +19,7 @@ git remote add upstream https://github.com/jordandeklerk/KernelJax.git
 pixi install -e dev
 ```
 
-There are five environments. `dev` runs the tests, `docs` builds the documentation, `check`
-runs the linters, `build` packages the project, and `gpu` installs the CUDA build of JAX.
+The repository has five environments. `dev` runs the tests, `docs` builds the documentation, `check` runs the linters, `build` packages the project, and `gpu` installs the CUDA build of JAX.
 
 If you would rather not use pixi, a virtual environment works too.
 
@@ -33,19 +28,18 @@ python -m venv .venv && source .venv/bin/activate
 uv pip install -e ".[test,dev]"
 ```
 
-**2. Develop your contribution.**
+### 2. Develop your contribution
 
-Branch from the upstream main rather than from whatever your fork happens to be at, so you
-start from current work. Make your changes with tests for anything new, and commit as you go.
+Branch from the current upstream `main` rather than from whatever state your fork happens to be in.
 
 ```bash
 git fetch upstream
 git checkout -b fix-aic-penalty-barrier upstream/main
 ```
 
-Commit messages start with a capitalized prefix saying what kind of change it is, then a
-short description in the imperative. For example, `FEAT` marks new behavior, `REF` indicates
-refactoring and maintenance, and `DOC` refers to documentation changes. Pull request titles take the same prefix.
+Make your changes, add tests for new behavior, and commit as you go.
+
+Commit messages start with a capitalized prefix describing the kind of change, followed by a short imperative description. `FEAT` marks new behavior, `REF` covers refactoring and maintenance, and `DOC` covers documentation changes. Pull request titles use the same convention.
 
 ```text
 FEAT: add standard errors to local polynomial regression
@@ -53,84 +47,84 @@ REF: fold the smoother diagonal into the Cholesky pass
 DOC: derive the boundary constant on the regression page
 ```
 
-A message should be understandable without the diff, so say what changed and why rather than
-"fix another one". Reference an issue with `Closes #123` in the body.
+A commit message should make sense without reading the diff. Say what changed and, where useful, why. If the change closes an issue, reference it with `Closes #123` in the commit body or pull request.
 
-If upstream moves while you work, rebase rather than merging, which keeps the branch a clean
-sequence of your own commits.
+If upstream moves while you work, rebase your branch rather than merging `main` into it. This keeps the branch as a clean sequence of the commits that belong to your change.
 
 ```bash
 git fetch upstream
 git rebase upstream/main
 ```
 
-**3. Validate your changes.**
+### 3. Validate your changes
+
+Run the relevant checks before opening a pull request.
 
 ```bash
-pixi run -e dev tests      # the test suite
-pixi run lint              # style, via prek
+pixi run -e dev tests      # test suite
+pixi run lint              # style and hooks, via prek
 pixi run typecheck         # mypy and ty
-pixi run docs              # build the documentation
+pixi run docs              # documentation build
 ```
 
-**4. Submit your contribution.**
+Code changes should come with tests for the behavior they introduce or modify. Documentation changes should build without warnings.
 
-Push to your fork and open a pull request with a clear description of what the change does
-and why.
+### 4. Submit your contribution
+
+Push your branch to your fork and open a pull request with a clear description of what changed and why.
 
 ```bash
 git push origin fix-aic-penalty-barrier
 ```
 
-If the change alters behavior a user can see, say so in the pull request description. Those
-notes are what the [release notes](../release-notes.md) are assembled from, so a change that
-goes unmentioned there tends to go unmentioned at release.
+If the change affects behavior that a user can observe, mention it in the pull request description. The [changelog](../release-notes.md) is assembled from those descriptions, so user-visible changes that are not called out there are easy to miss at release time.
 
-**5. Review.**
+### 5. Review
 
-Reviewers leave inline and general comments. Every change gets reviewed, including a
-maintainer's own, and the aim is the quality of the result rather than a judgment of the
-author. Update the pull request by committing and pushing to the same branch, and it updates
-itself. CI has to pass and a maintainer has to approve before a merge. If a week goes by with
-no response, a comment on the pull request is a fair nudge.
+Reviewers may leave both inline and general comments. Every change is reviewed, including a maintainer's own changes. The goal is to improve the result, not to evaluate the person who wrote it.
+
+Respond to review by committing and pushing to the same branch. The pull request updates automatically.
+
+CI must pass and a maintainer must approve the change before it can merge. If a week goes by without a response, a comment on the pull request is a reasonable nudge.
 
 ## Reporting an issue
 
-Open a [bug report](https://github.com/jordandeklerk/KernelJax/issues/new/choose) with a
-snippet that reproduces the problem from a fresh interpreter. For a numerical library, three
-details decide whether a report is actionable. Include the JAX and KernelJax versions, whether
-`jax_enable_x64` was set, and what you expected the number to be and why. A reproducer that
-depends on private data or on a fifty-line pipeline is usually not one anybody can act on.
+Open a [bug report](https://github.com/jordandeklerk/KernelJax/issues/new/choose) with the smallest example you can find that reproduces the problem from a fresh interpreter.
 
-## Guidelines
+For a numerical library, a few details make a large difference. Include the JAX and KernelJax versions, whether `jax_enable_x64` was enabled, and the value you expected to get along with why you expected it.
 
-Every code change should come with tests, and the useful standard is that they fail before
-your change and pass after it. Write them to assert on behavior a caller can observe rather
-than on the shape of the implementation. A bandwidth that is never updated will still satisfy
-a test that only checks the returned array's shape, so assert on the number that came back.
+The most useful reproducer is small and self-contained. If the problem currently depends on private data or a long pipeline, try to reduce it to the smallest example that still shows the behavior.
 
-Public functions and classes carry numpydoc docstrings, which is what the API reference is
-generated from. Include an `Examples` section wherever a caller would benefit from seeing the
-call, and a `References` section for anything with a source in the literature.
+## Code and testing conventions
 
-Numerical agreement with the R package [np](https://cran.r-project.org/package=np) is the
-standard KernelJax holds its estimators to. If you change an estimator, a criterion or a
-kernel, check the numbers against np rather than against the previous KernelJax output.
+Tests should assert on behavior a caller can observe rather than on implementation details. A useful test fails before the change and passes afterward.
 
-## Stylistic guidelines
+For example, a bandwidth that is never updated can still satisfy a test that checks only the shape of the returned array. If the behavior being tested is numerical, assert on the number that comes back.
 
-We follow [PEP 8](https://www.python.org/dev/peps/pep-0008/), with a line length of 120.
+Shared fixtures live in `tests/conftest.py`. Put reusable setup there rather than duplicating it across test files.
 
-Use the standard import conventions, `import jax.numpy as jnp` and `import numpy as np`, and
-keep imports grouped as standard library, third party, then local. Absolute imports are
-enforced by a hook.
+Public functions and classes use numpydoc docstrings, which are also used to generate the API reference. Include an `Examples` section when a caller would benefit from seeing the function used, and a `References` section when the implementation comes from the literature.
 
-Prefer descriptive names to short ones. Code is read more often than it is written.
+Numerical agreement with the R package [np](https://cran.r-project.org/package=np) is the reference standard for KernelJax estimators. If you change an estimator, criterion, or kernel, compare the resulting numbers against `np` rather than treating the previous KernelJax output as ground truth.
+
+## Style
+
+We follow [PEP 8](https://www.python.org/dev/peps/pep-0008/) with a line length of 120.
+
+Use the standard import conventions:
+
+```python
+import jax.numpy as jnp
+import numpy as np
+```
+
+Keep imports grouped as standard library, third party, then local. Absolute imports are enforced by a hook.
+
+Prefer descriptive names over abbreviations unless the shorter name is conventional in the surrounding mathematics or statistics.
 
 ## Code quality tools
 
-[ruff](https://docs.astral.sh/ruff/) handles linting, formatting and import sorting in one
-tool, configured in `pyproject.toml` with the numpy docstring convention.
+[ruff](https://docs.astral.sh/ruff/) handles linting, formatting, and import sorting. Its configuration lives in `pyproject.toml` and uses the NumPy docstring convention.
 
 ```bash
 ruff check kerneljax tests        # lint
@@ -138,44 +132,48 @@ ruff format kerneljax tests       # format
 ruff check --fix kerneljax tests  # auto-fix
 ```
 
-Type checking runs both [mypy](https://mypy-lang.org/) and
-[ty](https://github.com/astral-sh/ty) over `kerneljax`, which is what `pixi run typecheck`
-does.
+Type checking runs both [mypy](https://mypy-lang.org/) and [ty](https://github.com/astral-sh/ty) over `kerneljax`.
+
+```bash
+pixi run typecheck
+```
 
 ### Pre-commit hooks
 
-We use [prek](https://github.com/j178/prek) to manage pre-commit hooks. Install them once
-after cloning.
+We use [prek](https://github.com/j178/prek) to manage pre-commit hooks. Install them once after cloning.
 
 ```bash
 prek install
 ```
 
-They then run on every commit. To run them over the whole tree, use `prek run --all-files`,
-which is what `pixi run lint` does. Alongside ruff, the hooks block committing directly to a
-protected branch, reject stray `print` statements, and check for private keys, merge
-conflicts and large files.
+The hooks then run on every commit. To run them over the entire repository, use:
+
+```bash
+prek run --all-files
+```
+
+This is also what `pixi run lint` runs. Alongside ruff, the hooks prevent commits directly to protected branches, reject stray `print` statements, and check for private keys, merge conflicts, and large files.
 
 ## JAX conventions
 
-KernelJax is a JAX library, and a few conventions follow from that.
+KernelJax relies on JAX transformations throughout the library, so a few constraints show up repeatedly in new code.
 
-Three rules bind anything you write here, and the user guides already work them through with
-running examples rather than assertions. Anything handed to the compiler as a static argument
-has to be hashable, so kernels and criteria are frozen dataclasses. Code that will be
-differentiated has to be differentiable on every branch it traces, not only the one that runs,
-which is why `jnp.where` needs its denominator guarded and not just its branch. And a setting
-that fixes the shape of a computation has to stay concrete rather than arrive as array data.
-[Custom kernels](../user-guide/custom-kernels.md#interface-at-a-glance) demonstrates the
-first two, [Custom bandwidth selection](../user-guide/custom-criteria.md#keep-static-settings-on-the-criterion) the third.
+Static values need to remain hashable. Code that may be differentiated has to stay differentiable along every branch JAX traces, not only the branch that happens to execute. Settings that determine the structure of a computation need to remain concrete rather than arriving as traced array values.
 
-When you register a container as a pytree, a field is either data or metadata, and putting a
-static setting in `data_fields` makes it a tracer the moment the container crosses a `jit`
-boundary. It then fails wherever that value is used as a shape, far from the registration that
-caused it.
+The user guides work through these cases with running examples. [Custom kernels](../user-guide/custom-kernels.md#interface-at-a-glance) covers the first two, and [custom bandwidth selection](../user-guide/custom-criteria.md#keep-static-settings-on-the-criterion) covers the third.
+
+### Keep static configuration out of pytree data
+
+When a container is registered as a pytree, each field is either dynamic data or static metadata. Putting a structural setting in `data_fields` turns it into a tracer as soon as the object crosses a `jit` boundary.
+
+That often causes the failure much later, when the traced value is eventually used somewhere that requires a concrete shape.
 
 ```python
-@partial(jax.tree_util.register_dataclass, data_fields=["values", "degree"], meta_fields=[])
+@partial(
+    jax.tree_util.register_dataclass,
+    data_fields=["values", "degree"],
+    meta_fields=[],
+)
 @dataclasses.dataclass(frozen=True)
 class Wrong:
     values: jax.Array
@@ -186,38 +184,30 @@ class Wrong:
 TypeError: Shapes must be 1D sequences of concrete values of integer type
 ```
 
-`degree` belongs in `meta_fields`, which is where `MixedData` keeps its `ColumnSpec` and
-`Bandwidth` its `h_axis`. The quick check is that `jax.tree_util.tree_leaves` should return
-only arrays.
+`degree` belongs in `meta_fields`. KernelJax uses the same distinction for fields such as the `ColumnSpec` carried by `MixedData` and the `h_axis` carried by `Bandwidth`.
 
-An array built from a Python scalar is weakly typed, and two otherwise identical values
-differing only in that flag are different cache keys, so a function retraces when it should
-have hit the cache.
+A useful check is:
+
+```python
+jax.tree_util.tree_leaves(obj)
+```
+
+For these containers, the leaves should be the array-valued data rather than structural configuration.
+
+### Normalize weakly typed inputs
+
+An array created directly from a Python scalar can carry JAX's `weak_type` flag. Two values that are otherwise identical but differ in weak typing can produce different cache keys, causing a function to retrace when it could have reused an existing compilation.
 
 ```python
 weak = jnp.full((3,), 3.0)        # from a Python float, weak_type=True
 strong = weak.astype(weak.dtype)  # same values, concrete dtype
 ```
 
-That single `astype` is why `from_blocks` normalizes its continuous block, and it is worth
-doing wherever user input reaches a cached call.
-
-## Test coverage
-
-Pull requests that change code should include tests covering the new behavior, including edge
-cases.
-
-```bash
-pixi run -e dev tests
-```
-
-Shared fixtures live in `tests/conftest.py`. Put new fixtures there rather than duplicating
-setup across files.
+That final `astype` is why `from_blocks` normalizes its continuous input. The same pattern is worth using anywhere user-provided values feed into a cached computation.
 
 ## Building documentation
 
-The documentation is built with Sphinx and lives in
-[docs](https://github.com/jordandeklerk/KernelJax/tree/main/docs).
+The documentation is built with Sphinx and lives under [docs](https://github.com/jordandeklerk/KernelJax/tree/main/docs).
 
 ```bash
 pixi run docs         # build
@@ -226,43 +216,44 @@ pixi run docs-serve   # build, then serve on localhost:8765
 pixi run docs-clean   # remove the build and doctree
 ```
 
-The build runs `sphinx-build -W --keep-going`, so warnings are errors and a broken
-cross-reference fails the build rather than slipping through. A plain `sphinx-build` from a
-virtual environment is not the same check, since it neither enforces `-W` nor resolves the
-pinned documentation dependencies.
+The standard build runs:
 
-The example pages under `docs/source` are ordinary markdown with their output pasted in.
-Runnable notebook copies of the same examples live in `docs/notebooks`, which is gitignored,
-so you can execute them locally to confirm that the numbers a page reports are still what the
-library produces. If you change an estimator, run those notebooks and update any page whose
-printed output moved.
+```text
+sphinx-build -W --keep-going
+```
+
+Warnings therefore fail the build, including broken cross-references. Running a plain `sphinx-build` from an arbitrary virtual environment is not equivalent because it does not necessarily enable `-W` or use the pinned documentation dependencies.
+
+The example pages under `docs/source` are ordinary Markdown files with their output pasted into the page. Runnable notebook copies of the same examples live in `docs/notebooks`, which is gitignored.
+
+If you change an estimator, run the corresponding notebooks and check whether any printed results have changed. Update the documentation when the values shown on the page no longer match what the library produces.
 
 ## Continuous integration
 
-Every pull request and push to `main` runs `test` across Python 3.11 to 3.14 on Ubuntu,
-uploading coverage from the 3.12 job, and `codeql` for static analysis, which also runs on
-Monday. Both block a merge, and `test` is the one to check first when a pull request fails.
+Every pull request and push to `main` runs the `test` workflow across Python 3.11 through 3.14 on Ubuntu. The Python 3.12 job uploads coverage. `codeql` runs static analysis and also runs on Mondays.
 
-Three more run on their own schedule. `nightly` runs on Sunday against nightly
-scientific-python wheels, and a failure there flags upcoming upstream breakage rather than
-anything wrong with your change. `publish` uploads to PyPI through Trusted Publishing on a
-`v*` tag, and `post-release` regenerates the changelog once a release is published.
+Both checks block a merge. If a pull request fails, `test` is usually the first workflow to inspect.
 
-Two differences from your machine account for most failures that reproduce nowhere else. CI
-runs on Ubuntu while you are likely on macOS, and floating point differs slightly between
-platforms. JAX also defaults to 32-bit floats, which is the usual reason a comparison passes
-locally and fails on a tighter tolerance, so set
-`jax.config.update("jax_enable_x64", True)` before importing when you are comparing numbers.
+Several other workflows run independently of pull requests. `nightly` runs on Sundays against nightly scientific Python wheels. A failure there usually signals an upcoming upstream compatibility problem rather than a regression introduced by a particular pull request.
+
+`publish` uploads releases to PyPI through Trusted Publishing when a `v*` tag is created, and `post-release` regenerates the changelog after a release is published.
+
+Two differences between CI and a local environment explain many failures that are difficult to reproduce. CI runs on Ubuntu while development is often done on macOS, and floating-point behavior can differ slightly across platforms.
+
+JAX also uses 32-bit floating point by default. If a numerical comparison passes locally but fails under a tighter tolerance, check the configured precision. For comparisons that require 64-bit values, enable them before the relevant JAX computation:
+
+```python
+jax.config.update("jax_enable_x64", True)
+```
 
 ## Dependency management
 
-The core is `jax`, `jaxlib` and `jaxtyping`, pinned to minimum versions in `pyproject.toml`.
-Every addition there is one that every user carries, so anything needed only for the tests, the
-documentation or the linters goes in an extra instead.
+The core dependencies are `jax`, `jaxlib`, and `jaxtyping`, with minimum supported versions declared in `pyproject.toml`.
 
-Those extras are declared twice. `pixi.toml` is what `pixi run docs` resolves, as a conda
-dependency or under `pypi-dependencies` when the package is not on conda-forge, and
-`pyproject.toml` is what Read the Docs installs. A dependency added to one and not the other
-builds in one place and fails in the other.
+A core dependency is installed for every KernelJax user, so packages needed only for tests, documentation, or development tooling belong in the corresponding extras instead.
 
-KernelJax supports Python 3.11 and above, so a feature newer than that needs a version gate.
+Those development dependencies are represented in two places. `pixi.toml` controls what commands such as `pixi run docs` resolve, either as conda dependencies or under `pypi-dependencies` when a package is not available from conda-forge. `pyproject.toml` controls what environments such as Read the Docs install.
+
+When adding or changing a dependency, make sure the two declarations remain consistent. A dependency that exists in one environment but not the other can make the documentation build locally and fail elsewhere.
+
+KernelJax supports Python 3.11 and above, so code that relies on a newer Python feature needs an appropriate version guard or compatible alternative.

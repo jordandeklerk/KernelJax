@@ -6,7 +6,7 @@ By default, KernelJax uses a second-order Gaussian kernel for continuous variabl
 
 A custom kernel does not need to be registered anywhere. Define it, place it in a `KernelSet`, and pass it directly to an estimator.
 
-This page builds an Epanechnikov kernel first, uses it in regression and density estimation, and then works through the small interface a custom kernel must satisfy to work throughout the library. For the surrounding estimator API, see the [Quickstart](../quickstart.md). For the statistical role of the kernel itself, see [Kernel smoothing](../background/smoothing.md).
+This page builds an Epanechnikov kernel first, uses it in regression and density estimation, and then works through the small interface a custom kernel must satisfy to work throughout the library. For the surrounding estimator API, see the earlier pages of this guide. For the statistical role of the kernel itself, see [Kernel smoothing](../background/smoothing.md).
 
 ## Your first custom kernel
 

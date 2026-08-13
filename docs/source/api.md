@@ -1,11 +1,10 @@
 # API reference
 
-Everything below is exported from the top-level `kerneljax` namespace. The
-[Quickstart](quickstart.md) walks through the first few sections, which cover most use.
+Everything below is available from the top-level `kerneljax` namespace. For a guided introduction, see the [user guide](user-guide/index.md).
 
 ## Data
 
-Mixed-type samples and the evaluation grids built from them.
+Mixed-type data containers and helpers for constructing evaluation grids.
 
 ```{eval-rst}
 .. autosummary::
@@ -19,7 +18,7 @@ Mixed-type samples and the evaluation grids built from them.
 
 ## Estimators
 
-The entry points. Each takes training data and a bandwidth rule, and returns a fit object.
+The main estimation entry points. Each takes training data and a bandwidth rule and returns a fitted result.
 
 ```{eval-rst}
 .. autosummary::
@@ -35,19 +34,9 @@ The entry points. Each takes training data and a bandwidth rule, and returns a f
    kerneljax.cmode
 ```
 
-Any fit passes to {func}`~kerneljax.summary` for the report shown throughout these docs.
-
-```{eval-rst}
-.. autosummary::
-   :toctree: generated
-   :nosignatures:
-
-   kerneljax.summary
-```
-
 ## Bandwidth selection
 
-Selecting once to reuse the result, starting from a plug-in rule, or swapping the solver.
+Select bandwidths explicitly when you want to reuse a result, start from a plug-in rule, or customize the optimization.
 
 ```{eval-rst}
 .. autosummary::
@@ -56,12 +45,11 @@ Selecting once to reuse the result, starting from a plug-in rule, or swapping th
 
    kerneljax.select_bandwidth
    kerneljax.normal_reference
-   kerneljax.lbfgs
 ```
 
 ### Criteria
 
-What selection minimizes, configured and handed to {func}`~kerneljax.select_bandwidth`.
+Criterion objects configure the objective minimized by {func}`~kerneljax.select_bandwidth`.
 
 ```{eval-rst}
 .. autosummary::
@@ -73,7 +61,9 @@ What selection minimizes, configured and handed to {func}`~kerneljax.select_band
    kerneljax.DistributionCriterion
 ```
 
-Underneath each is an ordinary differentiable function, callable directly.
+### Criterion functions
+
+Each criterion is backed by an ordinary differentiable function that can also be called directly.
 
 ```{eval-rst}
 .. autosummary::
@@ -87,9 +77,21 @@ Underneath each is an ordinary differentiable function, callable directly.
    kerneljax.cv_cdf_distribution
 ```
 
+### Solvers
+
+Optimization routines used by bandwidth selection.
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated
+   :nosignatures:
+
+   kerneljax.lbfgs
+```
+
 ## Kernels
 
-One kernel per column kind, collected into a {class}`~kerneljax.KernelSet`.
+Kernel families for continuous, unordered, and ordered variables. A {class}`~kerneljax.KernelSet` collects the choices used by an estimator.
 
 ```{eval-rst}
 .. autosummary::
@@ -103,10 +105,9 @@ One kernel per column kind, collected into a {class}`~kerneljax.KernelSet`.
    kerneljax.LiRacine
 ```
 
-## Containers
+## Bandwidths
 
-Smoothing parameters, one per column, with the conditional form carrying one block per
-sample.
+Objects that carry smoothing parameters, with the conditional form holding one bandwidth block for each sample.
 
 ```{eval-rst}
 .. autosummary::
@@ -117,7 +118,9 @@ sample.
    kerneljax.ConditionalBandwidth
 ```
 
-The results estimators and solvers hand back, read rather than constructed.
+## Results
+
+Fit and selection objects returned by estimators and optimization routines.
 
 ```{eval-rst}
 .. autosummary::
@@ -135,9 +138,21 @@ The results estimators and solvers hand back, read rather than constructed.
    kerneljax.WLS
 ```
 
+### Summaries
+
+{func}`~kerneljax.summary` produces the formatted reports shown throughout the documentation.
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated
+   :nosignatures:
+
+   kerneljax.summary
+```
+
 ## Primitives
 
-The pieces every estimator above is built from.
+Low-level operations used to build the estimators above.
 
 ```{eval-rst}
 .. autosummary::
@@ -150,9 +165,9 @@ The pieces every estimator above is built from.
    kerneljax.hat_diagonal
 ```
 
-## Extension points
+## Kernel interfaces
 
-Subclass these to add a kernel of your own.
+Base classes for implementing custom kernels.
 
 ```{eval-rst}
 .. autosummary::

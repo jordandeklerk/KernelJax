@@ -1,4 +1,4 @@
-# Release notes
+# Changelog
 
 Notes for each released version of KernelJax.
 

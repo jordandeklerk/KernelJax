@@ -32,6 +32,22 @@ body[data-md-color-scheme="default"] {
 
   --md-typeset-a-color: var(--kj-blue);
 
+  --kj-header-bg: #ffffff;
+  --kj-header-fg: rgba(0, 0, 0, 0.87);
+  --kj-header-hover: rgba(0, 0, 0, 0.06);
+  --kj-search-bg: rgba(0, 0, 0, 0.07);
+  --kj-search-fg: #212121;
+  --kj-search-placeholder: rgba(0, 0, 0, 0.6);
+
+  --kj-wordmark: linear-gradient(
+    90deg,
+    #0b5cff 0%,
+    #0852f0 30%,
+    #314da2 55%,
+    #c21c4e 82%,
+    #e90d34 100%
+  );
+
   --kj-banner: linear-gradient(
     90deg,
     #0b5cff 0%,
@@ -56,6 +72,22 @@ body[data-md-color-scheme="slate"] {
 
   --md-typeset-a-color: #7aa8ff;
 
+  --kj-header-bg: #14151a;
+  --kj-header-fg: #ffffff;
+  --kj-header-hover: rgba(255, 255, 255, 0.1);
+  --kj-search-bg: #0f1013;
+  --kj-search-fg: #ffffff;
+  --kj-search-placeholder: rgba(255, 255, 255, 0.7);
+
+  --kj-wordmark: linear-gradient(
+    90deg,
+    #4985ff 0%,
+    #5086f9 30%,
+    #6f87d3 55%,
+    #e75883 82%,
+    #f54c6a 100%
+  );
+
   --kj-banner: linear-gradient(
     90deg,
     #0a4ad6 0%,
@@ -67,12 +99,63 @@ body[data-md-color-scheme="slate"] {
 }
 
 /*
-The header carries the logo's blue to crimson sweep. Its stops are darker than
---kj-sweep because white header text sits on them, and the lighter blues in the
-logo drop below 4.5:1 against white.
+The masthead follows the palette rather than holding one value, so the header is
+white under the light scheme and near black under the dark one. The primary color
+variables above carry the brand blue for links and accents and would otherwise
+paint the header with it, so the masthead reads its own variables instead.
 */
-.md-header {
+header.md-header {
+  background-color: var(--kj-header-bg);
+  color: var(--kj-header-fg);
+}
+
+.md-search form input,
+.md-search form input:active,
+.md-search form input:focus {
+  background-color: var(--kj-search-bg);
+  color: var(--kj-search-fg);
+}
+
+.md-search form input::placeholder {
+  color: var(--kj-search-placeholder);
+}
+
+.md-version button {
+  font-weight: 100 !important;
+}
+
+/*
+The tabs take the header's own background rather than carrying one of their own,
+so the two rows read as a single masthead instead of two stacked bands. The
+sweep survives as a rule along the bottom edge, where it separates the masthead
+from the page and stays a brand mark rather than a second band competing with
+the first.
+*/
+.md-tabs {
+  font-family: "PT Sans", var(--md-text-font-family, Roboto), sans-serif;
+  background-color: var(--kj-header-bg);
   background-image: var(--kj-banner);
+  background-size: 100% 3px;
+  background-position: bottom;
+  background-repeat: no-repeat;
+  color: var(--kj-header-fg);
+  font-weight: 400;
+  opacity: 1;
+}
+
+.md-tabs li:hover {
+  background-color: var(--kj-header-hover);
+}
+
+.md-tabs__link {
+  color: var(--kj-header-fg);
+  opacity: 0.7;
+}
+
+.md-tabs__link--active,
+.md-tabs__link:hover {
+  color: var(--kj-header-fg);
+  opacity: 1;
 }
 
 /* The lighter sweep bookends the page where no text sits on it. */
@@ -91,21 +174,38 @@ logo drop below 4.5:1 against white.
 
 .md-header__button.md-logo img,
 .md-header__button.md-logo svg {
-  height: 2.5rem;
+  height: 40px;
   width: auto;
 }
 
 .md-header__button.md-logo {
-  padding: 0.2rem;
+  height: 100%;
+  margin: 0;
+  padding: 0;
 }
 
 /*
-Type scale, following GPJax. Material's default root size is 137.5%, which
-leaves headings large enough to break the rhythm of a page carrying this much
-math. Everything below is relative to the 130% root.
+Type scale, following GPJax. Material's default headings are large enough to
+break the rhythm of a page carrying this much math, so the heading sizes below
+are pinned smaller against a 130% base. The wide viewport breakpoints must
+mirror Material's stock 137.5% and 150% steps, since every header widget is
+sized in rem and a root without them renders the search bar, repository
+widget, and tabs smaller than stock Material sites on big screens.
 */
 html {
   font-size: 130%;
+}
+
+@media screen and (min-width: 100em) {
+  html {
+    font-size: 137.5%;
+  }
+}
+
+@media screen and (min-width: 125em) {
+  html {
+    font-size: 150%;
+  }
 }
 
 .md-typeset h1 {
@@ -155,10 +255,10 @@ the rule.
 
 /*
 The theme sticks the sidebar 2.4rem below the top, which is its own header
-height. Ours is taller because of the larger logo (2.5rem plus 0.2rem padding
-either side), so without matching the offset the foot of a long nav sits below
-the viewport and cannot be reached. The explicit scroll height is a belt-and-
-braces measure, since the theme otherwise sets it from JavaScript.
+height. Ours is taller because the logo sets the header height rather than the
+other way round, so without matching the offset the foot of a long nav sits
+below the viewport and cannot be reached. The explicit scroll height is a belt-
+and-braces measure, since the theme otherwise sets it from JavaScript.
 */
 .md-sidebar {
   top: 2.9rem;
@@ -275,6 +375,41 @@ file loads last.
   opacity: 1;
 }
 
+/* The site name carries the same sweep as the rule beneath it, set off from the
+logo by enough space to read as its own element. */
+[dir="ltr"] .md-header__title {
+  margin-left: 0.5rem;
+}
+
+/*
+The wordmark carries the same sweep as the rule beneath it, at the same stop
+positions and the same hue at every stop. Only lightness moves between the
+schemes, darkened against the white header and lifted against the near black
+one, so each stop clears 4.5:1 either way.
+*/
+.md-header__title .md-header__topic .md-ellipsis {
+  font-size: 1rem;
+  background-image: var(--kj-wordmark);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  font-weight: 700;
+}
+
 .md-header__title .md-header__topic + .md-header__topic {
   display: none;
+}
+
+/*
+The project name carries the same sweep wherever it is set as text, in the
+masthead and in the page heading, so both read the variable rather than
+repeating the stops.
+*/
+.md-typeset h1 .kj-wordmark {
+  background-image: var(--kj-wordmark);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
