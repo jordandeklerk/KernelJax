@@ -1,6 +1,6 @@
 <div style="text-align: center;" align="center">
 
-<img alt="KernelJax" src="https://raw.githubusercontent.com/jordandeklerk/KernelJax/main/docs/source/_static/kerneljax-logo.png" width="650">
+<img alt="KernelJax" src="https://raw.githubusercontent.com/jordandeklerk/KernelJax/main/docs/source/_static/kerneljax-logo.png" width="450">
 
 <br>
 <br>
@@ -54,6 +54,12 @@ naturally into the wider JAX ecosystem.
   model rather than fixed by a derivative-free search.
 - Composable primitives (`kweights`, `ksum`, the kernel base classes) are public,
   so estimators the high-level interface does not ship can be built directly.
+- [Custom kernels](https://kerneljax.readthedocs.io/en/latest/user-guide/custom-kernels.html)
+  subclass a kernel base class and implement `value`, and every estimator and
+  selection rule then runs through them.
+- [Custom selection criteria](https://kerneljax.readthedocs.io/en/latest/user-guide/custom-criteria.html)
+  are any JAX callable returning one scalar, which the optimizer differentiates the
+  same way it differentiates the built-in objectives.
 
 ## Installation
 
@@ -99,73 +105,3 @@ Local polynomial regression
   Solver iterations                      8
   Converged                           True
 ```
-
-### Custom kernels
-
-A kernel sets how observations are weighted. Subclass `ContinuousKernel` or the
-categorical base for that column kind, implement `value`, and pass the result through
-`KernelSet`. Bandwidth selection then runs through the kernel you wrote.
-
-```python
-import dataclasses
-import jax.numpy as jnp
-
-@dataclasses.dataclass(frozen=True)
-class Epanechnikov(kj.ContinuousKernel):
-    def value(self, x, y, h):
-        u = (x - y) / h
-        return jnp.where(jnp.abs(u) <= 1.0, 0.75 * (1.0 - u * u), 0.0)
-
-epan = kj.local_poly(x, y, "cv_ls", degree=1, kernels=kj.KernelSet(continuous=Epanechnikov()))
-print(f"Epanechnikov  h={epan.bandwidth.h[0]:.6f}  r2={epan.r_squared:.6f}")
-print(f"Gaussian      h={fit.bandwidth.h[0]:.6f}  r2={fit.r_squared:.6f}")
-```
-
-```text
-Epanechnikov  h=0.084645  r2=0.947231
-Gaussian      h=0.036019  r2=0.947953
-```
-
-### Custom bandwidth selection
-
-Bandwidth selection minimizes a scalar criterion. The built-in rules
-(`cv_ls`, corrected AIC) are ordinary JAX callables, and so is anything you
-write in their place. Implement `__call__`, pass it to
-`select_bandwidth`, and the optimizer finds `h` by differentiating the
-loss you wrote.
-
-```python
-@dataclasses.dataclass(frozen=True)
-class AbsoluteDeviation:
-    degree: int = 1
-
-    def __call__(self, train, bandwidth, *, y, kernels=None, chunk=None):
-        fit = kj.local_poly(train, y, bandwidth, kernels=kernels, chunk=chunk,
-                            degree=self.degree, fold=jnp.arange(train.n))
-        return jnp.mean(jnp.abs(y - fit.mean))
-
-squared = kj.select_bandwidth(x, kj.RegressionCriterion(method="cv_ls", degree=1), y=y)
-absolute = kj.select_bandwidth(x, AbsoluteDeviation(degree=1), y=y)
-print(f"squared error       h = {squared.bandwidth.h[0]:.4f}")
-print(f"absolute deviation  h = {absolute.bandwidth.h[0]:.4f}")
-```
-
-```text
-squared error       h = 0.0360
-absolute deviation  h = 0.0348
-```
-
-[density]: kerneljax/estimators/density.py#L58
-[distribution]: kerneljax/estimators/distribution.py#L60
-[regression]: kerneljax/estimators/regression.py#L99
-[bandwidth]: kerneljax/bandwidth.py#L69
-[normal_reference]: kerneljax/bandwidth.py#L296
-[objectives]: kerneljax/selection/objectives.py
-[cv_ls]: kerneljax/selection/objectives.py#L173
-[aic]: kerneljax/selection/objectives.py#L385
-[select_bandwidth]: kerneljax/selection/optimize.py#L22
-[selection]: kerneljax/selection
-[kweights]: kerneljax/ksum.py#L23
-[ksum]: kerneljax/ksum.py#L232
-[kernels]: kerneljax/kernels/base.py#L21
-[kernelset]: kerneljax/kernels/sets.py#L18
