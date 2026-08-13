@@ -1,8 +1,8 @@
 # Local polynomial regression
 
-{func}`~kerneljax.local_poly` estimates how the conditional mean of a response changes with mixed continuous and categorical covariates without specifying a global functional form. This page fits a local polynomial regression, interprets its bandwidths, predicts along an evaluation grid with standard errors, and estimates derivatives.
+{func}`~kerneljax.local_poly` estimates how the conditional mean of a response changes with mixed continuous and categorical covariates without specifying a global functional form. This page starts with a local polynomial fit, works through what its selected bandwidths mean, and then uses the same fit for prediction, standard errors, and derivatives.
 
-The setup is the shared wage example from [Working with data](data.md).
+The setup is the shared wage example from [Working with data](data.md). That page introduced the mixed sample and the evaluation grids we will use here.
 
 ```python
 import matplotlib.pyplot as plt
@@ -62,11 +62,13 @@ Local polynomial regression
   Converged                           True
 ```
 
-There are two important choices in that call. `degree=1` asks for a local linear fit. Rather than fitting one line to the entire sample, KernelJax fits a weighted line around every point where the regression function is evaluated.
+Two choices define that fit. `degree=1` asks for a local linear regression. Rather than fitting one line to the entire sample, KernelJax fits a weighted line around every point where the regression function is evaluated.
 
-`"cv_ls"` asks KernelJax to select the bandwidths by least-squares cross-validation. At each candidate bandwidth, every observation is left out of its own local fit and predicted from the remaining sample. The selected bandwidth minimizes the resulting mean squared prediction error.
+`"cv_ls"` asks KernelJax to choose the bandwidths by least-squares cross-validation. At each candidate bandwidth, every observation is left out of its own local fit and predicted from the remaining sample. The selected bandwidth minimizes the resulting mean squared prediction error.
 
-To see how the pieces fit together, write $x$ for an evaluation point and $X_i$ for training observation $i$. Its kernel weight is
+### What the fit is doing
+
+To make that description concrete, write $x$ for an evaluation point and $X_i$ for training observation $i$. Its kernel weight is
 
 $$
 W_i(x) = \prod_d K_d(x_d, X_{id}),
@@ -102,6 +104,8 @@ $$
 \frac{\partial \hat m}{\partial x_d}(x) = \frac{\hat\beta_d(x)}{h_d}.
 $$
 
+That relationship will matter again when we ask the fitted model for derivatives later in the page.
+
 The bandwidths themselves are selected by minimizing
 
 $$
@@ -110,11 +114,11 @@ $$
 
 where $\hat m_{-i}$ is the local polynomial estimate formed without allowing observation $i$ to contribute to its own fit.
 
-You do not need these equations to use the API, but they give the useful mental model. KernelJax learns how local each fit should be and then estimates the relationship from the observations receiving the most weight nearby.
+You do not need these equations to use the API, but they provide the useful mental model behind the call above. The bandwidths determine which observations count as nearby, and the local polynomial uses those weighted observations to estimate the relationship around each evaluation point.
 
 ### Reading the fit diagnostics
 
-The report also contains statistics describing the in-sample fit.
+Before looking at the selected bandwidths themselves, the report gives several ways to assess the resulting fit.
 
 KernelJax reports the root mean squared residual as the residual standard error,
 
@@ -155,7 +159,7 @@ $$
 
 agrees with it when the residuals are orthogonal to the fitted deviations $\hat m(X_i)-\bar Y$. Ordinary least squares with an intercept has that projection property. A local polynomial smoother does not generally have it.
 
-The cross-validation criterion is a different kind of quantity. At the selected bandwidth it is
+The cross-validation criterion measures something different from either in-sample statistic. At the selected bandwidth it is
 
 $$
 \operatorname{CV}_{\mathrm{LS}} = \frac{1}{n} \sum_{i=1}^{n}
@@ -172,17 +176,11 @@ $$
 
 where $H_{ii}$ is the diagonal element of the smoother matrix. This explains why leave-one-out errors are typically larger when the observation carries appreciable weight in its own fitted value, although the ordering is not a separate guarantee of the criterion itself. [Bandwidth selection](../background/selection.md#cross-validation-for-regression) derives the identity.
 
-Here,
-
-$$
-0.334907 \quad\text{versus}\quad 0.537311^2 \approx 0.288703,
-$$
-
-so the leave-one-out error is larger than the in-sample mean squared residual, as we would expect in this fit.
+Here, $0.334907$ versus $0.537311^2 \approx 0.288703$, so the leave-one-out error is larger than the in-sample mean squared residual, as we would expect in this fit.
 
 ## Reading the bandwidths
 
-The selected bandwidths are worth looking at closely.
+The diagnostics tell us how the fitted model behaves. The selected bandwidths tell us what kind of local structure cross-validation chose to produce that fit.
 
 ```text
 Variable      Kind             Bandwidth
@@ -195,7 +193,7 @@ For a continuous variable such as experience, the bandwidth controls the width o
 
 Categorical bandwidths behave differently. Near zero, observations at different levels receive little or no weight from that column. As the smoothing parameter approaches its upper bound, distinctions between levels matter less.
 
-For the default Aitchison-Aitken kernel used with an unordered variable having $c$ levels,
+The region bandwidth is particularly easy to interpret. For the default Aitchison-Aitken kernel used with an unordered variable having $c$ levels,
 
 $$
 L(x, y; \lambda) =
@@ -223,15 +221,15 @@ Region lands exactly on its upper bound. Its kernel factor is therefore constant
 
 Education behaves very differently. Its smoothing parameter is close to zero, so observations at different education levels remain relatively distinct.
 
-That is what the simulation was constructed to reveal. Region carries no information about the conditional mean, while education shifts it directly. KernelJax was not told either fact. The distinction emerged from choosing the bandwidths that predicted held-out observations best.
+This is what the simulation was constructed to reveal. Region carries no information about the conditional mean, while education shifts it directly. KernelJax was not told either fact. The distinction emerged from choosing the bandwidths that predicted held-out observations best.
 
 This ability to smooth across uninformative variables is particularly useful in nonparametric models, where unnecessary dimensions would otherwise increase the difficulty of estimation. [Bandwidth selection](../background/selection.md#what-cross-validation-buys) develops that idea in more detail.
 
 ## Predicting on a grid
 
-Next, we can inspect the fitted relationship with experience. The model contains three covariates, so plotting its entire regression surface is not useful. Instead, we vary experience while holding region and education at representative values.
+The bandwidths tell us how the estimator is smoothing each covariate. We can now use the fitted model to inspect the relationship those bandwidths produce.
 
-{func}`~kerneljax.grid` constructs those evaluation points.
+The model contains three covariates, so plotting its entire regression surface is not useful. Instead, we vary experience while holding region and education at representative values. The [Working with data](data.md#evaluation-grids) page introduced {func}`~kerneljax.grid` for constructing exactly this kind of path.
 
 ```python
 points = kj.grid(data, vary="exper", n=200)
@@ -250,7 +248,9 @@ exper varies over 200 points from 0.01 to 29.92
 region pinned at 2, educ pinned at 2
 ```
 
-By default, `grid` holds continuous variables at their median, unordered variables at their most common level, and ordered variables at the first level whose cumulative sample share reaches the median probability. Passing `fit` back to {func}`~kerneljax.local_poly` reuses its selected bandwidths, kernels, and polynomial degree. Setting `se=True` additionally returns a pointwise plug-in standard error for the fitted mean.
+By default, `grid` holds continuous variables at their median, unordered variables at their most common level, and ordered variables at the first level whose cumulative sample share reaches the median probability. Passing `fit` back to {func}`~kerneljax.local_poly` reuses its selected bandwidths, kernels, and polynomial degree rather than running selection again.
+
+Setting `se=True` additionally returns a pointwise plug-in standard error for the fitted mean. Before plotting that band, it is useful to be precise about what this standard error measures.
 
 ### Pointwise standard errors
 
@@ -275,6 +275,8 @@ Second, the returned standard error applies only to the fitted mean. It does not
 Third, a curve such as $\hat m(x)\pm 2\,\widehat{\operatorname{se}}(\hat m(x))$ is a pointwise standard-error band, not a simultaneous confidence band over the entire regression function.
 
 Finally, the calculation does not explicitly correct smoothing bias. A local linear estimate has bias that is typically of order $h^2$ away from special cases, so the band describes sampling variation around the smoothed estimator rather than automatically producing exact coverage for the true conditional mean $m(x)$. [Kernel regression](../background/regression.md#why-local-linear-is-the-default) develops the variance approximation and the role of smoothing bias in more detail.
+
+With those qualifications in place, we can plot the fitted mean and its pointwise standard-error band.
 
 ```python
 fig, ax = plt.subplots()
@@ -304,15 +306,15 @@ The fitted curve recovers the nonlinear relationship even though we never specif
 
 ## Derivatives
 
-A local polynomial fit also gives direct access to derivatives with respect to its continuous covariates.
+The fitted mean shows the shape of the relationship with experience. A local polynomial fit can also describe how quickly that relationship is changing by returning derivatives with respect to its continuous covariates.
 
-For a local linear fit, recall that the basis uses $u_{id} = \frac{X_{id}-x_d}{h_d}$, so the coefficient $\hat\beta_d(x)$ is expressed in bandwidth-scaled units and KernelJax returns
+For a local linear fit, recall that the basis uses $u_{id} = \frac{X_{id}-x_d}{h_d}$. The coefficient $\hat\beta_d(x)$ is therefore expressed in bandwidth-scaled units, and KernelJax returns
 
 $$
 \widehat{ \frac{\partial m}{\partial x_d} }(x) = \frac{ \hat\beta_d(x) }{ h_d }.
 $$
 
-In this example, that gives an estimate of the change in expected wage associated with another year of experience at each point along the curve.
+This is the same coefficient rescaling introduced when we constructed the local polynomial above. In this example, it gives an estimate of the change in expected wage associated with another year of experience at each point along the curve.
 
 ```python
 slope = kj.local_poly(data, wage, fit, at=points, gradient=True)
@@ -320,13 +322,13 @@ estimated = slope.grad[:, 0]
 truth = 0.35 - 2 * 0.008 * exper_grid
 ```
 
-Because the data are simulated, we know the true derivative,
+Because the data are simulated, we also know the true derivative,
 
 $$
 \frac{\partial m}{\partial e} = 0.35 - 0.016 e,
 $$
 
-and can compare it directly with the estimate.
+so we can compare it directly with the estimate.
 
 ```python
 fig, ax = plt.subplots()

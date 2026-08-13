@@ -1,6 +1,8 @@
 # Bandwidth selection
 
-How much to smooth is usually the most consequential choice in kernel estimation. KernelJax can select that smoothing automatically, and every estimator exposes the selection rule through the same bandwidth argument. The rules differ statistically rather than just computationally. They optimize different criteria, so choosing between them means choosing what kind of error the bandwidth should trade off.
+How much to smooth is usually the most consequential choice in kernel estimation. KernelJax can select that smoothing automatically, and every estimator exposes the selection rule through the same bandwidth argument.
+
+The choice is statistical before it is computational. Different rules optimize different criteria, so choosing a selector means deciding what kind of error the bandwidth should trade off. When that selector requires numerical optimization, there is then a second question of how KernelJax searches for a good solution.
 
 The setup is the shared wage example from [Working with data](data.md), with the local linear fit from [Local polynomial regression](regression.md).
 
@@ -31,7 +33,7 @@ fit = kj.local_poly(data, wage, "cv_ls", degree=1)
 
 ## Choosing a selector
 
-The selection criterion is part of the statistical method, not merely an optimizer setting.
+The selection criterion is part of the statistical method, not merely an optimizer setting. The accepted shorthand depends on the estimator being fitted.
 
 | Estimator                     | Accepted strings                           |
 | ----------------------------- | ------------------------------------------ |
@@ -43,7 +45,7 @@ The selection criterion is part of the statistical method, not merely an optimiz
 | {func}`~kerneljax.cquantile`  | `"cv_ls"`, `"normal_reference"`            |
 | {func}`~kerneljax.cmode`      | `"cv_ml"`, `"cv_ls"`, `"normal_reference"` |
 
-The names tell KernelJax which objective to optimize.
+These names determine what KernelJax asks a candidate bandwidth to do well.
 
 `"cv_ml"` uses leave-one-out likelihood and is natural for density estimation. `"cv_ls"` denotes a least-squares criterion suited to the estimator being selected. For regression, that is the leave-one-out mean squared residual. For density and conditional density, it is an integrated-squared-error criterion. For conditional distributions, it compares the estimated CDF with the indicator the CDF is trying to reproduce.
 
@@ -53,7 +55,7 @@ The [Bandwidth selection](../background/selection.md) background page derives th
 
 ### The normal-reference rule
 
-`"normal_reference"` is different. It does not optimize a cross-validation objective at all. It constructs a bandwidth from the scale and size of the sample, so it is much cheaper than running a numerical search.
+`"normal_reference"` is different from the criteria above because it does not optimize a cross-validation or information criterion at all. It constructs a bandwidth directly from the scale and size of the sample, making it much cheaper than running a numerical search.
 
 For the density-style reference rule used by the local polynomial fit in this example, each continuous bandwidth is
 
@@ -73,8 +75,8 @@ s_j
 =
 \min_{+}
 \left\{
-\hat\sigma_j,\
-\frac{\operatorname{IQR}_j}{2\Phi^{-1}(0.75)},\
+\hat\sigma_j,\;
+\frac{\operatorname{IQR}_j}{2\Phi^{-1}(0.75)},\;
 1.4826\,\operatorname{MAD}_j
 \right\},
 $$
@@ -88,7 +90,7 @@ X_{ij}-\operatorname{median}_k X_{kj}
 \right|.
 $$
 
-Using several scale estimates makes the starting width less sensitive to an unusually large sample standard deviation.
+Using several scale estimates makes the reference width less sensitive to an unusually large sample standard deviation.
 
 For this example there is one continuous column and the default Gaussian kernel has order $P=2$, so
 
@@ -131,13 +133,17 @@ cross validated   h=2.792168
 
 For this example, the reference and cross-validated continuous bandwidths happen to be fairly close. Nothing requires that agreement in general.
 
+The reference rule also has a second role. When a selector such as `"cv_ls"` or `"cv_ml"` does require numerical optimization, its bandwidth provides KernelJax with a sensible scale from which to begin the search.
+
 ## Why KernelJax uses multiple starts
 
-The optimization-based selectors use L-BFGS from several starting points. KernelJax uses three starts by default, and the estimators expose `n_starts` when you want to change that. The search takes place in the unconstrained coordinates described in the [introduction](intro.md#keep-the-full-path-differentiable). The first start comes from the reference rule, with categorical coordinates moved to the middle of their admissible ranges. Additional starts perturb that unconstrained vector before running the solver again.
+For optimization-based selectors, the reference bandwidth is a starting point rather than the final answer. KernelJax runs L-BFGS from several starting points and keeps the resulting solution with the best criterion value.
+
+KernelJax uses three starts by default, and the estimators expose `n_starts` when you want to change that. The search takes place in the unconstrained coordinates described in the [introduction](intro.md#keep-the-full-path-differentiable). The first start comes from the reference rule, with categorical coordinates moved to the middle of their admissible ranges. Additional starts perturb that unconstrained vector before running the solver again.
 
 Multiple starts matter because bandwidth-selection criteria are not generally convex. Two runs can both satisfy the optimizer's stopping rule while ending at different local solutions.
 
-A deliberately difficult example makes that visible. Here the response is generated independently of the covariate.
+A deliberately difficult example makes that distinction visible. Here the response is generated independently of the covariate, so there is no systematic relationship for a local regression to recover.
 
 ```python
 noise_rng = np.random.default_rng(9)
@@ -177,7 +183,9 @@ for label, run in [("1 start", one_start), ("3 starts", three_starts)]:
 3 starts  h= 33.5028  criterion=0.984698  converged=True
 ```
 
-Because `y_noise` contains no systematic relationship with `x_noise`, there is little reason to fit a strongly local curve. The much larger bandwidth found by the three-start search is therefore plausible. The large-bandwidth limit makes that interpretation precise.
+Both searches report convergence, but they arrive at very different bandwidths and criterion values. Because `y_noise` contains no systematic relationship with `x_noise`, there is little reason to fit a strongly local curve. The much larger bandwidth found by the three-start search is therefore plausible.
+
+The large-bandwidth limit makes that interpretation precise.
 
 For a one-dimensional local linear regression, the fit at $x$ solves a weighted regression on
 
@@ -195,15 +203,7 @@ $$
 \frac{X_i-x}{h}
 $$
 
-span the same linear space as $1$ and $X_i$. Once the weights become constant, the local weighted regression therefore approaches the global ordinary least-squares line
-
-$$
-\hat m_h(x)
-\longrightarrow
-\hat\alpha+\hat\beta x,
-$$
-
-where
+span the same linear space as $1$ and $X_i$. Once the weights become constant, the local weighted regression therefore approaches the global ordinary least-squares line $\hat m_h(x) \longrightarrow \hat\alpha + \hat\beta x$, where
 
 $$
 (\hat\alpha,\hat\beta)
@@ -217,17 +217,7 @@ $$
 
 The cross-validation criterion approaches the leave-one-out mean squared error of that line.
 
-Let $\mathbf Z$ be the $n\times2$ design matrix with rows $(1,X_i)$ and let
-
-$$
-H
-=
-\mathbf Z
-(\mathbf Z^\top\mathbf Z)^{-1}
-\mathbf Z^\top
-$$
-
-be its hat matrix. The ordinary least-squares leave-one-out identity gives
+Let $\mathbf Z$ be the $n\times2$ design matrix with rows $(1,X_i)$ and let $H = \mathbf Z(\mathbf Z^\top\mathbf Z)^{-1}\mathbf Z^\top$ be its hat matrix. The ordinary least-squares leave-one-out identity gives
 
 $$
 Y_i-\hat m_{-i}(X_i)
@@ -259,11 +249,11 @@ $$
 
 The three-start search reports `0.984698` at $h=33.5$, essentially the same value at the displayed precision. The optimizer has not simply wandered toward a meaningless large number. The criterion has moved close to its global-linear limit.
 
-The one-start fit settles at a much smaller bandwidth and a worse criterion value even though it also reports `converged=True`. That distinction is exactly why multiple starts are useful.
+The one-start fit settles at a much smaller bandwidth and a worse criterion value even though it also reports `converged=True`. Convergence therefore tells us something about how a particular solver run stopped, not whether that run found the best solution available. That distinction is important when reading the selection diagnostics.
 
 ## Reading a selection
 
-For an optimization-based bandwidth, it is worth inspecting the selection result before relying on the fitted estimator.
+For an optimization-based bandwidth, it is worth inspecting the selection result before relying on the fitted estimator. The wage fit from the beginning of the page exposes both the selected bandwidth structure and the diagnostics for the run that produced it.
 
 ```python
 print(jax.tree.map(lambda a: a.shape, fit.bandwidth))
@@ -300,11 +290,11 @@ with a finite final objective and gradient.
 
 It does **not** mean that the gradient criterion specifically was met, and it does not imply that the returned point is the global minimum. The noise example above shows why those distinctions matter. `n_iter` reports the number of iterations taken by the selected run, while `criterion` is the original, unscaled objective evaluated at its chosen bandwidth.
 
-The bandwidth itself is a JAX pytree. Here, `h_axis='shared'` means one continuous bandwidth is shared across all evaluation and training points rather than varying by row. The arrays inside the bandwidth are traced JAX values, so bandwidths and selection results can participate naturally in JAX computations. Structural information such as the criterion and kernels remains attached as static metadata.
+The result also carries the structure needed to use that bandwidth later. The bandwidth itself is a JAX pytree. Here, `h_axis='shared'` means one continuous bandwidth is shared across all evaluation and training points rather than varying by row. The arrays inside the bandwidth are traced JAX values, so bandwidths and selection results can participate naturally in JAX computations. Structural information such as the criterion and kernels remains attached as static metadata.
 
 ## Selecting once and reusing
 
-Selection is usually the expensive step, so the result is designed to travel.
+Because a selection result carries both the chosen bandwidth and the context under which it was selected, it can be reused without reconstructing that information from separate arguments. This is especially useful because selection is usually the expensive step.
 
 {func}`~kerneljax.select_bandwidth` exposes the same selection machinery that estimator shortcuts use internally. Criterion objects configure what is minimized, and the returned {class}`~kerneljax.SelectionResult` retains the criterion and kernels under which the bandwidth was selected.
 
