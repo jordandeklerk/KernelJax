@@ -1,16 +1,42 @@
 # Custom bandwidth selection
 
-Kernels determine how observations are weighted. Bandwidth criteria determine which smoothing parameters KernelJax chooses. Those are separate extension points. A custom criterion can use the built-in kernels, custom kernels can use the built-in criteria, and you can replace both when you need to.
+Kernels determine how observations are weighted. Bandwidth criteria determine which smoothing parameters KernelJax chooses. Those are separate extension points. A custom criterion can use the built-in kernels, a custom kernel can use the built-in criteria, and both can be replaced when a method requires it.
 
-KernelJax does not require custom criteria to inherit from a base class. A criterion is simply a callable that receives the training data and a candidate bandwidth and returns a scalar objective for {func}`~kerneljax.select_bandwidth` to minimize.
+KernelJax does not require custom criteria to inherit from a base class. A criterion is any callable that receives the training data and a candidate bandwidth and returns one scalar objective for {func}`~kerneljax.select_bandwidth` to minimize.
 
-This page builds a regression criterion first, uses it in bandwidth selection, and then works through the small interface needed to create more specialized criteria. For custom weighting schemes, see [Custom kernels](custom-kernels.md). For the statistical ideas behind the built-in selectors, see [Bandwidth selection](../background/selection.md).
+This page builds a regression criterion first and then works through the interface needed for more specialized selectors. For custom weighting schemes, see [Custom kernels](custom-kernels.md). For the statistical ideas behind the built-in criteria, see [Bandwidth selection](../background/selection.md).
 
 ## Your first custom criterion
 
-The built-in least-squares cross-validation criterion chooses the bandwidth that minimizes held-out squared prediction error. We can replace squared error with absolute deviation in a few lines.
+The built-in least-squares regression criterion chooses a bandwidth by minimizing the mean squared leave-one-out residual,
 
-First, create a small regression problem with a handful of large outliers.
+$$
+\mathrm{CV}_{\mathrm{LS}}(h,\lambda)
+=
+\frac{1}{n}
+\sum_{i=1}^{n}
+\left[
+Y_i-\hat m_{-i}(X_i)
+\right]^2,
+$$
+
+where $\hat m_{-i}(X_i)$ is the local polynomial prediction at $X_i$ obtained without allowing observation $i$ to contribute to its own fit.
+
+We can change the **selection loss** without changing the estimator underneath. Replacing the square with an absolute value gives
+
+$$
+\mathrm{CV}_{\mathrm{abs}}(h,\lambda)
+=
+\frac{1}{n}
+\sum_{i=1}^{n}
+\left|
+Y_i-\hat m_{-i}(X_i)
+\right|.
+$$
+
+The regression being evaluated is still a local polynomial fit obtained by weighted least squares. Only the criterion used to choose its bandwidth has changed.
+
+First, create a small regression problem containing several large response outliers.
 
 ```python
 import dataclasses
@@ -25,8 +51,10 @@ n = 150
 rng = np.random.default_rng(1)
 x = rng.uniform(size=n)
 y = np.sin(2 * np.pi * x) + rng.normal(0, 0.2, n)
+
 outliers = rng.choice(n, 8, replace=False)
 y[outliers] += 6.0
+
 train = kj.MixedData.continuous(x)
 ```
 
@@ -37,37 +65,61 @@ Now define the criterion.
 class AbsoluteDeviation:
     degree: int = 1
 
-    def __call__(self, train, bandwidth, *, y, kernels=None, chunk=None):
+    def __call__(
+        self,
+        train,
+        bandwidth,
+        *,
+        y,
+        kernels=None,
+        chunk=None,
+    ):
         fold = jnp.arange(train.n)
 
         fit = kj.local_poly(
-            train, y, bandwidth, degree=self.degree, kernels=kernels, chunk=chunk, fold=fold
+            train,
+            y,
+            bandwidth,
+            degree=self.degree,
+            kernels=kernels,
+            chunk=chunk,
+            fold=fold,
         )
 
         return jnp.mean(jnp.abs(y - fit.mean))
 ```
 
-There are only three ideas in that class.
+There are three pieces to it. `fold = jnp.arange(train.n)` assigns every observation its own fold, so each prediction excludes the observation being predicted. `local_poly(...)` evaluates those leave-one-out predictions at the candidate bandwidth supplied by the optimizer. The final line reduces the held-out residuals to the single scalar that bandwidth selection minimizes.
 
-`fold = jnp.arange(train.n)` gives every observation its own fold, producing leave-one-out predictions.
-
-`local_poly(...)` evaluates those predictions at the candidate bandwidth supplied by the optimizer.
-
-The final line reduces the held-out errors to one scalar objective.
-
-We can hand the criterion directly to {func}`~kerneljax.select_bandwidth`.
+The criterion can be passed directly to {func}`~kerneljax.select_bandwidth`.
 
 ```python
-squared = kj.select_bandwidth(train, kj.RegressionCriterion(method="cv_ls", degree=1), y=y)
-absolute = kj.select_bandwidth(train, AbsoluteDeviation(degree=1), y=y)
+squared = kj.select_bandwidth(
+    train,
+    kj.RegressionCriterion(method="cv_ls", degree=1),
+    y=y,
+)
+
+absolute = kj.select_bandwidth(
+    train,
+    AbsoluteDeviation(degree=1),
+    y=y,
+)
+
 truth = np.sin(2 * np.pi * x)
 
-for name, result in [("squared error", squared), ("absolute deviation", absolute)]:
-    fit = kj.local_poly(train, y, result)
+for name, result in [
+    ("squared error", squared),
+    ("absolute deviation", absolute),
+]:
+    fitted = kj.local_poly(train, y, result)
+    error = jnp.median(jnp.abs(fitted.mean - truth))
 
-    error = jnp.median(jnp.abs(fit.mean - truth))
-
-    print(f"{name:19s} h = {result.bandwidth.h[0]:.4f}   median |error| = {error:.4f}")
+    print(
+        f"{name:19s} "
+        f"h = {result.bandwidth.h[0]:.4f}   "
+        f"median |error| = {error:.4f}"
+    )
 ```
 
 ```text
@@ -75,63 +127,98 @@ squared error       h = 0.0323   median |error| = 0.1223
 absolute deviation  h = 0.0628   median |error| = 0.2141
 ```
 
-The two criteria choose very different bandwidths. The absolute-deviation loss is less sensitive to individual large residuals, but that does not automatically make the resulting estimator more robust. The regression underneath is still fitted by weighted least squares, and here the wider selected bandwidth spreads the effect of the contaminated observations over a larger neighborhood.
+The criteria choose quite different bandwidths. Absolute deviation makes the **selection objective** less sensitive to individual large residuals, but that does not make the resulting regression estimator robust to outliers. The local polynomial itself is still fitted by weighted least squares. Here the absolute-deviation criterion chooses a wider bandwidth, which spreads the influence of the contaminated observations across a larger neighborhood and produces a larger median error against the known regression function.
 
 ```{important}
-KernelJax minimizes the objective you give it. Deciding whether that objective targets the behavior you actually want remains part of the statistical problem.
+KernelJax minimizes the objective you give it. Whether that objective targets the statistical behavior you want remains part of the method you are designing.
 ```
 
 ## What a criterion must satisfy
 
-A custom bandwidth criterion has a deliberately small interface. At a minimum, it should do the following.
+A custom criterion has a deliberately small interface. It should
 
-1. Accept `train` and `bandwidth` as its first two arguments.
-2. Accept the keyword arguments `kernels` and `chunk`.
-3. Accept any additional data it needs through keyword arguments such as `y`.
-4. Return a single scalar.
-5. Be compatible with JAX differentiation with respect to the bandwidth.
-6. Be hashable when represented as a stateful callable object.
+1. accept `train` and `bandwidth` as its first two arguments,
+2. accept the keyword arguments `kernels` and `chunk`,
+3. accept any additional data it needs through keyword arguments such as `y`,
+4. return one scalar,
+5. be compatible with JAX automatic differentiation through the candidate bandwidth, and
+6. be hashable when represented by a callable object with configuration.
 
-Conceptually, {func}`~kerneljax.select_bandwidth` does this.
+Conceptually, {func}`~kerneljax.select_bandwidth` constructs an objective like the one below.
 
 ```python
 def objective(z):
     bandwidth = transform.from_unconstrained(z)
 
-    return criterion(train, bandwidth, **extra, kernels=kernels, chunk=chunk)
+    return criterion(
+        train,
+        bandwidth,
+        **extra,
+        kernels=kernels,
+        chunk=chunk,
+    )
 ```
 
-The optimizer works in unconstrained coordinates, transforms each candidate back into a valid {class}`~kerneljax.Bandwidth`, and differentiates the scalar your criterion returns. Everything inside the criterion should therefore be ordinary JAX-compatible computation.
+The optimizer does not work directly on constrained values such as $h > 0$ and bounded categorical $\lambda$. It works on an unconstrained vector `z`, transforms that vector into a valid {class}`~kerneljax.Bandwidth`, and differentiates the resulting scalar objective.
+
+A criterion therefore does not need to be differentiable in the classical sense at every possible point, but it does need to produce usable JAX derivatives along the optimization path. Nonsmooth losses such as absolute deviation can work, while non-finite values or gradients cannot.
 
 ## Functions work too
 
-A dataclass is convenient when the criterion has settings such as `degree`, but it is not required. A plain function works just as well.
+A dataclass is useful when a criterion carries configuration such as polynomial degree, but it is not required. A plain function works just as well.
 
 ```python
-def absolute_deviation(train, bandwidth, *, y, kernels=None, chunk=None):
+def absolute_deviation(
+    train,
+    bandwidth,
+    *,
+    y,
+    kernels=None,
+    chunk=None,
+):
     fit = kj.local_poly(
-        train, y, bandwidth, degree=1, kernels=kernels, chunk=chunk, fold=jnp.arange(train.n)
+        train,
+        y,
+        bandwidth,
+        degree=1,
+        kernels=kernels,
+        chunk=chunk,
+        fold=jnp.arange(train.n),
     )
 
     return jnp.mean(jnp.abs(y - fit.mean))
 ```
 
 ```python
-result = kj.select_bandwidth(train, absolute_deviation, y=y)
+result = kj.select_bandwidth(
+    train,
+    absolute_deviation,
+    y=y,
+)
 ```
 
-Use a callable object when the criterion has configuration that should travel with it. Use a function when it does not.
+Use a callable object when configuration should travel with the criterion. A module-level function is usually the simplest choice when there is no configuration to retain.
 
 ## Why callable objects are frozen
 
-When a criterion does carry configuration, a frozen dataclass like `AbsoluteDeviation` above is usually the easiest representation. The criterion is treated as a static argument by JAX, so it must be hashable. A mutable dataclass is not.
+A criterion passed to {func}`~kerneljax.select_bandwidth` is static JAX configuration. A configurable criterion object must therefore be hashable.
+
+A mutable dataclass is not.
 
 ```python
 @dataclasses.dataclass
 class MutableCriterion:
     degree: int = 1
 
-    def __call__(self, train, bandwidth, *, y, kernels=None, chunk=None):
+    def __call__(
+        self,
+        train,
+        bandwidth,
+        *,
+        y,
+        kernels=None,
+        chunk=None,
+    ):
         fit = kj.local_poly(
             train,
             y,
@@ -146,7 +233,11 @@ class MutableCriterion:
 ```
 
 ```python
-kj.select_bandwidth(train, MutableCriterion(), y=y)
+kj.select_bandwidth(
+    train,
+    MutableCriterion(),
+    y=y,
+)
 ```
 
 ```text
@@ -156,25 +247,44 @@ error was:
 TypeError: unhashable type: 'MutableCriterion'
 ```
 
-A frozen dataclass also gives configuration values predictable equality and hashing behavior, which helps JAX reuse compiled functions.
+A frozen dataclass provides stable equality and hashing for immutable configuration. The same compilation consideration applies to functions and other callables. A callable recreated as a new object on every invocation may appear to JAX as new static configuration and trigger another compilation. Reusing criterion objects or module-level functions avoids that unnecessary churn.
 
 ## Return one scalar
 
-The optimizer needs one number to minimize. This criterion returns one loss per observation.
+The optimizer needs one objective value for each candidate bandwidth.
+
+This criterion instead returns one loss per observation.
 
 ```python
-def returns_a_vector(train, bandwidth, *, y, kernels=None, chunk=None):
+def returns_a_vector(
+    train,
+    bandwidth,
+    *,
+    y,
+    kernels=None,
+    chunk=None,
+):
     fit = kj.local_poly(
-        train, y, bandwidth, degree=1, kernels=kernels, chunk=chunk, fold=jnp.arange(train.n)
+        train,
+        y,
+        bandwidth,
+        degree=1,
+        kernels=kernels,
+        chunk=chunk,
+        fold=jnp.arange(train.n),
     )
 
     return jnp.abs(y - fit.mean)
 ```
 
-Passing it to the selector fails when JAX first tries to differentiate it.
+Passing it to the selector fails when JAX differentiates the objective.
 
 ```python
-kj.select_bandwidth(train, returns_a_vector, y=y)
+kj.select_bandwidth(
+    train,
+    returns_a_vector,
+    y=y,
+)
 ```
 
 ```text
@@ -182,54 +292,115 @@ TypeError: Gradient only defined for scalar-output functions.
 Output had shape: (150,).
 ```
 
-Reduce the observation-level contributions inside the criterion using whatever loss definition is appropriate for your problem.
+Reduce observation-level contributions inside the criterion according to the loss you intend to optimize.
 
 ## Accept `kernels` and `chunk`
 
-KernelJax passes both keywords to every criterion call, whether or not your criterion uses them. Here is a criterion that omits them.
+KernelJax passes `kernels` and `chunk` on every criterion evaluation. A custom criterion therefore needs to accept both keywords even when it does not use them.
 
 ```python
 def forgets_the_keywords(train, bandwidth, *, y):
-    fit = kj.local_poly(train, y, bandwidth, degree=1, fold=jnp.arange(train.n))
+    fit = kj.local_poly(
+        train,
+        y,
+        bandwidth,
+        degree=1,
+        fold=jnp.arange(train.n),
+    )
 
     return jnp.mean(jnp.abs(y - fit.mean))
 ```
 
-It fails immediately.
-
 ```python
-kj.select_bandwidth(train, forgets_the_keywords, y=y)
+kj.select_bandwidth(
+    train,
+    forgets_the_keywords,
+    y=y,
+)
 ```
 
 ```text
 TypeError: forgets_the_keywords() got an unexpected keyword argument 'kernels'
 ```
 
-Even when your criterion does not use them directly, include `kernels=None` and `chunk=None` in its signature. Passing them onward to the estimator underneath also ensures that selection is evaluating the same kernel configuration and chunking behavior that the eventual fit will use.
+Even if the criterion does not use those values directly, include `kernels=None` and `chunk=None` in its signature. When the criterion calls another KernelJax operation internally, passing them onward is important. It ensures that selection evaluates the same kernel configuration the eventual estimator will use, while `chunk` can preserve the intended memory/computation strategy without changing the mathematical result.
 
 ## A custom density criterion
 
-The same interface works for density estimation. For example, the built-in likelihood criterion uses leave-one-out density estimates. We can instead write a five-fold version.
+The same extension mechanism works for density estimation. The built-in likelihood criterion uses leave-one-out densities. As an example, we can instead evaluate a five-fold log-likelihood criterion.
+
+Let $F_i$ be the fold containing observation $i$, and let $W_{ij}(h,\lambda)$ denote the **unscaled** product-kernel weight between $X_i$ and $X_j$. If $\mathcal{C}$ indexes the continuous columns, the held-out density is
+
+$$
+\hat f_{-F_i}(X_i)
+=
+\frac{
+  \sum_{j : F_j \ne F_i} W_{ij}(h, \lambda)
+}{
+  n_i \prod_{d \in \mathcal{C}} h_d
+},
+\qquad
+n_i = \#\{j : F_j \ne F_i\}
+$$
+
+The corresponding criterion is
+
+$$
+\mathrm{CV}^{(F)}_{\mathrm{ML}}(h,\lambda)
+=
+-\sum_{i=1}^{n}
+\log \hat f_{-F_i}(X_i).
+$$
+
+This normalization matters. KernelJax kernel values do not carry their own continuous $1/h$ factors. The density estimator inserts $1/\prod h_d$ itself and divides each row by the number of observations left after its fold has been removed. The built-in likelihood criterion uses the same construction with one observation per fold, so $n_i = n-1$ for every row.
 
 ```python
 @dataclasses.dataclass(frozen=True)
 class KFoldLikelihood:
     n_folds: int = 5
 
-    def __call__(self, train, bandwidth, *, kernels=None, chunk=None):
+    def __call__(
+        self,
+        train,
+        bandwidth,
+        *,
+        kernels=None,
+        chunk=None,
+    ):
         fold = jnp.arange(train.n) % self.n_folds
-        fit = kj.density(train, bandwidth, kernels=kernels, chunk=chunk, fold=fold)
+
+        fit = kj.density(
+            train,
+            bandwidth,
+            kernels=kernels,
+            chunk=chunk,
+            fold=fold,
+        )
+
         return -jnp.sum(jnp.log(fit.value))
 ```
 
-Select the bandwidth exactly as before.
+The bandwidth is selected exactly as before.
 
 ```python
-five_fold = kj.select_bandwidth(train, KFoldLikelihood(n_folds=5))
-cv_ml = kj.select_bandwidth(train, kj.DensityCriterion(method="cv_ml"))
+five_fold = kj.select_bandwidth(
+    train,
+    KFoldLikelihood(n_folds=5),
+)
 
-for name, result in [("five-fold likelihood", five_fold), ("leave-one-out cv_ml", cv_ml)]:
-    print(f"{name:20s}  h = {result.bandwidth.h[0]:.4f}")
+cv_ml = kj.select_bandwidth(
+    train,
+    kj.DensityCriterion(method="cv_ml"),
+)
+
+for name, result in [
+    ("five-fold likelihood", five_fold),
+    ("leave-one-out cv_ml", cv_ml),
+]:
+    print(
+        f"{name:20s}  "
+        f"h = {result.bandwidth.h[0]:.4f}"
+    )
 ```
 
 ```text
@@ -237,56 +408,98 @@ five-fold likelihood  h = 0.0655
 leave-one-out cv_ml   h = 0.0533
 ```
 
-Five-fold cross validation removes more observations from each training fit than leave-one-out cross validation, so each held-out density is estimated from a smaller effective sample here. The selected bandwidth is correspondingly wider.
+Five-fold cross-validation estimates each held-out density from fewer observations than leave-one-out cross-validation. In this sample, the five-fold criterion chooses the wider bandwidth. That direction is plausible because the smaller fitting sample can benefit from more smoothing, but it is not a general rule that k-fold selection must always produce a larger bandwidth.
 
-The important API point is that density criteria are not a separate extension mechanism. They are ordinary callables returning scalar functions of a bandwidth, just like regression criteria.
+The fold assignment above is intentionally simple for demonstration. `jnp.arange(train.n) % 5` deterministically assigns rows by their position. In a real analysis, construct folds in a way that makes sense for the sampling design rather than relying on row order.
+
+The important API point is that a density criterion is not a separate kind of extension. It is still an ordinary scalar function of a bandwidth.
 
 ## Holding observations out
 
-KernelJax estimators expose fold assignment directly rather than treating leave-one-out as a special mode. {func}`~kerneljax.ksum`, {func}`~kerneljax.local_poly`, and {func}`~kerneljax.density` accept a `fold` array containing one label per observation. Pairs with matching evaluation and training labels are excluded.
+KernelJax exposes fold exclusion directly in several lower-level estimators. {func}`~kerneljax.ksum`, {func}`~kerneljax.local_poly`, and {func}`~kerneljax.density` accept a `fold` array containing one label per training observation. When evaluation rows are aligned with those labels, an evaluation-training pair is dropped whenever their fold labels agree.
 
-For leave-one-out, every observation receives its own label.
+For a generic weighted contraction, the retained part of row $i$ is
+
+$$
+\sum_{j : F_j \ne F_i} W(X_i, X_j) v_j.
+$$
+
+For a density, $v_j = 1$. For a kernel regression numerator, $v_j = Y_j$.
+
+A local polynomial applies the same exclusion to the entire weighted least-squares problem.
+
+$$
+\hat\beta_{-F_i}(X_i)
+=
+\arg\min_\beta
+\sum_{j : F_j \ne F_i}
+K_{h, \lambda}(X_i, X_j)
+\left[
+  Y_j - \beta^\top b_h(X_j, X_i)
+\right]^2.
+$$
+
+The fitted conditional mean is the intercept of that local polynomial.
+
+Leave-one-out gives every observation a distinct label,
 
 ```python
 fold = jnp.arange(train.n)
 ```
 
-For five-fold cross validation, observations sharing a label are held out together.
+while a simple five-fold assignment gives several observations the same label.
 
 ```python
 fold = jnp.arange(train.n) % 5
 ```
 
-This means a custom criterion does not need a Python loop over folds or observations. The estimator handles all exclusions inside the JAX computation. Density estimation also adjusts its normalization for the omitted observations, so the criterion does not need to correct the denominator itself.
+No Python loop over observations or folds is required. The exclusion is handled inside the JAX computation. Density estimation also changes the divisor to the number of retained observations on each row, so a custom density criterion does not need to make that correction itself.
 
-Two built-in criteria work differently. {func}`~kerneljax.cdf` does not expose `fold`. Its leave-one-out distribution criterion removes the observation's own contribution directly from the cumulative estimate. Likewise, `aic_c_regression` uses the full-sample regression fit and penalizes model complexity through the hat-matrix trace rather than holding observations out.
+Not every estimator implements held-out observations through the public `fold` argument. The unconditional CDF criterion, for example, constructs its leave-one-out values directly from cumulative kernel weights. Corrected AIC for regression uses the full-sample fit instead and penalizes complexity through the smoother matrix.
 
 ## Keep static settings on the criterion
 
-There are two kinds of information a criterion may need.
+A criterion may need two different kinds of information.
 
-* data that vary with the problem
-* settings that determine the structure of the computation
+* data that vary from one problem to another
+* configuration that changes the structure of the computation
 
-Those should travel differently. Array-like data belong in arguments such as `y` or `criterion_kwargs`. Settings that change the static structure of the estimator should generally live on the criterion object itself. The local polynomial degree is the clearest example.
+They should not travel through the selector in the same way. Array-like data such as a response belong in `y` or `criterion_kwargs`. They are traced values, so changing them can reuse the compiled structure.
 
-The `AbsoluteDeviation` class at the top of this page already follows the recommended pattern, holding `degree` as a frozen field and reading it inside `__call__`.
+Settings such as polynomial degree should normally be immutable fields on the criterion object. The `AbsoluteDeviation` class at the top of this page already follows that pattern, holding `degree` as a frozen field and reading it inside `__call__`.
 
-Routing the degree dynamically through `criterion_kwargs` instead can turn it into a traced JAX value.
+Routing `degree` through `criterion_kwargs` instead causes it to become a traced value inside the compiled selector.
 
 ```python
-def with_degree_argument(train, bandwidth, *, y, degree, kernels=None, chunk=None):
+def with_degree_argument(
+    train,
+    bandwidth,
+    *,
+    y,
+    degree,
+    kernels=None,
+    chunk=None,
+):
     fit = kj.local_poly(
-        train, y, bandwidth, degree=degree, kernels=kernels, chunk=chunk, fold=jnp.arange(train.n)
+        train,
+        y,
+        bandwidth,
+        degree=degree,
+        kernels=kernels,
+        chunk=chunk,
+        fold=jnp.arange(train.n),
     )
 
     return jnp.mean(jnp.abs(y - fit.mean))
 ```
 
-This fails because `degree` reaches an estimator that expects it to remain static.
-
 ```python
-kj.select_bandwidth(train, with_degree_argument, y=y, criterion_kwargs={"degree": 1})
+kj.select_bandwidth(
+    train,
+    with_degree_argument,
+    y=y,
+    criterion_kwargs={"degree": 1},
+)
 ```
 
 ```text
@@ -296,16 +509,21 @@ LocalPolyBasis(degree=JitTracer(~int32[])). The error was:
 TypeError: unhashable type: 'DynamicJaxprTracer'
 ```
 
-If a setting controls the shape or structure of the JAX computation, keep it as immutable configuration on the criterion object.
+The problem is not that `criterion_kwargs` is generally unsafe. It is specifically the wrong route for information that a downstream JAX operation needs as static structure. If a setting affects shapes, dispatch, polynomial degree, or other compile-time behavior, put it on the static criterion object instead.
 
-## Settings can travel with the selection result
+## Settings travel with the selection result
 
-Keeping configuration on the criterion has another benefit. A {class}`~kerneljax.SelectionResult` retains the criterion used to select its bandwidth. When that result is passed back to an estimator, KernelJax can recover compatible settings automatically.
+Keeping configuration on the criterion has another benefit. A {class}`~kerneljax.SelectionResult` retains the criterion that produced its bandwidth.
 
-For example, pass the earlier selection back to the estimator.
+When that result is reused by an estimator, compatible settings can therefore be recovered automatically.
 
 ```python
-fit = kj.local_poly(train, y, absolute)
+fit = kj.local_poly(
+    train,
+    y,
+    absolute,
+)
+
 print(f"degree read off the criterion: {fit.degree}")
 ```
 
@@ -313,9 +531,9 @@ print(f"degree read off the criterion: {fit.degree}")
 degree read off the criterion: 1
 ```
 
-The same applies to kernels. If the bandwidth was selected using a custom kernel set, reusing the selection result preserves that kernel configuration.
+For local polynomial regression, KernelJax looks specifically for an attribute named `degree` on the carried criterion.
 
-For local polynomial regression, KernelJax specifically looks for a criterion attribute named `degree`. That means this works.
+A custom object such as
 
 ```python
 @dataclasses.dataclass(frozen=True)
@@ -323,32 +541,53 @@ class MyCriterion:
     degree: int = 1
 ```
 
-while a semantically equivalent field named `poly_degree` will not be discovered automatically.
+therefore supplies enough metadata for `local_poly` to recover that setting. An otherwise equivalent field named `poly_degree` would not be discovered automatically. If no `degree` is carried, `local_poly` uses its usual default unless a degree is supplied explicitly.
 
-If no `degree` attribute is available, `local_poly` falls back to its default degree unless you pass one explicitly. KernelJax also protects against contradictory settings.
+An explicit setting must agree with carried configuration.
 
 ```python
-kj.local_poly(train, y, absolute, degree=2)
+kj.local_poly(
+    train,
+    y,
+    absolute,
+    degree=2,
+)
 ```
 
 ```text
 ValueError: degree=2 contradicts the degree 1 that bw was selected under
 ```
 
-This keeps the estimator used after selection aligned with the estimator the criterion actually optimized.
+The same provenance rule applies to kernels. A `SelectionResult` retains the {class}`~kerneljax.KernelSet` used during selection, so reusing the result does not silently switch back to another kernel configuration.
 
 ## Inspect a criterion directly
 
-A criterion is an ordinary callable. You do not need to run the optimizer to evaluate it. That is useful both for understanding a new criterion and for debugging one.
+A criterion is an ordinary callable. You can evaluate it without running an optimizer. That is often the fastest way to understand or debug a new objective.
 
 ```python
 criterion = AbsoluteDeviation(degree=1)
-bandwidth = kj.Bandwidth(h=jnp.array([0.02]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+
+bandwidth = kj.Bandwidth(
+    h=jnp.array([0.02]),
+    lam_uno=jnp.zeros(0),
+    lam_ord=jnp.zeros(0),
+)
 
 for h in [0.02, 0.06, 0.15, 0.40]:
-    candidate = bandwidth.replace(h=jnp.array([h]))
-    value = criterion(train, candidate, y=y)
-    print(f"h = {h:.2f}   criterion = {value:.4f}")
+    candidate = bandwidth.replace(
+        h=jnp.array([h])
+    )
+
+    value = criterion(
+        train,
+        candidate,
+        y=y,
+    )
+
+    print(
+        f"h = {h:.2f}   "
+        f"criterion = {value:.4f}"
+    )
 ```
 
 ```text
@@ -358,46 +597,81 @@ h = 0.15   criterion = 0.6799
 h = 0.40   criterion = 0.7403
 ```
 
-The lowest value in this small sweep is near $h = 0.06$, close to the 0.0628 selected earlier. For a one-dimensional bandwidth, evaluating a few candidate values is often the fastest way to check whether the objective behaves the way you expect.
+The lowest value in this small sweep occurs near $h=0.06$, close to the `0.0628` found by the optimizer. For a one-dimensional bandwidth, a small grid like this is often more informative than looking only at an optimizer exit flag. For several bandwidth dimensions, evaluating selected slices can serve the same purpose.
 
-## Bandwidth selection and gradients
+## Check the gradient too
 
-Optimization-based selection differentiates your criterion with respect to the bandwidth. A criterion can therefore have a perfectly reasonable forward value while still producing an unusable gradient. The following criterion has exactly that flaw.
+A criterion can have a reasonable forward value while still producing a gradient that cannot be optimized.
+
+The following example deliberately introduces that problem.
 
 ```python
 @dataclasses.dataclass(frozen=True)
 class NanGradient(AbsoluteDeviation):
-    def __call__(self, train, bandwidth, *, y, kernels=None, chunk=None):
-        loss = super().__call__(train, bandwidth, y=y, kernels=kernels, chunk=chunk)
+    def __call__(
+        self,
+        train,
+        bandwidth,
+        *,
+        y,
+        kernels=None,
+        chunk=None,
+    ):
+        loss = super().__call__(
+            train,
+            bandwidth,
+            y=y,
+            kernels=kernels,
+            chunk=chunk,
+        )
+
         zero = loss - loss
-        return loss + jnp.where(zero == 0.0, 0.0, jnp.sqrt(zero))
+
+        return loss + jnp.where(
+            zero == 0.0,
+            0.0,
+            jnp.sqrt(zero),
+        )
 ```
 
-The selected branch contributes zero to the forward value, but the other branch contains a problematic derivative. The same principle appears in custom kernels. Guard unsafe expressions themselves rather than assuming an untaken `jnp.where` branch cannot affect differentiation.
+The selected branch adds zero to the forward value, but the unused square-root branch has a problematic derivative at zero.
 
-You can inspect the value and gradient directly.
+Inspect both directly.
 
 ```python
 criterion = NanGradient()
 
 value, grad = jax.value_and_grad(
     lambda h: criterion(
-        train, kj.Bandwidth(h=jnp.array([h]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0)), y=y
+        train,
+        kj.Bandwidth(
+            h=jnp.array([h]),
+            lam_uno=jnp.zeros(0),
+            lam_ord=jnp.zeros(0),
+        ),
+        y=y,
     )
 )(0.1)
 
-print(f"value={value:.4f}  gradient={grad}")
+print(
+    f"value={value:.4f}  "
+    f"gradient={grad}"
+)
 ```
 
 ```text
 value=0.6563  gradient=nan
 ```
 
-For a custom criterion, checking `jax.value_and_grad` at a reasonable bandwidth is often worth doing before launching a full multi-start search.
+As with custom kernels, guard the unsafe expression itself rather than assuming that an untaken `jnp.where` branch cannot affect differentiation.
+
+For a custom criterion, evaluating `jax.value_and_grad` at several plausible bandwidths is often worth doing before launching a full multi-start optimization. Remember that this direct check differentiates in the natural bandwidth scale. {func}`~kerneljax.select_bandwidth` ultimately differentiates the criterion through its unconstrained bandwidth transform, so the numerical gradient seen by the solver also contains the derivative of that transformation.
 
 ## Reading a selection result
 
-A bandwidth search can fail without raising an exception, so do not judge the result from the bandwidth alone. A {class}`~kerneljax.SelectionResult` gives you four pieces of information that matter together.
+A search can return a result without producing a useful optimum, so the bandwidth should not be read in isolation.
+
+A {class}`~kerneljax.SelectionResult` exposes four numerical pieces that belong together.
 
 ```text
 bandwidth
@@ -406,21 +680,52 @@ n_iter
 converged
 ```
 
-Consider two intentionally broken criteria, the `NanGradient` class from above and a companion whose forward value is never finite.
+Consider the `NanGradient` criterion above and a second criterion whose objective is never finite.
 
 ```python
 @dataclasses.dataclass(frozen=True)
 class NanValue(AbsoluteDeviation):
-    def __call__(self, train, bandwidth, *, y, kernels=None, chunk=None):
-        return super().__call__(train, bandwidth, y=y, kernels=kernels, chunk=chunk) * jnp.nan
+    def __call__(
+        self,
+        train,
+        bandwidth,
+        *,
+        y,
+        kernels=None,
+        chunk=None,
+    ):
+        return (
+            super().__call__(
+                train,
+                bandwidth,
+                y=y,
+                kernels=kernels,
+                chunk=chunk,
+            )
+            * jnp.nan
+        )
 ```
 
 ```python
-start = kj.normal_reference(train, kj.KernelSet())
-print(f"the search starts at h = {start.h[0]:.4f}")
+start = kj.normal_reference(
+    train,
+    kj.KernelSet(),
+)
 
-for name, criterion in [("nan gradient", NanGradient()), ("nan value", NanValue())]:
-    result = kj.select_bandwidth(train, criterion, y=y)
+print(
+    f"the continuous reference starts at "
+    f"h = {start.h[0]:.4f}"
+)
+
+for name, criterion in [
+    ("nan gradient", NanGradient()),
+    ("nan value", NanValue()),
+]:
+    result = kj.select_bandwidth(
+        train,
+        criterion,
+        y=y,
+    )
 
     print(
         f"{name:12s}  "
@@ -432,49 +737,75 @@ for name, criterion in [("nan gradient", NanGradient()), ("nan value", NanValue(
 ```
 
 ```text
-the search starts at h = 0.1081
+the continuous reference starts at h = 0.1081
 nan gradient  h = nan     value = 0.9693  n_iter = 200  converged = False
 nan value     h = 0.1081  value = nan     n_iter = 200  converged = False
 ```
 
-The two failures look very different. With a bad gradient, the objective value can remain finite even while the optimizer moves to an invalid bandwidth. With a bad objective value, the bandwidth can look completely ordinary because the solver never found a usable step and returned the starting point.
+The failures look different. With an unusable gradient, an objective value may remain finite while the coordinates themselves become invalid. With an unusable objective, the coordinates can look perfectly ordinary even though no meaningful optimization took place.
 
 ```{important}
-Read `bandwidth`, `value`, `n_iter`, and `converged` together. A plausible bandwidth by itself is not evidence of a successful solve.
+Read `bandwidth`, `value`, `n_iter`, and `converged` together. A plausible bandwidth by itself is not evidence that selection succeeded.
 ```
+
+For the default L-BFGS solver, `converged=True` means its stopping tolerance was reached with a finite final objective and gradient before the iteration limit. It does not mean that a global minimum was found. For a custom solver, the meaning of `converged` is whatever boolean that solver returns, so document its stopping rule accordingly.
 
 ## Where the search starts
 
-Bandwidth-selection objectives are generally nonconvex, so KernelJax does not rely on one optimization trajectory. {func}`~kerneljax.select_bandwidth` uses `n_starts=3` by default.
+Bandwidth-selection objectives are generally nonconvex, so KernelJax runs multiple optimization trajectories by default. {func}`~kerneljax.select_bandwidth` uses `n_starts=3`. The first continuous bandwidth comes from the normal-reference scale. Categorical parameters start halfway between zero and their kernel-specific upper bounds so that they begin in a region where the logistic transform still has useful slope.
 
-The first start uses {func}`~kerneljax.normal_reference` for continuous bandwidths. Categorical parameters begin halfway between zero and their kernel-specific upper bounds rather than at zero, since zero can sit in a flat region of the optimization transform.
+Additional starts shift that initial point in the **unconstrained** coordinate system. Each start receives a complete solver run. KernelJax then ranks runs whose objective values and coordinates are finite and keeps the one with the smallest objective.
 
-Additional starts perturb that initial point in unconstrained coordinates. Each start gets a full solve, and KernelJax keeps the best finite result.
+An important consequence is that the winner is not chosen according to its `converged` flag. A finite non-converged run with the lowest objective can be selected, in which case the returned {class}`~kerneljax.SelectionResult` correctly carries `converged=False`. The result fields describe that one winning trajectory, not averages or summaries across all starts. If a criterion appears to land at a poor local solution, comparing more starting points is often the first useful diagnostic.
 
-That means the fields in the returned `SelectionResult` describe the **winning start**. They are not aggregates over all optimization runs.
-
-If a custom criterion appears to converge to a poor local solution, increasing `n_starts` is usually more useful than changing the solver immediately. For debugging a single trajectory, use one start.
+For inspecting one trajectory in isolation,
 
 ```python
-result = kj.select_bandwidth(train, criterion, y=y, n_starts=1)
+result = kj.select_bandwidth(
+    train,
+    criterion,
+    y=y,
+    n_starts=1,
+)
 ```
+
+removes the multi-start comparison.
 
 ## Swapping the solver
 
-The optimizer itself is also replaceable. By default, {func}`~kerneljax.select_bandwidth` uses {func}`~kerneljax.lbfgs`, but any callable with the expected solver interface can be supplied. A minimal gradient-descent solver looks like this.
+The optimizer is replaceable too. By default, {func}`~kerneljax.select_bandwidth` uses {func}`~kerneljax.lbfgs`, but any static callable matching the solver interface can be supplied.
+
+A minimal gradient-descent example is
 
 ```python
-def gradient_descent(objective, start, *, steps=300, rate=0.05):
+def gradient_descent(
+    objective,
+    start,
+    *,
+    steps=300,
+    rate=0.05,
+):
     def step(z, _):
         grad = jax.grad(objective)(z)
-        return (z - rate * grad, None)
+        return z - rate * grad, None
 
-    z, _ = jax.lax.scan(step, start, length=steps)
+    z, _ = jax.lax.scan(
+        step,
+        start,
+        length=steps,
+    )
+
     converged = jnp.all(jnp.isfinite(z))
-    return (z, objective(z), jnp.asarray(steps), converged)
+
+    return (
+        z,
+        objective(z),
+        jnp.asarray(steps),
+        converged,
+    )
 ```
 
-The solver receives `objective` and `start` positionally, and returns
+A solver receives `objective` and the starting unconstrained coordinates positionally and must return
 
 ```text
 coordinates
@@ -483,19 +814,40 @@ iteration count
 convergence flag
 ```
 
-We can compare it with the default.
+The interpretation of the last two fields belongs to the solver. In this deliberately simple example, `converged` only means that the final coordinates are finite, so it is not a numerical convergence test comparable to L-BFGS's stopping tolerance.
+
+We can compare the two solvers from the same starting point.
 
 ```python
-criterion = kj.RegressionCriterion(method="cv_ls", degree=1)
-descent = kj.select_bandwidth(train, criterion, y=y, solver=gradient_descent, n_starts=1)
-lbfgs = kj.select_bandwidth(train, criterion, y=y, n_starts=1)
+criterion = kj.RegressionCriterion(
+    method="cv_ls",
+    degree=1,
+)
 
-for name, result in [("gradient descent", descent), ("L-BFGS", lbfgs)]:
+descent = kj.select_bandwidth(
+    train,
+    criterion,
+    y=y,
+    solver=gradient_descent,
+    n_starts=1,
+)
+
+lbfgs = kj.select_bandwidth(
+    train,
+    criterion,
+    y=y,
+    n_starts=1,
+)
+
+for name, result in [
+    ("gradient descent", descent),
+    ("L-BFGS", lbfgs),
+]:
     print(
         f"{name:16s} "
         f"value = {result.value:.4f}  "
         f"h = {result.bandwidth.h[0]:.4f}  "
-        f"steps = {result.n_iter:d}"
+        f"steps = {int(result.n_iter)}"
     )
 ```
 
@@ -504,45 +856,59 @@ gradient descent value = 1.9194  h = 0.1336  steps = 300
 L-BFGS           value = 1.9185  h = 0.1606  steps = 5
 ```
 
-The custom solver works, but L-BFGS reaches a slightly lower objective in far fewer iterations. More importantly, both one-start solutions are worse than what the default multi-start search finds on this example. That is a useful reminder that, for a nonconvex bandwidth criterion, where the optimization begins can matter as much as the optimizer itself. A different solver is therefore usually the second thing to try. More starts are the first.
+The custom solver works, but L-BFGS reaches a slightly smaller objective in far fewer iterations here. More importantly, both are one-start solutions. On a nonconvex bandwidth objective, changing the initialization can matter as much as changing the local optimizer. It is therefore useful to separate those two questions when diagnosing a poor selection result.
 
 ## Common mistakes
 
-Most custom-criterion problems come from a small number of interface mismatches, and each row of this table is demonstrated earlier on the page with the error it produces.
-
-| Mistake                                           | Symptom                                             | Fix                                                        |
-| ------------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------- |
-| Returning a vector of losses                      | `Gradient only defined for scalar-output functions` | Reduce to one scalar inside the criterion                  |
-| Omitting `kernels` or `chunk`                     | `unexpected keyword argument 'kernels'`             | Include both keywords in the signature, even if unused     |
-| Routing static settings through `criterion_kwargs`| `Non-hashable static arguments are not supported`   | Keep structural settings as frozen fields on the criterion |
-| Returning `nan`                                   | Solver stays at its start with `converged = False`  | Inspect `value` and `converged` together                   |
-| A non-finite gradient                             | Finite `value` alongside `h = nan`                  | Check `jax.value_and_grad` before blaming the solver       |
-| Too few starts                                    | A plausible result at a poor local solution         | Compare criterion values across more starts                |
+| Mistake                                                | Symptom                                              | Fix                                                    |
+| ------------------------------------------------------ | ---------------------------------------------------- | ------------------------------------------------------ |
+| Returning a vector of losses                           | `Gradient only defined for scalar-output functions`  | Reduce to one scalar inside the criterion              |
+| Omitting `kernels` or `chunk`                          | Unexpected keyword argument                          | Accept both keywords                                   |
+| Routing structural settings through `criterion_kwargs` | Static argument becomes a tracer                     | Store structural settings on a frozen criterion object |
+| Returning a non-finite objective                       | `value` is `nan` or `inf`                            | Inspect the criterion directly before optimization     |
+| Producing a non-finite gradient                        | Finite forward value but unusable search coordinates | Check `jax.value_and_grad` at plausible bandwidths     |
+| Treating `converged=True` as a global guarantee        | Plausible but inferior local solution                | Compare objective values across starts                 |
+| Assuming the winning start converged                   | `converged=False` on a finite selected result        | Read the winner's status together with its objective   |
+| Using arbitrary row-order folds                        | Cross-validation does not match the sampling design  | Construct folds appropriate to the data                |
 
 ## Interface at a glance
 
-A custom criterion is any JAX-compatible callable with this general shape.
+A custom criterion has the general shape
 
 ```text
-criterion(train, bandwidth, *, kernels=None, chunk=None, **data) -> scalar
+criterion(
+    train,
+    bandwidth,
+    *,
+    kernels=None,
+    chunk=None,
+    **data,
+) -> scalar
 ```
 
-| Requirement                          | Why it matters                                                     |
-| ------------------------------------ | ------------------------------------------------------------------ |
-| Accept `train` and `bandwidth`       | They define the data and candidate smoothing parameters            |
-| Accept `kernels` and `chunk`         | KernelJax passes both on every call                                |
-| Return one scalar                    | The optimizer needs a scalar objective                             |
-| Remain differentiable in `bandwidth` | Optimization follows the bandwidth gradient                        |
-| Return finite values                 | Non-finite objectives cannot be minimized                          |
-| Be hashable when stateful            | Criteria are static JAX arguments                                  |
-| Keep structural settings static      | Estimator configuration such as degree cannot become traced values |
+| Requirement                           | Why it matters                                                 |
+| ------------------------------------- | -------------------------------------------------------------- |
+| Accept `train` and `bandwidth`        | They define the sample and candidate smoothing parameters      |
+| Accept `kernels` and `chunk`          | KernelJax supplies them on every criterion call                |
+| Return one scalar                     | The optimizer minimizes a scalar objective                     |
+| Be JAX-autodiff compatible            | Selection differentiates through the bandwidth transform       |
+| Return finite values along the search | Non-finite objectives cannot be meaningfully ranked            |
+| Produce usable gradients              | Gradient-based solvers depend on them                          |
+| Be hashable when stateful             | The criterion is static JAX configuration                      |
+| Keep structural settings static       | Configuration such as polynomial degree cannot become a tracer |
 
 The shortest useful custom criterion can therefore be just a function.
 
 ```python
-def my_criterion(train, bandwidth, *, kernels=None, chunk=None):
+def my_criterion(
+    train,
+    bandwidth,
+    *,
+    kernels=None,
+    chunk=None,
+):
     ...
     return loss
 ```
 
-Use a frozen callable object when the criterion needs configuration of its own, then pass it directly to {func}`~kerneljax.select_bandwidth`. From there, the selector treats your criterion exactly like one of the built-in rules.
+Use a frozen callable object when the criterion needs static configuration of its own, then pass it directly to {func}`~kerneljax.select_bandwidth`. From that point onward, the selector treats it through the same callable interface as the built-in criteria.

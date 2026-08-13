@@ -274,8 +274,8 @@ which belongs to the relevant continuous dimensions, though they still move cons
 finite sample behavior. Cross validation then supplies every smoothing parameter from the
 data, and asymptotically smooths away the variables that were not helping.
 
-To see these estimators at work, the [Quickstart](../quickstart.md) applies them to data, and
-the [Home](../index.md#installation) page covers getting set up. For fuller treatments,
+To see these estimators at work, the [user guide](../user-guide/index.md) applies them to data, and
+the [Install](../install.md) page covers getting set up. For fuller treatments,
 [Li and Racine (2007)](https://press.princeton.edu/books/hardcover/9780691121611/nonparametric-econometrics) is
 the standard reference for mixed-type kernel methods, and
 [Fan and Gijbels (1996)](https://doi.org/10.1201/9780203748725) for local

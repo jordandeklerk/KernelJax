@@ -1,9 +1,5 @@
 # Kernel smoothing
 
-Welcome! These four pages are a gentle introduction to kernel smoothing, the set of ideas
-that KernelJax implements. No prior exposure to nonparametric statistics is assumed, and
-they are meant to be read in order.
-
 We begin here by asking what it means to estimate a function without assuming its shape,
 build a density estimator out of the humble histogram, and derive in full the bias and
 variance that determine how its *bandwidth* must be chosen.

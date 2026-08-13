@@ -43,9 +43,9 @@ class KernelSet:
            ...:       type(kernels.ordered).__name__)
     """
 
-    continuous: ContinuousKernel = dataclasses.field(default_factory=Gaussian)
-    unordered: UnorderedKernel = dataclasses.field(default_factory=AitchisonAitken)
-    ordered: OrderedKernel = dataclasses.field(default_factory=LiRacine)
+    continuous: ContinuousKernel = Gaussian()
+    unordered: UnorderedKernel = AitchisonAitken()
+    ordered: OrderedKernel = LiRacine()
 
     def __post_init__(self) -> None:
         """Reject unhashable kernels."""

@@ -24,8 +24,11 @@ mathjax_path = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
 
 html_theme = "sphinx_immaterial"
 html_static_path = ["_static"]
-html_css_files = ["custom.css"]
-html_js_files = [("copybutton-shim.js", {"priority": 200})]
+html_css_files = [
+    "https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&display=swap",
+    "custom.css",
+]
+html_js_files = [("copybutton-shim.js", {"priority": 200}), "header-title-link.js"]
 html_title = "KernelJax"
 html_logo = "_static/logo.svg"
 html_favicon = "_static/favicon.ico"
@@ -33,30 +36,46 @@ html_favicon = "_static/favicon.ico"
 html_theme_options = {
     "repo_url": "https://github.com/jordandeklerk/KernelJax",
     "repo_name": "KernelJax",
-    "icon": {"repo": "fontawesome/brands/github"},
+    "icon": {"repo": "fontawesome/brands/git-alt"},
     "features": [
+        "header.autohide",
         "navigation.instant",
+        "navigation.tabs",
+        "navigation.tabs.sticky",
+        "navigation.path",
         "navigation.top",
         "navigation.tracking",
+        "announce.dismiss",
         "search.highlight",
         "search.share",
         "toc.follow",
     ],
+    "toc_title": "On this page",
     "palette": [
+        {
+            "media": "(prefers-color-scheme)",
+            "toggle": {"icon": "material/brightness-auto", "name": "Switch to light mode"},
+        },
         {
             "media": "(prefers-color-scheme: light)",
             "scheme": "default",
-            "primary": "blue",
+            "primary": "white",
             "accent": "red",
-            "toggle": {"icon": "material/weather-night", "name": "Switch to dark mode"},
+            "toggle": {"icon": "material/weather-sunny", "name": "Switch to dark mode"},
         },
         {
             "media": "(prefers-color-scheme: dark)",
             "scheme": "slate",
-            "primary": "blue",
+            "primary": "black",
             "accent": "red",
-            "toggle": {"icon": "material/weather-sunny", "name": "Switch to light mode"},
+            "toggle": {"icon": "material/weather-night", "name": "Switch to system preference"},
         },
+    ],
+    "version_dropdown": True,
+    "version_info": [
+        {"version": "https://kerneljax.readthedocs.io/en/latest", "title": "latest", "aliases": []},
+        {"version": "https://kerneljax.readthedocs.io/en/stable", "title": "stable", "aliases": []},
+        {"version": "https://kerneljax.readthedocs.io/en/v0.1.0", "title": "v0.1.0", "aliases": []},
     ],
 }
 

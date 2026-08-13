@@ -21,7 +21,7 @@ pytest-timeout = ">=2.0.0"
 tests = "pytest -vv"
 
 [feature.docs.dependencies]
-sphinx = "*"
+sphinx = ">=8,<9"
 sphinx-copybutton = "*"
 sphinx-design = "*"
 ipython = "*"
@@ -34,7 +34,7 @@ sphinx-immaterial = ">=0.12"
 
 [feature.docs.tasks]
 docs = "sphinx-build -E -a -W --keep-going -d docs/_doctree docs/source docs/_build/html --color -bhtml"
-docs-open = { cmd = "python -c \"import pathlib, subprocess, sys; p = str(pathlib.Path('docs/_build/html/index.html').resolve()); subprocess.run(['open', p] if sys.platform == 'darwin' else ['xdg-open', p])\"", depends-on = [
+docs-open = { cmd = "python -c \"import functools, http.server, threading, webbrowser; threading.Timer(0.8, lambda: webbrowser.open('http://127.0.0.1:8765')).start(); handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory='docs/_build/html'); print('serving docs at http://127.0.0.1:8765, stop with ctrl-c'); http.server.HTTPServer(('127.0.0.1', 8765), handler).serve_forever()\"", depends-on = [
   "docs",
 ] }
 docs-serve = { cmd = "python -m http.server 8765 --directory docs/_build/html --bind 127.0.0.1", depends-on = [

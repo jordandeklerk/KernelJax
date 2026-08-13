@@ -1,75 +1,80 @@
-# Welcome to KernelJax
+---
+hide-navigation: true
+---
 
-KernelJax is a low-level JAX library for nonparametric kernel smoothing with mixed-type
-data, built for researchers developing new statistical methodology from composable,
-differentiable primitives.
+# Welcome to <span class="kj-wordmark">KernelJax</span>
 
-```{warning}
-KernelJax is under active development and has not yet been released on PyPI. The API may change without notice.
+**Nonparametric kernel smoothing, differentiable end to end.**
+
+KernelJax is a low-level JAX library for nonparametric kernel smoothing with continuous and categorical data. It provides estimators and bandwidth-selection criteria for researchers developing and extending statistical methodology in JAX.
+
+For example, the following fits a local linear regression with its bandwidth chosen by
+least-squares cross-validation, then renders the fit as a summary report carrying the
+selected bandwidth, the goodness of fit, and the selection diagnostics in one table.
+
+```python
+import numpy as np
+import kerneljax as kj
+
+rng = np.random.default_rng(1)
+x = rng.uniform(size=200)
+y = np.sin(2 * np.pi * x) + rng.normal(0, 0.2, 200)
+
+fit = kj.local_poly(x, y, "cv_ls", degree=1)
+print(kj.summary(fit))
 ```
+
+```text
+Local polynomial regression
+
+  Observations                         200
+  Continuous variables                   1
+  Estimator                   local linear
+  Bandwidth type                    shared
+
+  Variable      Kind             Bandwidth
+  x1            continuous        0.036019
+
+  Continuous kernel         Gaussian, order 2
+
+  Residual standard error         0.174543
+  R-squared                       0.947953
+
+  Selection                          cv_ls
+  Criterion value                 0.034301
+  Solver iterations                      8
+  Converged                           True
+```
+
+That criterion is minimized with gradient-based optimization, which is why the report can count solver iterations and say whether the search converged.
+
+In addition to local polynomial regression, KernelJax supports kernel density and distribution estimation, conditional density and distribution estimation, mixed continuous and categorical kernels, and automatic bandwidth selection.
 
 ## Why KernelJax exists
 
-The core idea of KernelJax is that an estimator should be an ordinary JAX program rather than a procedure you call. Fits, bandwidths, and design matrices are pytrees, so {func}`jax.jit`,
-{func}`jax.grad`, and {func}`jax.vmap` work without special handling. Cross-validation criteria
-are ordinary differentiable functions, allowing smoothing parameters to be optimized within
-larger models rather than selected in a separate step.
+The core idea of KernelJax is that an estimator should be an ordinary JAX program rather
+than a procedure you call. Fits, bandwidths, and design matrices are pytrees, so
+{func}`jax.jit`, {func}`jax.grad`, and {func}`jax.vmap` work without special handling.
+Cross-validation criteria are ordinary differentiable functions, allowing smoothing
+parameters to be optimized within larger models rather than selected in a separate step.
 
-The same principle applies to the parts. Kernels, criteria, solvers, and low-level primitives
-such as {func}`~kerneljax.kweights`, {func}`~kerneljax.ksum`, and {func}`~kerneljax.wls` remain
-accessible through public interfaces. Everything lowers through XLA, runs on hardware supported
-by JAX, and is derived from first principles in the [Background](background/smoothing.md)
-documentation using the same concepts exposed by the API.
+The same principle applies to the parts. Kernels, criteria, solvers, and low-level
+primitives such as {func}`~kerneljax.kweights`, {func}`~kerneljax.ksum`, and
+{func}`~kerneljax.wls` remain accessible through public interfaces. Everything lowers
+through XLA, runs on hardware supported by JAX, and is derived from first principles in the
+[Background](background/smoothing.md) documentation using the same concepts exposed by the
+API.
 
-## Installation
+## Next steps
 
-```bash
-uv pip install kerneljax
-```
-
-The latest development version installs straight from the repository.
-
-```bash
-uv pip install git+https://github.com/jordandeklerk/KernelJax.git
-```
-
-```{tip}
-Check the install with `python -c 'import kerneljax; print(kerneljax.__version__)'`.
-```
-
-### GPU and TPU support
-
-JAX is not pinned, so install the build that matches your hardware before KernelJax. The
-[JAX installation guide](https://docs.jax.dev/en/latest/installation.html) covers the CPU,
-CUDA and TPU wheels.
-
-```bash
-uv pip install --upgrade "jax[cuda12]"
-```
-
-Everything in KernelJax runs on whichever device JAX is configured for, with no change to
-the calling code.
-
-### Double precision
-
-JAX defaults to 32 bit floats. Bandwidth selection and the cross-validation criteria are
-sensitive to that near an optimum, and agreement with established implementations is
-pinned in double precision, so enable 64 bit before importing if you are comparing
-numbers rather than exploring.
-
-```python
-import jax
-
-jax.config.update("jax_enable_x64", True)
-```
-
-## Where to go next
-
-- [Quickstart](quickstart.md) walks through the main API, from a first fit to building
-  estimators out of the exported primitives.
-- [Custom kernels](user-guide/custom-kernels.md) covers writing your own kernel and the four
-  requirements it has to meet, and [Custom bandwidth selection](user-guide/custom-criteria.md) does the
-  same for the rule that picks the bandwidth.
+- [Install](install.md) covers installation, GPU and TPU support, and double precision.
+- The [user guide](user-guide/index.md) develops every estimator one topic per page on a
+  shared example, starting from [what KernelJax is](user-guide/intro.md) and ending with the
+  extension points.
+- [Custom kernels](user-guide/custom-kernels.md) covers writing your own kernel and the
+  requirements it has to meet, and
+  [custom bandwidth selection](user-guide/custom-criteria.md) does the same for the rule
+  that picks the bandwidth.
 - [Background](background/smoothing.md) is a four-part introduction to kernel smoothing,
   running from densities through regression, mixed-type data, and bandwidth selection.
 - The [API reference](api.md) documents every exported object, grouped by topic.
@@ -79,55 +84,12 @@ jax.config.update("jax_enable_x64", True)
 ```{toctree}
 :hidden:
 
-Home <self>
-```
-
-```{toctree}
-:hidden:
-
-quickstart
-```
-
-```{toctree}
-:caption: User Guide
-:hidden:
-
-user-guide/custom-kernels
-user-guide/custom-criteria
-```
-
-```{toctree}
-:caption: Background
-:hidden:
-
-background/smoothing
-background/regression
-background/mixed-data
-background/selection
-```
-
-```{toctree}
-:caption: Development
-:hidden:
-
-development/contributing
-development/design
-```
-
-```{toctree}
-:hidden:
-
+install
+user-guide/index
+examples/index
+background/index
 api
-```
-
-```{toctree}
-:hidden:
-
+development/contributing
 release-notes
-```
-
-```{toctree}
-:hidden:
-
-acknowledgments
+development/acknowledgments
 ```
