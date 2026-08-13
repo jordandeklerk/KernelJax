@@ -51,7 +51,13 @@ Local polynomial regression
 
 Nothing in that call was tuned by hand. `"cv_ls"` selects both smoothing parameters jointly by least-squares cross-validation. KernelJax minimizes that differentiable criterion with gradient-based optimization, and the report keeps the selection diagnostics alongside the goodness-of-fit statistics.
 
-Two of those statistics describe the fit itself. The reported residual standard error is the root mean squared residual
+The categorical column also required no dummy encoding or separate per-group fits. {class}`~kerneljax.MixedData` records which variables are continuous, unordered, or ordered, and each kind is smoothed with an appropriate kernel. Its smoothing parameter is selected jointly with the continuous bandwidths, so a categorical variable carrying little useful information can be smoothed toward its maximum-smoothing limit, where distinctions between its levels contribute progressively less to the fit.
+
+## Reading a fit
+
+The printed report is a view of the fit object underneath. Two of the reported statistics describe the fit itself.
+
+The reported residual standard error is the root mean squared residual
 
 $$
 \operatorname{RSE} = \left[
@@ -99,13 +105,7 @@ $$
 
 agrees with the statistic above when the residuals are orthogonal to the fitted deviations $\hat m(X_i)-\bar Y$. An ordinary least-squares projection with an intercept has that property. A local polynomial smoother does not generally have it, so the two definitions need not coincide.
 
-This is the central idea behind the library. Criteria, kernels, and estimators remain ordinary JAX computations, so selection can use automatic differentiation, fits can run under `jit`, and bandwidths can participate directly in larger JAX programs.
-
-The categorical column also required no dummy encoding or separate per-group fits. {class}`~kerneljax.MixedData` records which variables are continuous, unordered, or ordered, and each kind is smoothed with an appropriate kernel. Its smoothing parameter is selected jointly with the continuous bandwidths, so a categorical variable carrying little useful information can be smoothed toward its maximum-smoothing limit automatically.
-
-## Reading a fit
-
-The printed report is a view of the fit object underneath, and the numerical results remain available directly as arrays.
+The numerical results behind the report remain available directly as arrays.
 
 ```python
 residuals = y - fit.mean
@@ -175,11 +175,11 @@ held fixed r_squared=0.928
 
 The first fit reuses the result returned by {func}`~kerneljax.select_bandwidth`. The second skips selection entirely and uses the supplied smoothing parameters as fixed values.
 
-The string form is shorthand for a configured criterion. Settings already named by the estimator call, such as `degree`, travel with the selection result so they do not need to be restated later. This matters because bandwidth selection is usually the expensive part of the computation.
+The string form is shorthand for a configured criterion. Settings already named by the estimator call, such as `degree`, travel with the selection result so they do not need to be reconstructed later. Reusing that result also avoids running bandwidth selection again, which is usually the expensive part of the computation.
 
 The [selection guide](selection.md) covers the available criteria, the optimizer, explicit selection and reuse, and [what to check](selection.md#reading-a-selection) before relying on a selected bandwidth.
 
-So far, we have used KernelJax from the outside. The rest of this page looks underneath the estimator API at the choices that make those pieces compose. These details are not required to fit a model, but they matter if you want to understand the library deeply or build on top of it.
+So far, we have used KernelJax from the outside. Underneath that API, criteria, kernels, and estimators remain ordinary JAX computations rather than opaque estimator internals. That design lets bandwidth selection use automatic differentiation, fits run under `jit`, and bandwidths participate directly in larger JAX programs. The rest of this page looks at the choices that make those pieces compose. These details are not required to fit a model, but they matter if you want to understand the library deeply or build on top of it.
 
 ## Build on shared primitives
 
@@ -202,7 +202,7 @@ where $\mathcal C$, $\mathcal U$, and $\mathcal O$ index the continuous, unorder
 
 The important detail is that {func}`~kerneljax.kweights` leaves out the continuous $1/h_d$ scale factors. Categorical kernels have no corresponding bandwidth divisor, and leaving the continuous factors unscaled lets each estimator apply the normalization it needs exactly once.
 
-For a density estimate, that normalization gives
+To see where that normalization enters, density estimation gives the simplest example. For a density estimate,
 
 $$
 \hat f(x) = \frac{1}{
@@ -232,9 +232,9 @@ largest gap to density=2.98e-08
 
 Regression uses the same weights but contracts them against the response. The [primitives guide](primitives.md) rebuilds the shipped local constant estimator directly from {func}`~kerneljax.ksum`. Conditional estimators use the same decomposition again, with a conditional density formed as a ratio of contractions over the conditioning and response kernels rather than through a separate computational path.
 
-This concentrates correctness in a small set of primitives. Mixed column types, per-column operators, and held-out folds are handled once in `kweights` and `ksum`, and estimators built on top inherit that behavior automatically.
+Reusing the same weighting and contraction path concentrates correctness in a small set of primitives. Mixed column types, per-column operators, and held-out folds are handled once in `kweights` and `ksum`, and estimators built on top inherit that behavior automatically.
 
-The primitives are public for the same reason. An estimator that KernelJax does not provide can still be assembled from the same pieces, which is the pattern used throughout the [primitives](primitives.md) and [custom kernel](custom-kernels.md) guides.
+Making those primitives public extends the same benefit to code outside the shipped estimators. An estimator that KernelJax does not provide can still be assembled from the same pieces, which is the pattern used throughout the [primitives](primitives.md) and [custom kernel](custom-kernels.md) guides.
 
 ## Keep the full path differentiable
 
@@ -266,7 +266,7 @@ $$
 while categorical smoothing parameters use a scaled logistic map
 
 $$
-\lambda_d = \bar\lambda_d\,\sigma(z_d),
+\lambda_d = \bar\lambda_d \sigma(z_d),
 \qquad
 \sigma(z) = \frac{1}{1+e^{-z}},
 $$
@@ -275,19 +275,18 @@ where $\bar\lambda_d$ is the upper bound imposed by the categorical kernel. For 
 
 The softplus maps the real line onto $(0,\infty)$, while the scaled logistic maps it onto $(0,\bar\lambda_d)$. The optimizer can therefore move freely in $z$ without stepping outside the admissible bandwidth region.
 
-The chain rule gives the gradient that the optimizer actually follows. For a continuous coordinate,
+The chain rule gives the gradient the optimizer actually follows. Differentiating the two maps gives $h_d'(z_d) = \sigma(z_d)$ for the softplus, since the derivative of the softplus is the logistic function, and $\lambda_d'(z_d) = \bar\lambda_d \sigma(z_d)\bigl(1-\sigma(z_d)\bigr)$ for the scaled logistic. Composing each with the criterion gives
 
 $$
+\begin{aligned}
 \frac{\partial \mathrm{CV}}{\partial z_d}
-= \frac{\partial \mathrm{CV}}{\partial h_d}\,\sigma(z_d),
-$$
-
-because the derivative of the softplus is the logistic function. For a categorical coordinate,
-
-$$
+&= \frac{\partial \mathrm{CV}}{\partial h_d} \cdot \sigma(z_d)
+&& \text{continuous},
+\\
 \frac{\partial \mathrm{CV}}{\partial z_d}
-= \frac{\partial \mathrm{CV}}{\partial \lambda_d}\,\bar\lambda_d\,
-\sigma(z_d)\bigl(1-\sigma(z_d)\bigr).
+&= \frac{\partial \mathrm{CV}}{\partial \lambda_d} \cdot \bar\lambda_d \sigma(z_d)\bigl(1-\sigma(z_d)\bigr)
+&& \text{categorical}.
+\end{aligned}
 $$
 
 The solver iterations reported by the opening fit are driven by these transformed gradients rather than by the natural-scale gradient printed above. This lets the optimizer use automatic derivatives of the criterion while keeping every candidate bandwidth valid.
@@ -302,19 +301,17 @@ Starting at that boundary would therefore leave almost no gradient in the uncons
 
 ## Separate structure from values
 
-JAX needs to know which parts of a computation define its structure and which parts are values that can change between calls. KernelJax keeps that boundary explicit.
+Automatic differentiation is only one part of keeping the estimator stack compatible with JAX. Compilation introduces another distinction between the structure of a computation and the values that can change between calls.
 
-Kernel families, polynomial degree, and criterion configuration are static. Data, responses, and candidate bandwidths are traced values. JAX can then compile a computation for a particular structure and reuse it as those values change.
+KernelJax keeps that boundary explicit. Kernel families, polynomial degree, and criterion configuration are static. Data, responses, and candidate bandwidths are traced values. JAX can then compile a computation for a particular structure and reuse it as those values change.
 
-This is why criterion settings live on the criterion object rather than in `criterion_kwargs`. The keyword arguments are intended for traced values such as responses. Routing a structural setting such as `degree` through them turns that setting into a tracer, which cannot later occupy a static JAX argument.
+That distinction also shapes the criterion API. Structural settings such as `degree` live on the criterion object, while `criterion_kwargs` is intended for traced values such as responses. Routing a structural setting such as `degree` through those keyword arguments turns that setting into a tracer, which cannot later occupy a static JAX argument.
 
 Keeping the distinction explicit prevents failures from appearing far from the configuration that caused them and makes compilation behavior predictable. The [custom bandwidth selection](custom-criteria.md) guide walks through the failure case and the pattern that avoids it.
 
 ## Preserve selection context
 
-Bandwidth selection is usually the expensive part of an analysis, so its result is designed to travel.
-
-A {class}`~kerneljax.SelectionResult` remembers the criterion and kernels it was selected under, and fitted estimators retain both their bandwidth and the selection that produced it. Passing either one back into another estimator reuses that information rather than reconstructing it from separate arguments.
+The reuse shown earlier depends on preserving more than the numerical bandwidth. A {class}`~kerneljax.SelectionResult` remembers the criterion and kernels it was selected under, and fitted estimators retain both their bandwidth and the selection that produced it. Passing either one back into another estimator reuses that information rather than reconstructing it from separate arguments.
 
 The earlier prediction example relied on exactly this behavior. Passing `fit` as the bandwidth rule reused the selected bandwidth and its settings without running selection again.
 
@@ -330,17 +327,17 @@ ValueError: degree=2 contradicts the degree 1 that bw was selected under
 
 The same rule applies to kernels. If a selection result carries one kernel configuration and the caller supplies another, KernelJax refuses the mismatch rather than silently choosing one.
 
-The conditional family follows the same pattern. A fit selected under {func}`~kerneljax.cdensity` can hand its bandwidth blocks directly to {func}`~kerneljax.cdist` and {func}`~kerneljax.cquantile` without restating the settings that produced them.
+The same context-preserving rule extends to the conditional estimators. A fit selected under {func}`~kerneljax.cdensity` can hand its bandwidth blocks directly to {func}`~kerneljax.cdist` and {func}`~kerneljax.cquantile` without restating the settings that produced them.
 
 ## Refuse invalid computations
 
-KernelJax also refuses requests when the requested computation is not mathematically meaningful. Those checks are applied only when an operation first depends on the property being verified.
+Configuration mismatches are one kind of invalid request. KernelJax applies the same principle when the requested computation itself is not mathematically meaningful. Those checks are applied only when an operation first depends on the property being verified.
 
 Kernel normalization is one example. Regression is a ratio of weighted sums, so a common multiplicative constant in the kernel cancels. Density estimation has no such cancellation. A kernel with the wrong total mass can therefore still be valid for regression but is rejected when a density first requires proper normalization.
 
 The [custom kernels guide](custom-kernels.md#normalization-is-checked-when-it-matters) shows that check directly.
 
-The same principle applies to statistical objectives. Likelihood selection for a conditional distribution is rejected because the likelihood of a CDF value rewards oversmoothing without bound. Rather than return a bandwidth from an ill-posed objective, KernelJax points to the supported alternatives.
+A second example comes from bandwidth selection for conditional distributions. Likelihood selection for a conditional distribution is rejected because the likelihood of a CDF value rewards oversmoothing without bound. Rather than return a bandwidth from an ill-posed objective, KernelJax points to the supported alternatives.
 
 ```python
 kj.cdist(data, y, "cv_ml")
@@ -354,6 +351,6 @@ supply a ConditionalBandwidth
 
 These checks are not optional because bypassing them would allow the library to return results it knows are invalid. They are also placed as narrowly as possible, so computations that are already mathematically valid are not restricted unnecessarily.
 
-The rest of the guide develops these ideas one topic at a time. The estimator pages build on the shared example above, while the selection, primitives, and custom guides go deeper into bandwidth optimization and the pieces used to construct and extend those estimators.
-
 If you are comparing KernelJax numerically with another implementation, enable [double precision](../install.md#double-precision) first. JAX uses 32-bit floating-point arithmetic by default.
+
+The rest of the guide develops these ideas one topic at a time. The estimator pages build on the shared example above, while the selection, primitives, and custom guides go deeper into bandwidth optimization and the pieces used to construct and extend those estimators.
