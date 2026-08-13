@@ -64,7 +64,8 @@ naturally into the wider JAX ecosystem.
 uv pip install kerneljax
 ```
 
-JAX itself is not pinned, so install the build matching your hardware first. The
+KernelJax does not choose a hardware build for you, so install the build matching your
+hardware first. The
 [JAX installation guide](https://docs.jax.dev/en/latest/installation.html) covers
 the CPU, CUDA, and TPU wheels.
 
