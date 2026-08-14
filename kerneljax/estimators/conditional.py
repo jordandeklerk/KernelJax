@@ -337,7 +337,6 @@ def _mode_values(
 ) -> tuple[Array, Array]:
     """Score every declared response level and return the modal level with its density."""
     weights_x = kweights(x_train, bandwidth.x, at=x_eval, kernels=kernels)
-
     # The candidate levels are built directly rather than through from_blocks,
     # whose eager code validation cannot run on a traced array.
     codes = jnp.arange(n_levels, dtype=jnp.int32)[:, None]
