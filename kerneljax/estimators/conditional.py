@@ -307,12 +307,12 @@ def cquantile(
         raise ValueError("cquantile inverts a scalar distribution, so y must be a single continuous column")
 
     bandwidth, selection = _resolve_conditional(x_train, y_train, bw, kernels, n_starts, "distribution")
-    _require_usable(bandwidth.x)
-    _require_usable(bandwidth.y)
 
     x_eval = x_train if at_x is None else _as_points(at_x, x_train.spec)
     value = _quantile_values(x_train, y_train, x_eval, bandwidth, tau, kernels=kernels, n_iter=n_iter)
 
+    _require_usable(bandwidth.x)
+    _require_usable(bandwidth.y)
     return QuantileFit(
         value=value,
         tau=tau,
@@ -433,8 +433,6 @@ def cmode(
         raise ValueError("cmode ranks response levels, so y must be a single unordered or ordered column")
 
     bandwidth, selection = _resolve_conditional(x_train, y_train, bw, kernels, n_starts, "density")
-    _require_usable(bandwidth.x)
-    _require_usable(bandwidth.y)
 
     x_eval = x_train if at_x is None else _as_points(at_x, x_train.spec)
     n_levels = (y_train.spec.uno_levels + y_train.spec.ord_levels)[0]
@@ -445,6 +443,8 @@ def cmode(
         observed = (y_train.uno if y_train.spec.p_uno else y_train.orde)[:, 0]
         accuracy = jnp.mean((value == observed).astype(density.dtype))
 
+    _require_usable(bandwidth.x)
+    _require_usable(bandwidth.y)
     return ModeFit(
         value=value,
         density=density,
@@ -680,14 +680,14 @@ def _conditional(
         )
 
     bandwidth, selection = _resolve_conditional(x_train, y_train, bw, kernels, n_starts, target)
-    _require_usable(bandwidth.x)
-    _require_usable(bandwidth.y)
 
     x_eval = x_train if at_x is None else _as_points(at_x, x_train.spec)
     y_eval = y_train if at_y is None else _as_points(at_y, y_train.spec)
 
     value = _evaluate(x_train, y_train, x_eval, y_eval, bandwidth, kernels, target)
 
+    _require_usable(bandwidth.x)
+    _require_usable(bandwidth.y)
     return ConditionalFit(
         value=value,
         bandwidth=bandwidth,

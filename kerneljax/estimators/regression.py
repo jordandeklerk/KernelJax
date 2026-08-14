@@ -207,7 +207,6 @@ def local_poly(
             _check_conv_at_zero(kernels.continuous)
 
     bandwidth, selection, degree = _resolve_bandwidth(train, y, bw, degree, kernels, n_starts, chunk)
-    _require_usable(bandwidth)
 
     if gradient and degree == 0:
         raise ValueError("gradient requires degree >= 1, a constant fit carries no slope information")
@@ -262,6 +261,7 @@ def local_poly(
         compare_to_y=at is None,
     )
 
+    _require_usable(bandwidth)
     return LocalPolyFit(
         mean=mean,
         grad=grad,

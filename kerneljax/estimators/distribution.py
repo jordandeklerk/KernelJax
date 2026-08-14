@@ -141,7 +141,6 @@ def cdf(
             _check_grad_diagonal(kernels.continuous, "cdf")
 
     bandwidth, selection = _resolve_bandwidth(train, bw, kernels, n_starts, chunk)
-    _require_usable(bandwidth)
 
     evaluate = None if at is None else _as_points(at, train.spec)
     if at is not None and isinstance(bw, SelectionResult | DistributionFit) and bandwidth.h_axis != "shared":
@@ -151,6 +150,7 @@ def cdf(
         )
 
     value, se = _cdf_values(train, bandwidth, evaluate, kernels=kernels, chunk=chunk)
+    _require_usable(bandwidth)
     return DistributionFit(
         value=value,
         se=se,

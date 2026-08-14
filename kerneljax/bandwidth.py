@@ -446,7 +446,12 @@ def _search_start(
 
 
 def _require_usable(bw: Bandwidth) -> None:
-    """Reject a bandwidth no kernel can be evaluated at."""
+    """Reject a bandwidth no kernel can be evaluated at.
+
+    Reading the values forces a host sync, so estimators call this after
+    dispatching their evaluation, letting tracing overlap a running solve while
+    the error still surfaces before any result is returned.
+    """
     try:
         h = jnp.reshape(bw.h, (-1,))
         h_ok = bool(jnp.all(jnp.isfinite(h))) and bool(jnp.all(h > 0.0))

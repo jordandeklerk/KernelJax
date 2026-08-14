@@ -153,7 +153,6 @@ def density(
             _check_conv_matches(kernels.continuous)
 
     bandwidth, selection = _resolve_bandwidth(train, bw, kernels, n_starts, chunk)
-    _require_usable(bandwidth)
 
     evaluate = None if at is None else _as_points(at, train.spec)
     if at is not None and isinstance(bw, SelectionResult | DensityFit) and bandwidth.h_axis != "shared":
@@ -165,6 +164,7 @@ def density(
     scale: Literal["per_train", "per_eval"] = "per_train" if bandwidth.h_axis == "train" else "per_eval"
     value = _density_values(train, bandwidth, evaluate, fold, kernels=kernels, weight_scale=scale, chunk=chunk)
 
+    _require_usable(bandwidth)
     return DensityFit(
         value=value,
         bandwidth=bandwidth,
