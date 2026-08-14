@@ -545,3 +545,24 @@ def test_each_degree_compiles_separately(poly_train, poly_bandwidth, poly_respon
         local_poly(poly_train, poly_response, poly_bandwidth, degree=degree)
 
     assert _fit_values._cache_size() == 3
+
+
+def test_fold_with_mismatched_evaluation_points_is_refused(probe_x, probe_y, probe_bw):
+    import pytest
+
+    with pytest.raises(ValueError, match="match train in length"):
+        local_poly(probe_x, probe_y, probe_bw, at=np.linspace(0.0, 1.0, 12), fold=jnp.arange(probe_x.shape[0]))
+
+
+def test_se_is_zero_not_nan_far_from_the_sample(probe_x, probe_y, probe_bw):
+    fit = local_poly(probe_x, probe_y, probe_bw, at=np.array([1e4]), se=True)
+    assert float(fit.se[0]) == 0.0
+
+
+def test_se_gradient_is_finite_at_zero_response_variance(probe_x, probe_bw):
+    def objective(h):
+        bandwidth = Bandwidth(h=jnp.array([h]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+        return jnp.sum(local_poly(probe_x, np.zeros_like(probe_x), bandwidth, at=np.array([0.5]), se=True).se)
+
+    grad = jax.grad(objective)(0.3)
+    assert bool(jnp.isfinite(grad))

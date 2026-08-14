@@ -90,6 +90,35 @@ def test_a_one_over_h_factor_is_named(probe_x, probe_bw):
         density(probe_x, probe_bw, kernels=KernelSet(continuous=CarriesOverH()))
 
 
+def test_a_nonconforming_kernel_is_refused_inside_jit(probe_x, probe_bw):
+    import jax
+
+    with pytest.raises(ValueError, match="signature of a kernel carrying its own 1/h factor"):
+        jax.jit(lambda x, bw: density(x, bw, kernels=KernelSet(continuous=CarriesOverH())).value)(probe_x, probe_bw)
+
+
+def test_half_mass_is_refused_inside_jit(probe_x, probe_bw):
+    import jax
+
+    with pytest.raises(ValueError, match=r"integrates to 0\.5"):
+        jax.jit(lambda x, bw: density(x, bw, kernels=KernelSet(continuous=HalfMass())).value)(probe_x, probe_bw)
+
+
+def test_a_conforming_kernel_passes_the_checks_inside_jit(probe_x, probe_bw):
+    import jax
+
+    @dataclasses.dataclass(frozen=True)
+    class JittedGaussian(ContinuousKernel):
+        def value(self, x, y, h):
+            u = (x - y) / h
+            return jnp.exp(-0.5 * u * u) / jnp.sqrt(2.0 * jnp.pi)
+
+    values = jax.jit(lambda x, bw: density(x, bw, kernels=KernelSet(continuous=JittedGaussian())).value)(
+        probe_x, probe_bw
+    )
+    assert bool(jnp.all(jnp.isfinite(values)))
+
+
 def test_an_unguarded_branch_is_refused_before_selection(probe_x, probe_y):
     with pytest.raises(ValueError, match="differentiates both branches"):
         local_poly(probe_x, probe_y, "cv_ls", degree=1, kernels=KernelSet(continuous=UnguardedSinc()))

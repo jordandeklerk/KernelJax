@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import Literal, cast
 
+import jax
 import jax.numpy as jnp
 
 from kerneljax.bandwidth import Bandwidth, SelectionResult, _require_usable, normal_reference
@@ -18,6 +20,30 @@ from kerneljax.selection.optimize import select_bandwidth
 from kerneljax.typing import Array
 
 __all__ = ["DensityFit", "density"]
+
+
+@partial(jax.jit, static_argnames=("kernels", "weight_scale", "chunk"))
+def _density_values(
+    train: MixedData,
+    bandwidth: Bandwidth,
+    evaluate: MixedData | None,
+    fold: Array | None,
+    *,
+    kernels: KernelSet,
+    weight_scale: Literal["per_train", "per_eval"],
+    chunk: int | tuple[int, int] | None,
+) -> Array:
+    """Contract the kernel weights and normalize them into a density."""
+    total = ksum(train, bandwidth, at=evaluate, kernels=kernels, fold=fold, weight_scale=weight_scale, chunk=chunk)
+
+    if fold is None:
+        denom = jnp.asarray(train.n, dtype=total.dtype)
+    else:
+        _, codes = jnp.unique(fold, return_inverse=True, size=fold.shape[0])
+        kept = train.n - jnp.bincount(codes, length=fold.shape[0])[codes]
+        denom = kept.astype(total.dtype)[:, None]
+
+    return (total / denom).reshape(-1)
 
 
 def density(
@@ -127,7 +153,6 @@ def density(
             _check_conv_matches(kernels.continuous)
 
     bandwidth, selection = _resolve_bandwidth(train, bw, kernels, n_starts, chunk)
-    _require_usable(bandwidth)
 
     evaluate = None if at is None else _as_points(at, train.spec)
     if at is not None and isinstance(bw, SelectionResult | DensityFit) and bandwidth.h_axis != "shared":
@@ -137,16 +162,11 @@ def density(
         )
 
     scale: Literal["per_train", "per_eval"] = "per_train" if bandwidth.h_axis == "train" else "per_eval"
-    total = ksum(train, bandwidth, at=evaluate, kernels=kernels, fold=fold, weight_scale=scale, chunk=chunk)
+    value = _density_values(train, bandwidth, evaluate, fold, kernels=kernels, weight_scale=scale, chunk=chunk)
 
-    if fold is None:
-        denom = jnp.asarray(train.n, dtype=total.dtype)
-    else:
-        kept = train.n - jnp.bincount(fold, length=fold.shape[0])[fold]
-        denom = kept.astype(total.dtype)[:, None]
-
+    _require_usable(bandwidth)
     return DensityFit(
-        value=(total / denom).reshape(-1),
+        value=value,
         bandwidth=bandwidth,
         selection=selection,
         kernels=kernels,

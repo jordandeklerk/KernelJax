@@ -159,3 +159,11 @@ def test_normal_reference_leaves_categorical_smoothing_at_zero(mixed_bandwidth_d
     assert float(bw.h[0]) > 0.0
     assert jnp.all(bw.lam_uno == 0.0)
     assert jnp.all(bw.lam_ord == 0.0)
+
+
+def test_normal_reference_keeps_float32_data_in_float32_under_x64(float64_enabled):
+    import numpy as np
+
+    data = MixedData.continuous(np.random.default_rng(0).normal(size=20).astype(np.float32))
+    reference = normal_reference(data, KernelSet())
+    assert reference.h.dtype == jnp.float32

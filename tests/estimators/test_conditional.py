@@ -18,6 +18,7 @@ from kerneljax.estimators.conditional import (
     cv_ls_conditional_density,
     cv_ls_conditional_distribution,
     cv_ml_conditional,
+    select_conditional_bandwidth,
 )
 from kerneljax.ksum import kweights
 
@@ -418,3 +419,29 @@ def _pin_first(x, rows):
         unordered=jnp.full((rows, 1), x.uno[0, 0]),
         unordered_levels=3,
     )
+
+
+def test_an_isolated_conditioning_point_returns_zero_not_nan(conditional_sample, conditional_bandwidth):
+    x, y = conditional_sample
+    bandwidth = conditional_bandwidth
+    far_continuous = np.full(1, 1e4)
+    far = MixedData.from_blocks(continuous=far_continuous, unordered=np.zeros(1, dtype=int), unordered_levels=3)
+    at_y = np.array([0.0])
+    dens = cdensity(x, y, bandwidth, at_x=far, at_y=at_y)
+    dist = cdist(x, y, bandwidth, at_x=far, at_y=at_y)
+    assert float(dens.value[0]) == 0.0
+    assert float(dist.value[0]) == 0.0
+
+
+def test_cmode_runs_inside_jit(categorical_response):
+    x, y, bandwidth = categorical_response
+    fit = cmode(x, y, bandwidth)
+    jitted = jax.jit(lambda c, labels: cmode(c, labels, bandwidth).value)(x, y)
+    assert bool(jnp.all(jitted == fit.value))
+
+
+def test_the_selector_reuses_its_compilation(conditional_sample):
+    x, y = conditional_sample
+    first = select_conditional_bandwidth(x, y, n_starts=1)
+    second = select_conditional_bandwidth(x, y, n_starts=1)
+    assert float(first.bandwidth.x.h[0]) == float(second.bandwidth.x.h[0])

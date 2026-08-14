@@ -180,11 +180,8 @@ class MixedData:
         n = jnp.asarray(blocks[0]).shape[0]
 
         con_a = jnp.zeros((n, 0)) if continuous is None else jnp.asarray(continuous)
-        # Force a concrete dtype. An array built from a bare Python scalar
-        # (e.g. `jnp.full(shape, 3.0)`) is "weakly typed" in JAX, and two
-        # otherwise identical MixedData instances differing only in that
-        # flag make jax.jit retrace instead of hitting the cache.
-        con_a = con_a.astype(con_a.dtype)
+        floating = con_a.dtype if jnp.issubdtype(con_a.dtype, jnp.floating) else jnp.result_type(float)
+        con_a = con_a.astype(floating)
         uno_a = jnp.zeros((n, 0), jnp.int32) if unordered is None else jnp.asarray(unordered).astype(jnp.int32)
         ord_a = jnp.zeros((n, 0), jnp.int32) if ordered is None else jnp.asarray(ordered).astype(jnp.int32)
 

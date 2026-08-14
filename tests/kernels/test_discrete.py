@@ -166,3 +166,20 @@ def test_ordered_cdf_spans_the_unit(kernel_cls):
     lam, y = jnp.asarray(0.5), jnp.asarray(3)
     assert float(kernel.cdf(jnp.asarray(-200), y, lam, 5)) == pytest.approx(0.0, abs=1e-9)
     assert float(kernel.cdf(jnp.asarray(200), y, lam, 5)) == pytest.approx(1.0, rel=1e-9)
+
+
+@pytest.mark.parametrize("kernel", [WangVanRyzin(), LiRacine()])
+@pytest.mark.parametrize("d", [0, 1, 3])
+def test_conv_is_finite_at_the_upper_bound(kernel, d):
+    value = float(kernel.conv(jnp.array(0), jnp.array(d), jnp.array(1.0), 4))
+    grad = float(jax.grad(lambda lam: jnp.sum(kernel.conv(jnp.array(0), jnp.array(d), lam, 4)))(jnp.array(1.0)))
+    assert np.isfinite(value)
+    assert np.isfinite(grad)
+
+
+@pytest.mark.parametrize("kernel", [WangVanRyzin(), LiRacine()])
+@pytest.mark.parametrize("d", [0, 1, 3])
+def test_conv_is_continuous_at_the_upper_bound(kernel, d):
+    at_bound = float(kernel.conv(jnp.array(0), jnp.array(d), jnp.array(1.0), 4))
+    just_inside = float(kernel.conv(jnp.array(0), jnp.array(d), jnp.array(0.9999), 4))
+    assert at_bound == pytest.approx(just_inside, abs=1e-3)

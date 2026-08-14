@@ -52,11 +52,9 @@ def _check_value_mass(kernel: ContinuousKernel, *, tol: float = 1.0 / 48.0) -> N
         return
 
     name = type(kernel).__name__
-    try:
+    with jax.ensure_compile_time_eval():
         at_one = _mass(kernel.value, 1.0)
         at_two = _mass(kernel.value, 2.0)
-    except (jax.errors.TracerArrayConversionError, jax.errors.ConcretizationTypeError):
-        return
 
     if abs(at_two - 1.0) > tol:
         if abs(at_one - 1.0) <= tol:
@@ -81,12 +79,10 @@ def _check_conv_at_zero(kernel: ContinuousKernel, *, tol: float = 1.0 / 48.0) ->
         return
 
     grid = _u_grid()
-    try:
+    with jax.ensure_compile_time_eval():
         values = _in_u_units(kernel.value, grid, 1.0)
         roughness = float(np.trapezoid(values**2, grid))
         at_zero = float(kernel.conv(jnp.asarray(0.0), jnp.asarray(0.0), jnp.asarray(1.0)))
-    except (jax.errors.TracerArrayConversionError, jax.errors.ConcretizationTypeError):
-        return
 
     if abs(at_zero - roughness) > tol:
         name = type(kernel).__name__
@@ -106,12 +102,10 @@ def _check_conv_matches(kernel: ContinuousKernel, *, tol: float = 1e-3) -> None:
 
     name = type(kernel).__name__
     offsets = _conv_offsets()
-    try:
+    with jax.ensure_compile_time_eval():
         numeric = _numeric_conv(kernel, offsets)
         at_one = _in_u_units(kernel.conv, offsets, 1.0)
         at_two = _in_u_units(kernel.conv, offsets, 2.0)
-    except (jax.errors.TracerArrayConversionError, jax.errors.ConcretizationTypeError):
-        return
 
     if np.max(np.abs(at_one - numeric)) <= tol < np.max(np.abs(at_two - numeric)):
         raise ValueError(
@@ -148,11 +142,9 @@ def _check_cdf_limits(kernel: ContinuousKernel, *, tol: float = 1.0 / 200.0) -> 
 
     edge = float(_u_grid()[-1])
     for h in (1.0, 2.0):
-        try:
+        with jax.ensure_compile_time_eval():
             lower = float(kernel.cdf(jnp.asarray(-edge * h), jnp.asarray(0.0), jnp.asarray(h)))
             upper = float(kernel.cdf(jnp.asarray(edge * h), jnp.asarray(0.0), jnp.asarray(h)))
-        except (jax.errors.TracerArrayConversionError, jax.errors.ConcretizationTypeError):
-            return
         if abs(lower) > tol or abs(upper - 1.0) > tol:
             name = type(kernel).__name__
             raise ValueError(
@@ -172,11 +164,9 @@ def _check_grad_diagonal(kernel: ContinuousKernel, op: str, *, offsets: tuple[fl
 
     method = getattr(kernel, op)
     for offset in offsets:
-        point = jnp.asarray(offset)
-        try:
+        with jax.ensure_compile_time_eval():
+            point = jnp.asarray(offset)
             gradient = float(jax.grad(lambda h, x=point: jnp.sum(method(x, jnp.asarray(0.0), h)))(jnp.asarray(1.0)))
-        except (jax.errors.TracerArrayConversionError, jax.errors.ConcretizationTypeError):
-            return
         if not jnp.isfinite(gradient):
             name = type(kernel).__name__
             raise ValueError(

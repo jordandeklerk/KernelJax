@@ -37,6 +37,22 @@ def test_fold_leave_one_out_zeroes_the_diagonal(ksum_data, ksum_bandwidth):
     assert jnp.allclose(got[:, 0], weights.sum(axis=1), rtol=1e-6)
 
 
+@pytest.mark.parametrize("n_labels", [3, 9])
+def test_fold_with_the_wrong_label_count_is_refused(ksum_data, ksum_bandwidth, n_labels):
+    with pytest.raises(ValueError, match="one label per row"):
+        ksum(ksum_data, ksum_bandwidth, fold=jnp.arange(n_labels))
+
+
+def test_fold_with_mismatched_evaluation_points_is_refused(ksum_data, ksum_bandwidth):
+    points = MixedData.from_blocks(
+        continuous=jnp.linspace(-1.0, 2.0, 9).reshape(9, 1),
+        unordered=jnp.zeros((9, 1), dtype=jnp.int32),
+        unordered_levels=(4,),
+    )
+    with pytest.raises(ValueError, match="match train in length"):
+        ksum(ksum_data, ksum_bandwidth, at=points, fold=jnp.arange(ksum_data.n))
+
+
 def test_fold_supports_k_fold_not_just_leave_one_out(ksum_data, ksum_bandwidth):
     fold = jnp.asarray([0, 0, 1, 1, 2, 2])
     got = ksum(ksum_data, ksum_bandwidth, fold=fold)

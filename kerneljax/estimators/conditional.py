@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from functools import partial
 from typing import Literal, cast
 
 import jax
@@ -20,6 +21,7 @@ from kerneljax.bandwidth import (
 from kerneljax.data import MixedData, _as_points
 from kerneljax.estimators.fit import ConditionalFit, ModeFit, QuantileFit
 from kerneljax.kernels import KernelSet, Op
+from kerneljax.kernels._numerics import safe_div
 from kerneljax.kernels.sets import _resolve_kernels
 from kerneljax.ksum import kweights
 from kerneljax.typing import Array, ScalarFloat
@@ -179,6 +181,44 @@ def cdist(
     return _conditional(x, y, bw, at_x, at_y, kernels, n_starts, "distribution")
 
 
+@partial(jax.jit, static_argnames=("kernels", "n_iter"))
+def _quantile_values(
+    x_train: MixedData,
+    y_train: MixedData,
+    x_eval: MixedData,
+    bandwidth: ConditionalBandwidth,
+    tau: ScalarFloat,
+    *,
+    kernels: KernelSet,
+    n_iter: int,
+) -> Array:
+    """Invert the fitted conditional distribution by bisection over the observed response range."""
+    weights_x = kweights(x_train, bandwidth.x, at=x_eval, kernels=kernels)
+    weight_sum = jnp.sum(weights_x, axis=1)
+
+    def distribution(candidates: Array) -> Array:
+        accumulated = kweights(y_train, bandwidth.y, at=MixedData.continuous(candidates), kernels=kernels, op=Op.CDF)
+        return safe_div(jnp.sum(weights_x * accumulated, axis=1), weight_sum)
+
+    y_min = jnp.min(y_train.con[:, 0])
+    y_max = jnp.max(y_train.con[:, 0])
+    low = jnp.full(x_eval.n, y_min)
+    high = jnp.full(x_eval.n, y_max)
+
+    clamp_low = distribution(low) >= tau
+    clamp_high = distribution(high) < tau
+
+    def halve(_: int, bracket: tuple[Array, Array]) -> tuple[Array, Array]:
+        low, high = bracket
+        mid = 0.5 * (low + high)
+        upper = distribution(mid) >= tau
+        return jnp.where(upper, low, mid), jnp.where(upper, mid, high)
+
+    low, high = jax.lax.fori_loop(0, n_iter, halve, (low, high))
+    value = 0.5 * (low + high)
+    return jnp.where(clamp_low, y_min, jnp.where(clamp_high, y_max, value))
+
+
 def cquantile(
     x: MixedData | Array,
     y: MixedData | Array,
@@ -267,37 +307,12 @@ def cquantile(
         raise ValueError("cquantile inverts a scalar distribution, so y must be a single continuous column")
 
     bandwidth, selection = _resolve_conditional(x_train, y_train, bw, kernels, n_starts, "distribution")
-    _require_usable(bandwidth.x)
-    _require_usable(bandwidth.y)
 
     x_eval = x_train if at_x is None else _as_points(at_x, x_train.spec)
-    weights_x = kweights(x_train, bandwidth.x, at=x_eval, kernels=kernels)
-    weight_sum = jnp.sum(weights_x, axis=1)
+    value = _quantile_values(x_train, y_train, x_eval, bandwidth, tau, kernels=kernels, n_iter=n_iter)
 
-    def distribution(candidates: Array) -> Array:
-        accumulated = kweights(y_train, bandwidth.y, at=MixedData.continuous(candidates), kernels=kernels, op=Op.CDF)
-        return jnp.sum(weights_x * accumulated, axis=1) / weight_sum
-
-    y_min = jnp.min(y_train.con[:, 0])
-    y_max = jnp.max(y_train.con[:, 0])
-    low = jnp.full(x_eval.n, y_min)
-    high = jnp.full(x_eval.n, y_max)
-
-    at_low = distribution(low)
-    at_high = distribution(high)
-    clamp_low = at_low >= tau
-    clamp_high = at_high < tau
-
-    def halve(_: int, bracket: tuple[Array, Array]) -> tuple[Array, Array]:
-        low, high = bracket
-        mid = 0.5 * (low + high)
-        upper = distribution(mid) >= tau
-        return jnp.where(upper, low, mid), jnp.where(upper, mid, high)
-
-    low, high = jax.lax.fori_loop(0, n_iter, halve, (low, high))
-    value = 0.5 * (low + high)
-    value = jnp.where(clamp_low, y_min, jnp.where(clamp_high, y_max, value))
-
+    _require_usable(bandwidth.x)
+    _require_usable(bandwidth.y)
     return QuantileFit(
         value=value,
         tau=tau,
@@ -308,6 +323,33 @@ def cquantile(
         y_spec=y_train.spec,
         n_train=x_train.n,
     )
+
+
+@partial(jax.jit, static_argnames=("kernels", "n_levels"))
+def _mode_values(
+    x_train: MixedData,
+    y_train: MixedData,
+    x_eval: MixedData,
+    bandwidth: ConditionalBandwidth,
+    *,
+    kernels: KernelSet,
+    n_levels: int,
+) -> tuple[Array, Array]:
+    """Score every declared response level and return the modal level with its density."""
+    weights_x = kweights(x_train, bandwidth.x, at=x_eval, kernels=kernels)
+    # The candidate levels are built directly rather than through from_blocks,
+    # whose eager code validation cannot run on a traced array.
+    codes = jnp.arange(n_levels, dtype=jnp.int32)[:, None]
+    empty = jnp.zeros((n_levels, 0), dtype=jnp.int32)
+    if y_train.spec.p_uno:
+        candidates = MixedData(con=jnp.zeros((n_levels, 0)), uno=codes, orde=empty, spec=y_train.spec)
+    else:
+        candidates = MixedData(con=jnp.zeros((n_levels, 0)), uno=empty, orde=codes, spec=y_train.spec)
+
+    per_level = kweights(y_train, bandwidth.y, at=candidates, kernels=kernels)
+    probabilities = safe_div(weights_x @ per_level.T, jnp.sum(weights_x, axis=1, keepdims=True))
+
+    return jnp.argmax(probabilities, axis=1), jnp.max(probabilities, axis=1)
 
 
 def cmode(
@@ -390,30 +432,18 @@ def cmode(
         raise ValueError("cmode ranks response levels, so y must be a single unordered or ordered column")
 
     bandwidth, selection = _resolve_conditional(x_train, y_train, bw, kernels, n_starts, "density")
-    _require_usable(bandwidth.x)
-    _require_usable(bandwidth.y)
 
     x_eval = x_train if at_x is None else _as_points(at_x, x_train.spec)
-    weights_x = kweights(x_train, bandwidth.x, at=x_eval, kernels=kernels)
-
     n_levels = (y_train.spec.uno_levels + y_train.spec.ord_levels)[0]
-    codes = jnp.arange(n_levels)
-    if y_train.spec.p_uno:
-        candidates = MixedData.from_blocks(unordered=codes, unordered_levels=n_levels)
-    else:
-        candidates = MixedData.from_blocks(ordered=codes, ordered_levels=n_levels)
-
-    per_level = kweights(y_train, bandwidth.y, at=candidates, kernels=kernels)
-    probabilities = (weights_x @ per_level.T) / jnp.sum(weights_x, axis=1, keepdims=True)
-
-    value = jnp.argmax(probabilities, axis=1)
-    density = jnp.max(probabilities, axis=1)
+    value, density = _mode_values(x_train, y_train, x_eval, bandwidth, kernels=kernels, n_levels=n_levels)
 
     accuracy = None
     if at_x is None:
         observed = (y_train.uno if y_train.spec.p_uno else y_train.orde)[:, 0]
         accuracy = jnp.mean((value == observed).astype(density.dtype))
 
+    _require_usable(bandwidth.x)
+    _require_usable(bandwidth.y)
     return ModeFit(
         value=value,
         density=density,
@@ -593,6 +623,7 @@ def cv_ls_conditional_distribution(
     return jnp.mean((_indicator(y_train, grid) - held_out) ** 2)
 
 
+@partial(jax.jit, static_argnames=("kernels", "solver", "n_starts", "method", "target"))
 def select_conditional_bandwidth(
     x: MixedData | Array,
     y: MixedData | Array,
@@ -648,14 +679,14 @@ def _conditional(
         )
 
     bandwidth, selection = _resolve_conditional(x_train, y_train, bw, kernels, n_starts, target)
-    _require_usable(bandwidth.x)
-    _require_usable(bandwidth.y)
 
     x_eval = x_train if at_x is None else _as_points(at_x, x_train.spec)
     y_eval = y_train if at_y is None else _as_points(at_y, y_train.spec)
 
     value = _evaluate(x_train, y_train, x_eval, y_eval, bandwidth, kernels, target)
 
+    _require_usable(bandwidth.x)
+    _require_usable(bandwidth.y)
     return ConditionalFit(
         value=value,
         bandwidth=bandwidth,
@@ -668,6 +699,7 @@ def _conditional(
     )
 
 
+@partial(jax.jit, static_argnames=("kernels", "target"))
 def _evaluate(
     x_train: MixedData,
     y_train: MixedData,
@@ -693,7 +725,7 @@ def _evaluate(
     if target == "density" and y_train.spec.p_con:
         numerator = numerator / jnp.prod(bandwidth.y.h)
 
-    return numerator / denominator
+    return safe_div(numerator, denominator)
 
 
 def _resolve_conditional(

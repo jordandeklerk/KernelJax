@@ -402,7 +402,7 @@ def normal_reference(
         sd = jnp.std(data.con, axis=0, ddof=1)
 
         q75, q25 = jnp.percentile(data.con, jnp.array([75.0, 25.0]), axis=0)
-        iqr = (q75 - q25) / (2.0 * jax.scipy.special.ndtri(0.75))
+        iqr = (q75 - q25) / (2.0 * jax.scipy.special.ndtri(jnp.asarray(0.75, dtype=q75.dtype)))
 
         mad = jnp.median(jnp.abs(data.con - jnp.median(data.con, axis=0)), axis=0) * 1.4826
 
@@ -446,7 +446,12 @@ def _search_start(
 
 
 def _require_usable(bw: Bandwidth) -> None:
-    """Reject a bandwidth no kernel can be evaluated at."""
+    """Reject a bandwidth no kernel can be evaluated at.
+
+    Reading the values forces a host sync, so estimators call this after
+    dispatching their evaluation, letting tracing overlap a running solve while
+    the error still surfaces before any result is returned.
+    """
     try:
         h = jnp.reshape(bw.h, (-1,))
         h_ok = bool(jnp.all(jnp.isfinite(h))) and bool(jnp.all(h > 0.0))

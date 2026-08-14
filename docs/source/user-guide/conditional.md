@@ -59,21 +59,21 @@ Conditional density estimate
 
   Response
   Variable      Kind             Bandwidth
-  wage          continuous        0.403852
+  wage          continuous        0.403857
 
   Conditioning
   Variable      Kind             Bandwidth
-  exper         continuous        1.508078
-  region        unordered         0.675291
+  exper         continuous        1.507978
+  region        unordered         0.675305
   educ          ordered           0.000000
 
   Continuous kernel         Gaussian, order 2
 
-  Log likelihood               -217.261520
+  Log likelihood               -217.261276
 
   Selection                          cv_ml
   Criterion value                 0.955425
-  Solver iterations                     30
+  Solver iterations                     32
   Converged                           True
 ```
 
