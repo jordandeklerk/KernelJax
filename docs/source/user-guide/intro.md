@@ -55,55 +55,7 @@ The categorical column also required no dummy encoding or separate per-group fit
 
 ## Reading a fit
 
-The printed report is a view of the fit object underneath. Two of the reported statistics describe the fit itself.
-
-The reported residual standard error is the root mean squared residual
-
-$$
-\operatorname{RSE} = \left[
-\frac{1}{n}
-\sum_{i=1}^{n}
-\bigl(Y_i - \hat m(X_i)\bigr)^2
-\right]^{1/2},
-$$
-
-where $Y_i$ is the response at observation $i$, $\hat m(X_i)$ is its fitted value, and $n$ is the sample size. Despite the name in the report, this is the root mean squared residual rather than a degrees-of-freedom adjusted estimate of the error standard deviation. The [background page on regression](../background/regression.md#the-smoother-matrix) explains why KernelJax uses $n$ in the denominator.
-
-The reported $R^2$ is also slightly different from the familiar linear-model definition. KernelJax measures both the response and the fitted values relative to the response mean $\bar Y$ and takes their squared cosine,
-
-$$
-R^2 = \frac{
-\left[
-\sum_{i=1}^{n}
-(Y_i-\bar Y)
-\bigl(\hat m(X_i)-\bar Y\bigr)
-\right]^2
-}{
-\left[
-\sum_{i=1}^{n}(Y_i-\bar Y)^2
-\right]
-\left[
-\sum_{i=1}^{n}\bigl(\hat m(X_i)-\bar Y\bigr)^2
-\right]
-},
-\qquad
-\bar Y = \frac{1}{n}\sum_{i=1}^{n}Y_i.
-$$
-
-This is not, in general, the squared Pearson correlation because the fitted values are centered at $\bar Y$ rather than at their own sample mean. Whenever the denominator is nonzero, the Cauchy-Schwarz inequality keeps the statistic in $[0, 1]$.
-
-The more familiar definition
-
-$$
-1 -
-\frac{
-\sum_i \bigl(Y_i-\hat m(X_i)\bigr)^2
-}{
-\sum_i (Y_i-\bar Y)^2
-}
-$$
-
-agrees with the statistic above when the residuals are orthogonal to the fitted deviations $\hat m(X_i)-\bar Y$. An ordinary least-squares projection with an intercept has that property. A local polynomial smoother does not generally have it, so the two definitions need not coincide.
+The printed report is a view of the fit object underneath. Its residual standard error is a root mean squared residual, and its $R^2$ is a squared cosine about the response mean rather than the usual variance decomposition, so neither is exactly its parametric namesake. The [regression guide](regression.md#reading-the-fit-diagnostics) defines both and explains where they differ from the familiar forms.
 
 The numerical results behind the report remain available directly as arrays.
 
