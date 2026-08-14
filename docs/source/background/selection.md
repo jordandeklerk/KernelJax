@@ -260,26 +260,15 @@ else.
 
 ## Conclusions
 
-We began by asking what it means to estimate a function without assuming its shape, and
-arrived at a single construction that answers the question for densities and regressions
-alike. A kernel converts distance into weight. A bandwidth sets the scale of that weight,
-contributing a bias of order $h^2$ and a variance of order $1/nh$, and the balance between
-them fixes both the optimal bandwidth and the $n^{-2/(4+d)}$ rate, which no estimator can beat
-over the twice differentiable functions of $d$ variables. Fitting local polynomials rather
-than local constants removes the design term $m'f'/f$ from that bias at no cost in leading
-interior variance, and repairs the boundary rate along with it. Kernels for unordered and ordered categories extend
-the whole apparatus to variables with no notion of distance, and because they enter as a
-product and carry finitely many levels, the discrete covariates leave the exponent alone,
-which belongs to the relevant continuous dimensions, though they still move constants and
-finite sample behavior. Cross validation then supplies every smoothing parameter from the
-data, and asymptotically smooths away the variables that were not helping.
+The pieces developed across these pages all serve the same purpose. Kernel smoothing estimates a function from nearby observations without fixing its global shape in advance. The kernel determines how similarity becomes weight, while the bandwidth determines the scale over which observations are treated as local. That choice creates the familiar bias-variance tradeoff and ultimately governs how quickly the estimator can learn as the sample grows.
 
-To see these estimators at work, the [user guide](../user-guide/index.md) applies them to data, and
-the [Install](../install.md) page covers getting set up. For fuller treatments,
-[Li and Racine (2007)](https://press.princeton.edu/books/hardcover/9780691121611/nonparametric-econometrics) is
-the standard reference for mixed-type kernel methods, and
-[Fan and Gijbels (1996)](https://doi.org/10.1201/9780203748725) for local
-polynomial modelling.
+Local polynomial regression improves that basic construction without changing its local character. Moving from a local constant to a local linear fit removes an important design-dependent bias term and improves behavior near boundaries. Product kernels then extend the same machinery to mixed continuous, unordered, and ordered data, with categorical smoothing parameters controlling how strongly information is shared across levels.
+
+Bandwidth selection completes the picture. Cross validation and related criteria replace unknown population quantities with objectives that can be computed from the sample, allowing continuous bandwidths and categorical smoothing parameters to be chosen jointly. Under the conditions developed above, that adaptation can do more than choose how much to smooth. Irrelevant covariates can be smoothed toward their pooling limits, reducing the effective dimension of the problem without requiring those variables to be removed in advance.
+
+The result is a family of estimators that remains nonparametric without being structureless. The assumptions live in the notions of smoothness and similarity encoded by the kernels, while the data determine how strongly those assumptions should be applied.
+
+To see these estimators at work, the [user guide](../user-guide/index.md) applies them to data, and the [Install](../install.md) page covers getting set up. For fuller treatments, [Li and Racine (2007)](https://press.princeton.edu/books/hardcover/9780691121611/nonparametric-econometrics) is the standard reference for mixed-type kernel methods, and [Fan and Gijbels (1996)](https://doi.org/10.1201/9780203748725) for local polynomial modelling.
 
 ## References
 
