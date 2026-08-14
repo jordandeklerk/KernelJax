@@ -545,3 +545,10 @@ def test_each_degree_compiles_separately(poly_train, poly_bandwidth, poly_respon
         local_poly(poly_train, poly_response, poly_bandwidth, degree=degree)
 
     assert _fit_values._cache_size() == 3
+
+
+def test_fold_with_mismatched_evaluation_points_is_refused(probe_x, probe_y, probe_bw):
+    import pytest
+
+    with pytest.raises(ValueError, match="match train in length"):
+        local_poly(probe_x, probe_y, probe_bw, at=np.linspace(0.0, 1.0, 12), fold=jnp.arange(probe_x.shape[0]))

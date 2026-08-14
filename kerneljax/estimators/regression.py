@@ -217,6 +217,14 @@ def local_poly(
         )
 
     evaluate = train if at is None else _as_points(at, train.spec)
+    if fold is not None:
+        if fold.shape[0] != train.n:
+            raise ValueError(f"fold carries {fold.shape[0]} labels for {train.n} training rows, one label per row")
+        if evaluate.n != train.n:
+            raise ValueError(
+                "fold aligns evaluation rows with training rows, so at must be "
+                f"dropped or match train in length, got {evaluate.n} evaluation rows for {train.n} training rows"
+            )
     if at is not None and isinstance(bw, SelectionResult | LocalPolyFit) and bandwidth.h_axis != "shared":
         raise ValueError(
             "reusing a bandwidth at new evaluation points requires h_axis 'shared', "

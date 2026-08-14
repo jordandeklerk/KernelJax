@@ -324,6 +324,14 @@ def ksum(
            Multivariate Analysis, 86, 266-292.
     """
     evaluate = train if at is None else at
+    if fold is not None:
+        if fold.shape[0] != train.n:
+            raise ValueError(f"fold carries {fold.shape[0]} labels for {train.n} training rows, one label per row")
+        if evaluate.n != train.n:
+            raise ValueError(
+                "fold aligns evaluation rows with training rows, so at must be "
+                f"dropped or match train in length, got {evaluate.n} evaluation rows for {train.n} training rows"
+            )
     kernels = KernelSet() if kernels is None else kernels
     p_con = train.spec.p_con
     con_ops, _, _ = _resolve_ops(train.spec, op)

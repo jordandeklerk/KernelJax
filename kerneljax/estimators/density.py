@@ -142,7 +142,8 @@ def density(
     if fold is None:
         denom = jnp.asarray(train.n, dtype=total.dtype)
     else:
-        kept = train.n - jnp.bincount(fold, length=fold.shape[0])[fold]
+        _, codes = jnp.unique(fold, return_inverse=True, size=fold.shape[0])
+        kept = train.n - jnp.bincount(codes, length=fold.shape[0])[codes]
         denom = kept.astype(total.dtype)[:, None]
 
     return DensityFit(

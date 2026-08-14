@@ -130,6 +130,16 @@ def test_chunked_matches_unchunked(density_data, density_bandwidth, chunk):
     assert jnp.allclose(got, ref, rtol=1e-6, atol=1e-8)
 
 
+@pytest.mark.parametrize("low, high", [(100, 200), (-1, 1), (7, 0)])
+def test_fold_labels_are_arbitrary_integers(density_data, density_bandwidth, low, high):
+    half = density_data.n // 2
+    canonical = jnp.where(jnp.arange(density_data.n) < half, 0, 1)
+    relabeled = jnp.where(jnp.arange(density_data.n) < half, low, high)
+    reference = density(density_data, density_bandwidth, fold=canonical)
+    got = density(density_data, density_bandwidth, fold=relabeled)
+    np.testing.assert_allclose(np.asarray(got.value), np.asarray(reference.value), rtol=1e-6)
+
+
 def test_chunked_fold_avoids_pairwise_memory():
     n = 4000
     data = MixedData.continuous(jnp.zeros((n, 1)))
