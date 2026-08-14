@@ -194,7 +194,11 @@ def _cdf_values(
     """
     total = ksum(train, bandwidth, at=evaluate, kernels=kernels, op=Op.CDF, chunk=chunk)
     value = (total / train.n).reshape(-1)
-    return value, jnp.sqrt(value * (1.0 - value) / train.n)
+    # The sqrt adjoint is infinite at zero, so the argument is swapped for a
+    # harmless one wherever the variance is zero and that branch discarded.
+    variance = value * (1.0 - value) / train.n
+    positive = variance > 0.0
+    return value, jnp.where(positive, jnp.sqrt(jnp.where(positive, variance, 1.0)), 0.0)
 
 
 def _resolve_bandwidth(

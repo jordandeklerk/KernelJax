@@ -15,6 +15,7 @@ from kerneljax.data import MixedData, _as_points
 from kerneljax.estimators.fit import LocalPolyFit
 from kerneljax.kernels import KernelSet
 from kerneljax.kernels._checks import _check_conv_at_zero, _check_grad_diagonal
+from kerneljax.kernels._numerics import safe_div
 from kerneljax.kernels.sets import _resolve_kernels
 from kerneljax.ksum import _pad_index, _pad_rows, kweights
 from kerneljax.linalg import wls
@@ -465,15 +466,19 @@ def _fit_point(
     se_value = None
     if se:
         weight_total = xtwx[0, 0]
-        mean_y = xtwy[0] / weight_total
-        mean_y2 = weight_y2 / weight_total
+        mean_y = safe_div(xtwy[0], weight_total)
+        mean_y2 = safe_div(weight_y2, weight_total)
         sigma2 = jnp.clip(mean_y2 - mean_y * mean_y, 0.0, None)
         # The continuous kernels here carry no 1/h factor, so a self
         # convolution at zero difference is the same for every h, and the
         # weight sum already carries the bandwidth product through the
         # unnormalized kernel values that built it.
         roughness = jnp.prod(kernels.continuous.conv(con_row, con_row, jnp.ones_like(con_row)))
-        se_value = jnp.sqrt(sigma2 * roughness / weight_total)
+        # The sqrt adjoint is infinite at zero, so the argument is swapped for a
+        # harmless one wherever the variance term is zero and that branch discarded.
+        variance_term = safe_div(sigma2 * roughness, weight_total)
+        positive = variance_term > 0.0
+        se_value = jnp.where(positive, jnp.sqrt(jnp.where(positive, variance_term, 1.0)), 0.0)
 
     return fit.coef[0], fit.coef, fit.rcond, grad, se_value
 

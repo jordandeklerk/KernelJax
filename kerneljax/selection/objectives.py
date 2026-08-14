@@ -87,7 +87,11 @@ def cv_ml_density(
     kernels = KernelSet() if kernels is None else kernels
 
     f_loo = _loo_density(train, bw, kernels, chunk)
-    return -jnp.sum(jnp.log(f_loo))
+    # An isolated observation can underflow its held-out density to exactly
+    # zero, and log of that is -inf with a NaN gradient. The floor keeps the
+    # criterion finite so a too-small bandwidth is ranked away rather than
+    # poisoning the search.
+    return -jnp.sum(jnp.log(jnp.maximum(f_loo, jnp.finfo(f_loo.dtype).tiny)))
 
 
 def cv_ls_density(

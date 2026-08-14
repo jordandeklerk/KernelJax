@@ -20,6 +20,7 @@ from kerneljax.bandwidth import (
 from kerneljax.data import MixedData, _as_points
 from kerneljax.estimators.fit import ConditionalFit, ModeFit, QuantileFit
 from kerneljax.kernels import KernelSet, Op
+from kerneljax.kernels._numerics import safe_div
 from kerneljax.kernels.sets import _resolve_kernels
 from kerneljax.ksum import kweights
 from kerneljax.typing import Array, ScalarFloat
@@ -276,7 +277,7 @@ def cquantile(
 
     def distribution(candidates: Array) -> Array:
         accumulated = kweights(y_train, bandwidth.y, at=MixedData.continuous(candidates), kernels=kernels, op=Op.CDF)
-        return jnp.sum(weights_x * accumulated, axis=1) / weight_sum
+        return safe_div(jnp.sum(weights_x * accumulated, axis=1), weight_sum)
 
     y_min = jnp.min(y_train.con[:, 0])
     y_max = jnp.max(y_train.con[:, 0])
@@ -693,7 +694,7 @@ def _evaluate(
     if target == "density" and y_train.spec.p_con:
         numerator = numerator / jnp.prod(bandwidth.y.h)
 
-    return numerator / denominator
+    return safe_div(numerator, denominator)
 
 
 def _resolve_conditional(

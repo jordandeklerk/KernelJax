@@ -418,3 +418,15 @@ def _pin_first(x, rows):
         unordered=jnp.full((rows, 1), x.uno[0, 0]),
         unordered_levels=3,
     )
+
+
+def test_an_isolated_conditioning_point_returns_zero_not_nan(conditional_sample, conditional_bandwidth):
+    x, y = conditional_sample
+    bandwidth = conditional_bandwidth
+    far_continuous = np.full(1, 1e4)
+    far = MixedData.from_blocks(continuous=far_continuous, unordered=np.zeros(1, dtype=int), unordered_levels=3)
+    at_y = np.array([0.0])
+    dens = cdensity(x, y, bandwidth, at_x=far, at_y=at_y)
+    dist = cdist(x, y, bandwidth, at_x=far, at_y=at_y)
+    assert float(dens.value[0]) == 0.0
+    assert float(dist.value[0]) == 0.0

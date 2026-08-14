@@ -444,3 +444,17 @@ def test_cv_cdf_chunking_is_differentiable(cdf_train, cdf_bandwidth):
     grads = jax.grad(lambda b: cv_cdf_distribution(cdf_train, b, chunk=5))(cdf_bandwidth)
     assert jnp.all(jnp.isfinite(grads.h))
     assert jnp.all(jnp.isfinite(grads.lam_ord))
+
+
+@pytest.mark.parametrize("h", [1e-4, 1e-3])
+def test_cv_ml_stays_finite_when_the_held_out_density_underflows(cv_continuous_data, h):
+    bandwidth = Bandwidth(h=jnp.array([h]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+    value = cv_ml_density(cv_continuous_data, bandwidth)
+
+    def objective(hh):
+        candidate = Bandwidth(h=jnp.array([hh]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+        return cv_ml_density(cv_continuous_data, candidate)
+
+    grad = jax.grad(objective)(h)
+    assert bool(jnp.isfinite(value))
+    assert bool(jnp.isfinite(grad))

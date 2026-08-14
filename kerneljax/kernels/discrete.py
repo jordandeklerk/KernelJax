@@ -153,7 +153,7 @@ class WangVanRyzin(OrderedKernel):
         y : IntArray
             Data levels, broadcastable against ``x``.
         lam : FloatArray
-            Smoothing parameter, in ``[0, 1)``.
+            Smoothing parameter, in ``[0, 1]``.
         levels : int
             Unused, accepted for interface uniformity with the other kernels.
 
@@ -190,7 +190,7 @@ class WangVanRyzin(OrderedKernel):
         y : IntArray
             Data levels, broadcastable against ``x``.
         lam : FloatArray
-            Smoothing parameter, in ``[0, 1)``.
+            Smoothing parameter, in ``[0, 1]``.
         levels : int
             Unused, accepted for interface uniformity with the other kernels.
 
@@ -202,9 +202,10 @@ class WangVanRyzin(OrderedKernel):
         del levels
         d = jnp.abs(x - y)
         a = 0.5 * (1.0 - lam)
-        tail = 2.0 * lam * lam / (1.0 - lam * lam)
-        body = safe_pow(lam, d) * (d + 3.0 + tail)
-        return a * a * (body + jnp.where(d == 0, 1.0, 0.0))
+        # One (1 - lam) of the prefactor cancels the pole in 2 lam^2 / (1 - lam^2),
+        # so the bound lam = 1 evaluates and differentiates finitely.
+        cross = 0.5 * lam * lam * (1.0 - lam) / (1.0 + lam)
+        return a * a * (safe_pow(lam, d) * (d + 3.0) + jnp.where(d == 0, 1.0, 0.0)) + safe_pow(lam, d) * cross
 
     def upper_bound(self, levels: int) -> float:
         r"""Largest admissible :math:`\lambda`, equal to ``1``.
@@ -283,7 +284,7 @@ class LiRacine(OrderedKernel):
         y : IntArray
             Data levels, broadcastable against ``x``.
         lam : FloatArray
-            Smoothing parameter, in ``[0, 1)``.
+            Smoothing parameter, in ``[0, 1]``.
         levels : int
             Unused, accepted for interface uniformity with the other kernels.
 
@@ -318,7 +319,7 @@ class LiRacine(OrderedKernel):
         y : IntArray
             Data levels, broadcastable against ``x``.
         lam : FloatArray
-            Smoothing parameter, in ``[0, 1)``.
+            Smoothing parameter, in ``[0, 1]``.
         levels : int
             Unused, accepted for interface uniformity with the other kernels.
 
@@ -330,8 +331,10 @@ class LiRacine(OrderedKernel):
         del levels
         d = jnp.abs(x - y)
         c = (1.0 - lam) / (1.0 + lam)
-        tail = 2.0 * lam * lam / (1.0 - lam * lam)
-        return c * c * safe_pow(lam, d) * (d + 1.0 + tail)
+        # One (1 - lam) of the squared prefactor cancels the pole in the tail,
+        # so the bound lam = 1 evaluates and differentiates finitely.
+        cross = 2.0 * lam * lam * (1.0 - lam) / ((1.0 + lam) ** 3)
+        return safe_pow(lam, d) * (c * c * (d + 1.0) + cross)
 
     def upper_bound(self, levels: int) -> float:
         r"""Largest admissible :math:`\lambda`, equal to ``1``.

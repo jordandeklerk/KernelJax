@@ -178,3 +178,13 @@ def test_cdf_reuses_one_compile(criteria_train, criteria_bandwidth):
         cdf(criteria_train, criteria_bandwidth.replace(h=jnp.array([h])))
 
     assert _cdf_values._cache_size() == 1
+
+
+@pytest.mark.parametrize("point", [-50.0, 50.0])
+def test_se_gradient_is_finite_in_the_tails(criteria_train, point):
+    def objective(h):
+        bandwidth = Bandwidth(h=jnp.array([h]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+        return jnp.sum(cdf(criteria_train, bandwidth, at=np.array([point])).se)
+
+    grad = jax.grad(objective)(0.3)
+    assert bool(jnp.isfinite(grad))
