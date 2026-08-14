@@ -18,6 +18,7 @@ from kerneljax.estimators.conditional import (
     cv_ls_conditional_density,
     cv_ls_conditional_distribution,
     cv_ml_conditional,
+    select_conditional_bandwidth,
 )
 from kerneljax.ksum import kweights
 
@@ -430,3 +431,17 @@ def test_an_isolated_conditioning_point_returns_zero_not_nan(conditional_sample,
     dist = cdist(x, y, bandwidth, at_x=far, at_y=at_y)
     assert float(dens.value[0]) == 0.0
     assert float(dist.value[0]) == 0.0
+
+
+def test_cmode_runs_inside_jit(categorical_response):
+    x, y, bandwidth = categorical_response
+    fit = cmode(x, y, bandwidth)
+    jitted = jax.jit(lambda c, labels: cmode(c, labels, bandwidth).value)(x, y)
+    assert bool(jnp.all(jitted == fit.value))
+
+
+def test_the_selector_reuses_its_compilation(conditional_sample):
+    x, y = conditional_sample
+    first = select_conditional_bandwidth(x, y, n_starts=1)
+    second = select_conditional_bandwidth(x, y, n_starts=1)
+    assert float(first.bandwidth.x.h[0]) == float(second.bandwidth.x.h[0])
