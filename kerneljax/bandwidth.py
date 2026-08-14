@@ -402,7 +402,7 @@ def normal_reference(
         sd = jnp.std(data.con, axis=0, ddof=1)
 
         q75, q25 = jnp.percentile(data.con, jnp.array([75.0, 25.0]), axis=0)
-        iqr = (q75 - q25) / (2.0 * jax.scipy.special.ndtri(0.75))
+        iqr = (q75 - q25) / (2.0 * jax.scipy.special.ndtri(jnp.asarray(0.75, dtype=q75.dtype)))
 
         mad = jnp.median(jnp.abs(data.con - jnp.median(data.con, axis=0)), axis=0) * 1.4826
 

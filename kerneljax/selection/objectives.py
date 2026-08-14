@@ -383,7 +383,7 @@ def cv_cdf_distribution(
 
         total, _ = jax.lax.scan(accumulate, jnp.zeros((), dtype=train.con.dtype), blocks)
 
-    return total / (train.n * evaluate.n)
+    return total / (float(train.n) * evaluate.n)
 
 
 def aic_c_regression(

@@ -293,3 +293,17 @@ def test_integer_levels_too_small_for_a_column_are_rejected():
 
     with pytest.raises(ValueError, match=r"unordered column 1 has codes outside \[0, 3\)"):
         MixedData.from_blocks(unordered=codes, unordered_levels=3)
+
+
+@pytest.mark.parametrize("build", [jnp.arange(10), jnp.arange(10).reshape(10, 1)])
+def test_integer_continuous_input_is_promoted_to_float(build):
+    data = MixedData.from_blocks(continuous=build, names=("x",))
+    assert jnp.issubdtype(data.con.dtype, jnp.floating)
+
+
+def test_integer_continuous_input_flows_through_the_grids():
+    data = MixedData.from_blocks(continuous=jnp.arange(10), names=("x",))
+    line = grid(data, vary="x", n=5)
+    spread = quantile_grid(data, n=5)
+    assert float(line.con[-1, 0]) == 9.0
+    assert float(spread.con[-1, 0]) == 9.0
