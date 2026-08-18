@@ -23,7 +23,7 @@ from kerneljax.estimators.fit import ConditionalFit, ModeFit, QuantileFit
 from kerneljax.kernels import KernelSet, Op
 from kerneljax.kernels._numerics import safe_div
 from kerneljax.kernels.sets import _resolve_kernels
-from kerneljax.ksum import kweights
+from kerneljax.ksum import _pad_index, _pad_rows, kweights
 from kerneljax.typing import Array, ScalarFloat
 
 __all__ = ["ConditionalFit", "ModeFit", "QuantileFit", "cdensity", "cdist", "cmode", "cquantile"]
@@ -464,6 +464,7 @@ def cv_ml_conditional(
     bandwidth: ConditionalBandwidth,
     *,
     kernels: KernelSet | None = None,
+    chunk: int | tuple[int, int] | None = None,
 ) -> ScalarFloat:
     r"""Score a conditional bandwidth by leave-one-out likelihood.
 
@@ -485,6 +486,9 @@ def cv_ml_conditional(
         The bandwidth to score.
     kernels : KernelSet, optional
         Kernel families, one per column kind. Static.
+    chunk : int or tuple of int, optional
+        Evaluation axis chunk size. The training entry of a tuple is
+        ignored. Static.
 
     Returns
     -------
@@ -492,9 +496,37 @@ def cv_ml_conditional(
         The criterion value, smaller being better.
     """
     kernels = KernelSet() if kernels is None else kernels
-    fold = jnp.arange(x_train.n)
-    held_out = _evaluate(x_train, y_train, x_train, y_train, bandwidth, kernels, "density", fold=fold)
-    return -jnp.mean(jnp.log(held_out))
+    chunk_eval = _chunk_eval(chunk)
+
+    if chunk_eval is None:
+        fold = jnp.arange(x_train.n)
+        held_out = _evaluate(x_train, y_train, x_train, y_train, bandwidth, kernels, "density", fold=fold)
+        return -jnp.mean(jnp.log(held_out))
+
+    x_blocks = jax.tree.map(lambda column: _pad_rows(column, chunk_eval), x_train)
+    y_blocks = jax.tree.map(lambda column: _pad_rows(column, chunk_eval), y_train)
+    idx_blocks = _pad_index(jnp.arange(x_train.n), x_train.n, chunk_eval)
+
+    def step(carry: Array, block: tuple[MixedData, MixedData, Array]) -> tuple[Array, None]:
+        x_block, y_block, idx_block = block
+        weights_x = kweights(x_train, bandwidth.x, at=x_block, kernels=kernels)
+        weights_y = kweights(y_train, bandwidth.y, at=y_block, kernels=kernels)
+
+        keep = idx_block[:, None] != jnp.arange(x_train.n)[None, :]
+        weights_x = jnp.where(keep, weights_x, 0.0)
+
+        numerator = jnp.sum(weights_x * weights_y, axis=1)
+        if y_train.spec.p_con:
+            numerator = numerator / jnp.prod(bandwidth.y.h)
+        held_out = safe_div(numerator, jnp.sum(weights_x, axis=1))
+
+        valid = idx_block < x_train.n
+        logs = jnp.where(valid, jnp.log(jnp.where(valid, held_out, 1.0)), 0.0)
+        return carry + jnp.sum(logs), None
+
+    blocks = (x_blocks, y_blocks, idx_blocks)
+    total, _ = jax.lax.scan(jax.checkpoint(step), jnp.zeros((), dtype=x_train.con.dtype), blocks)
+    return -(total / x_train.n)
 
 
 def cv_ls_conditional_density(
@@ -503,6 +535,7 @@ def cv_ls_conditional_density(
     bandwidth: ConditionalBandwidth,
     *,
     kernels: KernelSet | None = None,
+    chunk: int | tuple[int, int] | None = None,
 ) -> ScalarFloat:
     r"""Score a conditional bandwidth by least squares on the density.
 
@@ -532,6 +565,9 @@ def cv_ls_conditional_density(
         The bandwidth to score.
     kernels : KernelSet, optional
         Kernel families, one per column kind. Static.
+    chunk : int or tuple of int, optional
+        Evaluation axis chunk size. The training entry of a tuple is
+        ignored. Static.
 
     Returns
     -------
@@ -545,20 +581,46 @@ def cv_ls_conditional_density(
            the American Statistical Association, 99, 1015-1026.
     """
     kernels = KernelSet() if kernels is None else kernels
-
-    weights_x = kweights(x_train, bandwidth.x, kernels=kernels)
-    convolved = kweights(y_train, bandwidth.y, kernels=kernels, op=Op.CONV)
-    values = kweights(y_train, bandwidth.y, kernels=kernels)
+    chunk_eval = _chunk_eval(chunk)
     scale = jnp.prod(bandwidth.y.h) if y_train.spec.p_con else 1.0
+    convolved = kweights(y_train, bandwidth.y, kernels=kernels, op=Op.CONV)
 
-    full_sum = jnp.sum(weights_x, axis=1)
-    smoothed = jnp.matmul(weights_x, convolved, precision="highest")
-    integrated = jnp.sum(smoothed * weights_x, axis=1) / (full_sum**2 * scale)
+    if chunk_eval is None:
+        weights_x = kweights(x_train, bandwidth.x, kernels=kernels)
+        values = kweights(y_train, bandwidth.y, kernels=kernels)
 
-    masked = weights_x * (1.0 - jnp.eye(x_train.n, dtype=weights_x.dtype))
-    cross = jnp.sum(masked * values, axis=1) / (jnp.sum(masked, axis=1) * scale)
+        full_sum = jnp.sum(weights_x, axis=1)
+        smoothed = jnp.matmul(weights_x, convolved, precision="highest")
+        integrated = jnp.sum(smoothed * weights_x, axis=1) / (full_sum**2 * scale)
 
-    return jnp.mean(integrated - 2.0 * cross)
+        masked = weights_x * (1.0 - jnp.eye(x_train.n, dtype=weights_x.dtype))
+        cross = jnp.sum(masked * values, axis=1) / (jnp.sum(masked, axis=1) * scale)
+
+        return jnp.mean(integrated - 2.0 * cross)
+
+    x_blocks = jax.tree.map(lambda column: _pad_rows(column, chunk_eval), x_train)
+    y_blocks = jax.tree.map(lambda column: _pad_rows(column, chunk_eval), y_train)
+    idx_blocks = _pad_index(jnp.arange(x_train.n), x_train.n, chunk_eval)
+
+    def step(carry: Array, block: tuple[MixedData, MixedData, Array]) -> tuple[Array, None]:
+        x_block, y_block, idx_block = block
+        weights_x = kweights(x_train, bandwidth.x, at=x_block, kernels=kernels)
+        values = kweights(y_train, bandwidth.y, at=y_block, kernels=kernels)
+
+        full_sum = jnp.sum(weights_x, axis=1)
+        smoothed = jnp.matmul(weights_x, convolved, precision="highest")
+        integrated = jnp.sum(smoothed * weights_x, axis=1) / (full_sum**2 * scale)
+
+        keep = (idx_block[:, None] != jnp.arange(x_train.n)[None, :]).astype(weights_x.dtype)
+        masked = weights_x * keep
+        cross = jnp.sum(masked * values, axis=1) / (jnp.sum(masked, axis=1) * scale)
+
+        valid = idx_block < x_train.n
+        return carry + jnp.sum(jnp.where(valid, integrated - 2.0 * cross, 0.0)), None
+
+    blocks = (x_blocks, y_blocks, idx_blocks)
+    total, _ = jax.lax.scan(jax.checkpoint(step), jnp.zeros((), dtype=x_train.con.dtype), blocks)
+    return total / x_train.n
 
 
 def cv_ls_conditional_distribution(
@@ -569,6 +631,7 @@ def cv_ls_conditional_distribution(
     kernels: KernelSet | None = None,
     y_grid: MixedData | Array | None = None,
     n_grid: int = 100,
+    chunk: int | tuple[int, int] | None = None,
 ) -> ScalarFloat:
     r"""Score a conditional bandwidth by least squares on the indicator.
 
@@ -600,6 +663,9 @@ def cv_ls_conditional_distribution(
         continuous response.
     n_grid : int
         Size of the default quantile grid. Static.
+    chunk : int or tuple of int, optional
+        Evaluation axis chunk size. The training entry of a tuple is
+        ignored. Static.
 
     Returns
     -------
@@ -613,20 +679,43 @@ def cv_ls_conditional_distribution(
            functions." Journal of Business & Economic Statistics, 31, 57-65.
     """
     kernels = KernelSet() if kernels is None else kernels
+    chunk_eval = _chunk_eval(chunk)
     grid = _response_grid(y_train, y_grid, n_grid)
-
-    weights_x = kweights(x_train, bandwidth.x, kernels=kernels)
     accumulated = kweights(y_train, bandwidth.y, at=grid, kernels=kernels, op=Op.CDF)
 
-    keep = 1.0 - jnp.eye(x_train.n, dtype=weights_x.dtype)
-    masked = weights_x * keep
-    numerator = jnp.matmul(masked, accumulated.T, precision="highest")
-    held_out = numerator / jnp.sum(masked, axis=1, keepdims=True)
+    if chunk_eval is None:
+        weights_x = kweights(x_train, bandwidth.x, kernels=kernels)
 
-    return jnp.mean((_indicator(y_train, grid) - held_out) ** 2)
+        keep = 1.0 - jnp.eye(x_train.n, dtype=weights_x.dtype)
+        masked = weights_x * keep
+        numerator = jnp.matmul(masked, accumulated.T, precision="highest")
+        held_out = numerator / jnp.sum(masked, axis=1, keepdims=True)
+
+        return jnp.mean((_indicator(y_train, grid) - held_out) ** 2)
+
+    x_blocks = jax.tree.map(lambda column: _pad_rows(column, chunk_eval), x_train)
+    y_blocks = jax.tree.map(lambda column: _pad_rows(column, chunk_eval), y_train)
+    idx_blocks = _pad_index(jnp.arange(x_train.n), x_train.n, chunk_eval)
+
+    def step(carry: Array, block: tuple[MixedData, MixedData, Array]) -> tuple[Array, None]:
+        x_block, y_block, idx_block = block
+        weights_x = kweights(x_train, bandwidth.x, at=x_block, kernels=kernels)
+
+        keep = (idx_block[:, None] != jnp.arange(x_train.n)[None, :]).astype(weights_x.dtype)
+        masked = weights_x * keep
+        numerator = jnp.matmul(masked, accumulated.T, precision="highest")
+        held_out = numerator / jnp.sum(masked, axis=1, keepdims=True)
+
+        squared = (_indicator(y_block, grid) - held_out) ** 2
+        valid = (idx_block < x_train.n)[:, None]
+        return carry + jnp.sum(jnp.where(valid, squared, 0.0)), None
+
+    blocks = (x_blocks, y_blocks, idx_blocks)
+    total, _ = jax.lax.scan(jax.checkpoint(step), jnp.zeros((), dtype=x_train.con.dtype), blocks)
+    return total / (x_train.n * grid.n)
 
 
-@partial(jax.jit, static_argnames=("kernels", "solver", "n_starts", "method", "target"))
+@partial(jax.jit, static_argnames=("kernels", "solver", "n_starts", "method", "target", "chunk"))
 def select_conditional_bandwidth(
     x: MixedData | Array,
     y: MixedData | Array,
@@ -636,6 +725,7 @@ def select_conditional_bandwidth(
     n_starts: int = 3,
     method: Literal["cv_ml", "cv_ls"] = "cv_ml",
     target: Literal["density", "distribution"] = "density",
+    chunk: int | tuple[int, int] | None = None,
 ) -> SelectionResult:
     """Select a conditional bandwidth by held-out likelihood or least squares."""
     from kerneljax.selection.optimize import _multistart, lbfgs
@@ -656,7 +746,7 @@ def select_conditional_bandwidth(
 
     def objective(z: Array) -> ScalarFloat:
         bandwidth = transform.from_unconstrained(z)
-        return criterion(x_train, y_train, bandwidth, kernels=kernels)
+        return criterion(x_train, y_train, bandwidth, kernels=kernels, chunk=chunk)
 
     return _multistart(objective, transform, z0, solver, n_starts, criterion, kernels)
 
@@ -819,3 +909,10 @@ def _indicator(y_train: MixedData, grid: MixedData) -> Array:
     if y_train.spec.p_ord:
         below = below * jnp.all(y_train.orde[:, None, :] <= grid.orde[None, :, :], axis=-1)
     return below
+
+
+def _chunk_eval(chunk: int | tuple[int, int] | None) -> int | None:
+    """Resolve the evaluation axis chunk size."""
+    if isinstance(chunk, tuple):
+        return chunk[0]
+    return chunk
