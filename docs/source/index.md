@@ -89,7 +89,7 @@ user-guide/index
 examples/index
 background/index
 api
-development/contributing
+development/index
 release-notes
 development/acknowledgments
 ```

@@ -159,22 +159,9 @@ $$
 
 agrees with it when the residuals are orthogonal to the fitted deviations $\hat m(X_i)-\bar Y$. Ordinary least squares with an intercept has that projection property. A local polynomial smoother does not generally have it.
 
-The cross-validation criterion measures something different from either in-sample statistic. At the selected bandwidth it is
+The cross-validation criterion measures something different from either in-sample statistic. It is the objective minimized above, $\operatorname{CV}_{\mathrm{LS}} = n^{-1} \sum_i \bigl[Y_i - \hat m_{-i}(X_i)\bigr]^2$ evaluated at the selected bandwidth, so it measures prediction of observations excluded from their own local fit. By contrast, $\hat\sigma_{\mathrm{RMSE}}^2$ uses fitted values computed with the full sample.
 
-$$
-\operatorname{CV}_{\mathrm{LS}} = \frac{1}{n} \sum_{i=1}^{n}
-\left[Y_i - \hat m_{-i}(X_i) \right]^2,
-$$
-
-so it measures prediction of observations excluded from their own local fit. By contrast, $\hat\sigma_{\mathrm{RMSE}}^2$ uses fitted values computed with the full sample.
-
-For a fixed linear smoother, the leave-one-out residual can be written
-
-$$
-Y_i-\hat m_{-i}(X_i) = \frac{ Y_i - \hat m(X_i) }{ 1 - H_{ii} },
-$$
-
-where $H_{ii}$ is the diagonal element of the smoother matrix. This explains why leave-one-out errors are typically larger when the observation carries appreciable weight in its own fitted value, although the ordering is not a separate guarantee of the criterion itself. [Bandwidth selection](../background/selection.md#cross-validation-for-regression) derives the identity.
+For a fixed linear smoother, the leave-one-out residual is the ordinary residual inflated by $1/(1-H_{ii})$, with $H_{ii}$ the diagonal element of the smoother matrix. This explains why leave-one-out errors are typically larger when the observation carries appreciable weight in its own fitted value, although the ordering is not a separate guarantee of the criterion itself. [Bandwidth selection](../background/selection.md#cross-validation-for-regression) derives the identity.
 
 Here, $0.334907$ versus $0.537311^2 \approx 0.288703$, so the leave-one-out error is larger than the in-sample mean squared residual, as we would expect in this fit.
 
@@ -322,13 +309,7 @@ estimated = slope.grad[:, 0]
 truth = 0.35 - 2 * 0.008 * exper_grid
 ```
 
-Because the data are simulated, we also know the true derivative,
-
-$$
-\frac{\partial m}{\partial e} = 0.35 - 0.016 e,
-$$
-
-so we can compare it directly with the estimate.
+Because the data are simulated, we also know the true derivative $\partial m / \partial e = 0.35 - 0.016e$, derived alongside the wage curve on the [data page](data.md), so we can compare it directly with the estimate.
 
 ```python
 fig, ax = plt.subplots()
