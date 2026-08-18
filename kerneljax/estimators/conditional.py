@@ -347,7 +347,8 @@ def _mode_values(
         candidates = MixedData(con=jnp.zeros((n_levels, 0)), uno=empty, orde=codes, spec=y_train.spec)
 
     per_level = kweights(y_train, bandwidth.y, at=candidates, kernels=kernels)
-    probabilities = safe_div(weights_x @ per_level.T, jnp.sum(weights_x, axis=1, keepdims=True))
+    joint = jnp.matmul(weights_x, per_level.T, precision="highest")
+    probabilities = safe_div(joint, jnp.sum(weights_x, axis=1, keepdims=True))
 
     return jnp.argmax(probabilities, axis=1), jnp.max(probabilities, axis=1)
 
@@ -551,7 +552,8 @@ def cv_ls_conditional_density(
     scale = jnp.prod(bandwidth.y.h) if y_train.spec.p_con else 1.0
 
     full_sum = jnp.sum(weights_x, axis=1)
-    integrated = jnp.sum((weights_x @ convolved) * weights_x, axis=1) / (full_sum**2 * scale)
+    smoothed = jnp.matmul(weights_x, convolved, precision="highest")
+    integrated = jnp.sum(smoothed * weights_x, axis=1) / (full_sum**2 * scale)
 
     masked = weights_x * (1.0 - jnp.eye(x_train.n))
     cross = jnp.sum(masked * values, axis=1) / (jnp.sum(masked, axis=1) * scale)
@@ -618,7 +620,8 @@ def cv_ls_conditional_distribution(
 
     keep = 1.0 - jnp.eye(x_train.n)
     masked = weights_x * keep
-    held_out = (masked @ accumulated.T) / jnp.sum(masked, axis=1, keepdims=True)
+    numerator = jnp.matmul(masked, accumulated.T, precision="highest")
+    held_out = numerator / jnp.sum(masked, axis=1, keepdims=True)
 
     return jnp.mean((_indicator(y_train, grid) - held_out) ** 2)
 

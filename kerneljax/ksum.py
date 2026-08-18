@@ -385,7 +385,7 @@ def _sum_over_train(
             weights = weights * jnp.abs(jnp.sign(labels[eval_idx][:, None] - labels[None, :]))
         if v.shape[1] == 1:
             return jnp.sum(weights * v[:, 0][None, :], axis=1)[:, None]
-        return weights @ v
+        return jnp.matmul(weights, v, precision="highest")
 
     train_blocks = jax.tree.map(lambda column: _pad_rows(column, chunk_train), train)
     v_blocks = _pad_rows(v, chunk_train)
@@ -406,7 +406,7 @@ def _sum_over_train(
         weights = kweights(train_block, bw_block, at=eval_block, kernels=kernels, op=op, power=power) * mask
         if v.shape[1] == 1:
             return accumulated + jnp.sum(weights * v_block[:, 0][None, :], axis=1)[:, None], None
-        return accumulated + weights @ v_block, None
+        return accumulated + jnp.matmul(weights, v_block, precision="highest"), None
 
     initial = jnp.zeros((eval_block.n, v.shape[1]), dtype=v.dtype)
     total, _ = jax.lax.scan(jax.checkpoint(step), initial, (train_blocks, v_blocks, idx_blocks, h_blocks))
