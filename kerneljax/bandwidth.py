@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import dataclasses
-from functools import partial
 from typing import Any, Literal
 
 import jax
@@ -28,11 +27,7 @@ __all__ = [
 HAxis = Literal["shared", "eval", "train"]
 
 
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=["bandwidth", "value", "n_iter", "converged"],
-    meta_fields=["criterion", "kernels"],
-)
+@jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True)
 class SelectionResult:
     """Outcome of a bandwidth selection.
@@ -65,15 +60,11 @@ class SelectionResult:
     value: ScalarFloat
     n_iter: Array
     converged: Array
-    criterion: Any = None
-    kernels: KernelSet | None = None
+    criterion: Any = dataclasses.field(default=None, metadata=dict(static=True))
+    kernels: KernelSet | None = dataclasses.field(default=None, metadata=dict(static=True))
 
 
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=["h", "lam_uno", "lam_ord"],
-    meta_fields=["h_axis"],
-)
+@jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True)
 class Bandwidth:
     r"""Bandwidths in natural constrained scale.
@@ -121,14 +112,14 @@ class Bandwidth:
     h: FloatArray
     lam_uno: Float[Array, " p_uno"]
     lam_ord: Float[Array, " p_ord"]
-    h_axis: HAxis = "shared"
+    h_axis: HAxis = dataclasses.field(default="shared", metadata=dict(static=True))
 
     def replace(self, **changes: Any) -> Bandwidth:
         """Return a copy with the given fields replaced."""
         return dataclasses.replace(self, **changes)
 
 
-@partial(jax.tree_util.register_dataclass, data_fields=["x", "y"], meta_fields=[])
+@jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True)
 class ConditionalBandwidth:
     """A pair of bandwidth trees for the regressors and the response.

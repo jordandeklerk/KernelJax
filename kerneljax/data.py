@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import dataclasses
 import enum
-from functools import partial
 from typing import Any
 
 import jax
@@ -90,11 +89,7 @@ class ColumnSpec:
         return tuple(c for k, c in zip(self.kinds, self.n_levels, strict=True) if k is Kind.ORDERED)
 
 
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=["con", "uno", "orde"],
-    meta_fields=["spec"],
-)
+@jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True)
 class MixedData:
     r"""A mixed-type design matrix held as three dense blocks.
@@ -116,7 +111,7 @@ class MixedData:
     con: Float[Array, "n p_con"]
     uno: Int[Array, "n p_uno"]
     orde: Int[Array, "n p_ord"]
-    spec: ColumnSpec
+    spec: ColumnSpec = dataclasses.field(metadata=dict(static=True))
 
     @property
     def n(self) -> int:
