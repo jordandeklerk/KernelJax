@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import dataclasses
-from functools import partial
 from typing import Literal
 
 import jax
@@ -17,11 +16,7 @@ from kerneljax.typing import Array, ScalarFloat
 __all__ = ["ConditionalFit", "DensityFit", "DistributionFit", "LocalPolyFit", "ModeFit", "QuantileFit"]
 
 
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=["mean", "grad", "coef", "rcond", "bandwidth", "se", "selection", "r_squared", "residual_se"],
-    meta_fields=["degree", "kernels", "spec", "n_train"],
-)
+@jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True)
 class LocalPolyFit:
     r"""Result of a local polynomial regression fit.
@@ -90,19 +85,15 @@ class LocalPolyFit:
     bandwidth: Bandwidth
     se: Float[Array, " n_eval"] | None
     selection: SelectionResult | None = None
-    degree: int = 1
-    kernels: KernelSet = dataclasses.field(default_factory=KernelSet)
-    spec: ColumnSpec | None = None
-    n_train: int = 0
+    degree: int = dataclasses.field(default=1, metadata=dict(static=True))
+    kernels: KernelSet = dataclasses.field(default_factory=KernelSet, metadata=dict(static=True))
+    spec: ColumnSpec | None = dataclasses.field(default=None, metadata=dict(static=True))
+    n_train: int = dataclasses.field(default=0, metadata=dict(static=True))
     r_squared: ScalarFloat | None = None
     residual_se: ScalarFloat | None = None
 
 
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=["value", "bandwidth", "selection"],
-    meta_fields=["kernels", "spec", "n_train"],
-)
+@jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True)
 class DensityFit:
     """Result of a mixed-type density estimate.
@@ -127,16 +118,12 @@ class DensityFit:
     value: Float[Array, " n_eval"]
     bandwidth: Bandwidth
     selection: SelectionResult | None = None
-    kernels: KernelSet = dataclasses.field(default_factory=KernelSet)
-    spec: ColumnSpec | None = None
-    n_train: int = 0
+    kernels: KernelSet = dataclasses.field(default_factory=KernelSet, metadata=dict(static=True))
+    spec: ColumnSpec | None = dataclasses.field(default=None, metadata=dict(static=True))
+    n_train: int = dataclasses.field(default=0, metadata=dict(static=True))
 
 
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=["value", "se", "bandwidth", "selection"],
-    meta_fields=["kernels", "spec", "n_train"],
-)
+@jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True)
 class DistributionFit:
     """Result of a mixed-type cumulative distribution estimate.
@@ -164,16 +151,12 @@ class DistributionFit:
     se: Float[Array, " n_eval"]
     bandwidth: Bandwidth
     selection: SelectionResult | None = None
-    kernels: KernelSet = dataclasses.field(default_factory=KernelSet)
-    spec: ColumnSpec | None = None
-    n_train: int = 0
+    kernels: KernelSet = dataclasses.field(default_factory=KernelSet, metadata=dict(static=True))
+    spec: ColumnSpec | None = dataclasses.field(default=None, metadata=dict(static=True))
+    n_train: int = dataclasses.field(default=0, metadata=dict(static=True))
 
 
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=["value", "bandwidth", "selection"],
-    meta_fields=["kernels", "x_spec", "y_spec", "n_train", "target"],
-)
+@jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True)
 class ConditionalFit:
     """Result of a conditional density or conditional distribution estimate.
@@ -202,18 +185,14 @@ class ConditionalFit:
     value: Float[Array, " n_eval"]
     bandwidth: ConditionalBandwidth
     selection: SelectionResult | None = None
-    kernels: KernelSet = dataclasses.field(default_factory=KernelSet)
-    x_spec: ColumnSpec | None = None
-    y_spec: ColumnSpec | None = None
-    n_train: int = 0
-    target: Literal["density", "distribution"] = "density"
+    kernels: KernelSet = dataclasses.field(default_factory=KernelSet, metadata=dict(static=True))
+    x_spec: ColumnSpec | None = dataclasses.field(default=None, metadata=dict(static=True))
+    y_spec: ColumnSpec | None = dataclasses.field(default=None, metadata=dict(static=True))
+    n_train: int = dataclasses.field(default=0, metadata=dict(static=True))
+    target: Literal["density", "distribution"] = dataclasses.field(default="density", metadata=dict(static=True))
 
 
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=["value", "bandwidth", "selection"],
-    meta_fields=["tau", "kernels", "x_spec", "y_spec", "n_train"],
-)
+@jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True)
 class QuantileFit:
     """Result of a conditional quantile regression.
@@ -242,19 +221,15 @@ class QuantileFit:
 
     value: Float[Array, " n_eval"]
     bandwidth: ConditionalBandwidth
-    tau: float = 0.5
+    tau: float = dataclasses.field(default=0.5, metadata=dict(static=True))
     selection: SelectionResult | None = None
-    kernels: KernelSet = dataclasses.field(default_factory=KernelSet)
-    x_spec: ColumnSpec | None = None
-    y_spec: ColumnSpec | None = None
-    n_train: int = 0
+    kernels: KernelSet = dataclasses.field(default_factory=KernelSet, metadata=dict(static=True))
+    x_spec: ColumnSpec | None = dataclasses.field(default=None, metadata=dict(static=True))
+    y_spec: ColumnSpec | None = dataclasses.field(default=None, metadata=dict(static=True))
+    n_train: int = dataclasses.field(default=0, metadata=dict(static=True))
 
 
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=["value", "density", "bandwidth", "accuracy", "selection"],
-    meta_fields=["kernels", "x_spec", "y_spec", "n_train"],
-)
+@jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True)
 class ModeFit:
     """Result of a conditional mode estimate over a categorical response.
@@ -288,7 +263,7 @@ class ModeFit:
     bandwidth: ConditionalBandwidth
     accuracy: ScalarFloat | None = None
     selection: SelectionResult | None = None
-    kernels: KernelSet = dataclasses.field(default_factory=KernelSet)
-    x_spec: ColumnSpec | None = None
-    y_spec: ColumnSpec | None = None
-    n_train: int = 0
+    kernels: KernelSet = dataclasses.field(default_factory=KernelSet, metadata=dict(static=True))
+    x_spec: ColumnSpec | None = dataclasses.field(default=None, metadata=dict(static=True))
+    y_spec: ColumnSpec | None = dataclasses.field(default=None, metadata=dict(static=True))
+    n_train: int = dataclasses.field(default=0, metadata=dict(static=True))

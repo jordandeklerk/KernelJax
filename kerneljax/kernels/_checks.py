@@ -15,17 +15,17 @@ _passed: set[tuple[str, object]] = set()
 
 
 def _u_grid(span: float = 256.0, step: float = 1.0 / 128.0) -> np.ndarray:
-    """Build the probe grid in u units, wide enough that a Cauchy tail clears every tolerance."""
+    """Build a probe grid in u units wide enough that a Cauchy tail clears every tolerance."""
     return np.linspace(-span, span, round(2.0 * span / step) + 1)
 
 
 def _conv_offsets(reach: float = 8.0, spacing: float = 0.25) -> np.ndarray:
-    """Build the offsets conv is compared at, dense enough to sit near any truncation edge."""
+    """Build offsets for the conv comparison dense enough to sit near any truncation edge."""
     return np.arange(-reach, reach + spacing, spacing)
 
 
 def _mass(method: Callable[..., Array], h: float) -> float:
-    """Integrate a kernel operator in u units, through the substitution the estimator performs."""
+    """Integrate a kernel operator in u units through the substitution the estimator performs."""
     grid = _u_grid()
     values = method(jnp.asarray(0.0), jnp.asarray(-h * grid), jnp.asarray(h))
     return float(np.trapezoid(np.asarray(values, dtype=np.float64), grid))
@@ -73,7 +73,7 @@ def _check_value_mass(kernel: ContinuousKernel, *, tol: float = 1.0 / 48.0) -> N
 
 
 def _check_conv_at_zero(kernel: ContinuousKernel, *, tol: float = 1.0 / 48.0) -> None:
-    """Refuse a conv whose value at zero is not R(k), which is all a standard error consumes."""
+    """Refuse a conv whose value at zero is not the R(k) a standard error consumes."""
     key = ("conv_at_zero", kernel)
     if key in _passed:
         return
@@ -95,7 +95,7 @@ def _check_conv_at_zero(kernel: ContinuousKernel, *, tol: float = 1.0 / 48.0) ->
 
 
 def _check_conv_matches(kernel: ContinuousKernel, *, tol: float = 1e-3) -> None:
-    """Refuse a conv that is not the self-convolution of value, compared pointwise."""
+    """Refuse a conv that does not match the self-convolution of value pointwise."""
     key = ("conv_matches", kernel)
     if key in _passed:
         return

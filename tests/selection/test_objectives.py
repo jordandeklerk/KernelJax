@@ -281,6 +281,28 @@ def test_aic_c_matches_hand_built_shortcut_trace(cv_mixed_data, cv_mixed_bandwid
     assert float(got) == pytest.approx(float(want), rel=1e-6)
 
 
+@pytest.mark.parametrize("h_axis", ["train", "eval"])
+def test_aic_c_per_row_bandwidth_matches_shortcut_trace(
+    cv_mixed_data, cv_mixed_bandwidth, regression_mixed_response, h_axis
+):
+    n = cv_mixed_data.n
+    width = cv_mixed_bandwidth.h.shape[-1]
+    rows = jnp.full((n, width), float(cv_mixed_bandwidth.h[0])) * (1.0 + 0.01 * jnp.arange(n)[:, None])
+    bw = cv_mixed_bandwidth.replace(h=rows, h_axis=h_axis)
+
+    weights = np.asarray(kweights(cv_mixed_data, bw))
+    row_sum = weights.sum(axis=1)
+    response = np.asarray(regression_mixed_response)
+    mean_full = (weights @ response) / row_sum
+    sigma_squared = np.mean((response - mean_full) ** 2)
+    trace = np.sum(np.diagonal(weights) / row_sum)
+    penalty = (1.0 + trace / n) / (1.0 - (trace + 2.0) / n)
+    want = np.log(sigma_squared) + penalty
+
+    got = aic_c_regression(cv_mixed_data, bw, y=regression_mixed_response, degree=0)
+    assert float(got) == pytest.approx(float(want), rel=1e-6)
+
+
 def test_penalty_matches_formula_when_valid():
     n = 15
     trace = jnp.asarray(7.0)

@@ -566,3 +566,10 @@ def test_se_gradient_is_finite_at_zero_response_variance(probe_x, probe_bw):
 
     grad = jax.grad(objective)(0.3)
     assert bool(jnp.isfinite(grad))
+
+
+def test_local_poly_accepts_a_python_list_response(poly_train, poly_bandwidth, poly_response):
+    from_list = local_poly(poly_train, list(np.asarray(poly_response)), poly_bandwidth)
+    from_array = local_poly(poly_train, poly_response, poly_bandwidth)
+
+    np.testing.assert_allclose(np.asarray(from_list.mean), np.asarray(from_array.mean), rtol=1e-6)

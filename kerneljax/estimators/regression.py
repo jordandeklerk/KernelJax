@@ -17,8 +17,8 @@ from kerneljax.kernels import KernelSet
 from kerneljax.kernels._checks import _check_conv_at_zero, _check_grad_diagonal
 from kerneljax.kernels._numerics import safe_div
 from kerneljax.kernels.sets import _resolve_kernels
-from kerneljax.ksum import _pad_index, _pad_rows, kweights
-from kerneljax.linalg import wls
+from kerneljax.ksum import _pad_index, _pad_rows, _spec_mismatch, kweights
+from kerneljax.linalg import hat_diagonal, wls
 from kerneljax.selection.criteria import RegressionCriterion
 from kerneljax.selection.optimize import select_bandwidth
 from kerneljax.typing import Array, FloatArray
@@ -200,6 +200,7 @@ def local_poly(
     """
     kernels = _resolve_kernels(kernels, getattr(bw, "kernels", None))
     train = _as_points(train)
+    y = jnp.asarray(y)
     if train.spec.p_con:
         if isinstance(bw, str) and bw != "normal_reference":
             _check_grad_diagonal(kernels.continuous, "value")
@@ -235,7 +236,7 @@ def local_poly(
     p_con = train.spec.p_con
 
     if evaluate.spec.kinds != train.spec.kinds or evaluate.spec.n_levels != train.spec.n_levels:
-        raise ValueError("train and at must share the same column kinds and level counts")
+        raise ValueError(_spec_mismatch(train.spec, evaluate.spec))
 
     if chunk is None:
         chunk_eval, chunk_train = None, None
@@ -244,7 +245,7 @@ def local_poly(
     else:
         chunk_eval, chunk_train = chunk, None
 
-    mean, coef, rcond, grad, se_value, r_squared, residual_se = _fit_values(
+    mean, coef, rcond, grad, se_value, r_squared, residual_se, _ = _fit_values(
         train,
         bandwidth,
         y,
@@ -280,7 +281,7 @@ def local_poly(
 
 
 def _resolve_degree(explicit: int | None, carried: int | None) -> int:
-    """Settle on one degree, refusing an explicit value that contradicts a carried one."""
+    """Settle on one degree and refuse an explicit value that contradicts a carried one."""
     if explicit is None:
         return 0 if carried is None else carried
 
@@ -299,7 +300,7 @@ def _resolve_bandwidth(
     n_starts: int,
     chunk: int | tuple[int, int] | None,
 ) -> tuple[Bandwidth, SelectionResult | None, int]:
-    """Turn any accepted ``bw`` into a bandwidth, the selection behind it, and a degree."""
+    """Turn any accepted ``bw`` into the underlying bandwidth and selection and degree."""
     if isinstance(bw, Bandwidth):
         return bw, None, _resolve_degree(degree, None)
 
@@ -391,7 +392,7 @@ def _moments(
     row_index: Array,
     chunk_train: int | None,
 ) -> tuple[Array, Array, Array]:
-    """Form the weighted design moments for a single evaluation point, chunking the training axis when asked."""
+    """Form the weighted design moments for a single evaluation point."""
     if chunk_train is None:
         weights = kweights(train, bw, at=at_row, kernels=kernels)[0]
         if fold is not None:
@@ -447,10 +448,11 @@ def _fit_point(
     fold: Array | None,
     gradient: bool,
     se: bool,
+    leverage: bool,
     penalty: FloatArray | float,
     chunk_train: int | None,
     p_con: int,
-) -> tuple[Array, Array, Array, Array | None, Array | None]:
+) -> tuple[Array, Array, Array, Array | None, Array | None, Array | None]:
     """Solve the weighted least squares moments for a single evaluation point."""
     at_row = MixedData(con=con_row[None, :], uno=uno_row[None, :], orde=orde_row[None, :], spec=train.spec)
     bw_row = bw if h_row is None else bw.replace(h=h_row, h_axis="shared")
@@ -480,12 +482,34 @@ def _fit_point(
         positive = variance_term > 0.0
         se_value = jnp.where(positive, jnp.sqrt(jnp.where(positive, variance_term, 1.0)), 0.0)
 
-    return fit.coef[0], fit.coef, fit.rcond, grad, se_value
+    lev = None
+    if leverage:
+        if h_row is not None:
+            self_bw = bw_row
+        elif bw.h_axis == "train":
+            self_bw = bw.replace(h=bw.h[row_index], h_axis="shared")
+        else:
+            self_bw = bw
+        onehot = jnp.zeros_like(fit.coef).at[0].set(1.0)
+        weight_self = kweights(at_row, self_bw, kernels=kernels)[0, 0]
+        lev = hat_diagonal(fit.cho, onehot, weight_self)
+
+    return fit.coef[0], fit.coef, fit.rcond, grad, se_value, lev
 
 
 @partial(
     jax.jit,
-    static_argnames=("basis", "kernels", "gradient", "se", "chunk_eval", "chunk_train", "p_con", "compare_to_y"),
+    static_argnames=(
+        "basis",
+        "kernels",
+        "gradient",
+        "se",
+        "leverage",
+        "chunk_eval",
+        "chunk_train",
+        "p_con",
+        "compare_to_y",
+    ),
 )
 def _fit_values(
     train: MixedData,
@@ -503,7 +527,8 @@ def _fit_values(
     chunk_train: int | None,
     p_con: int,
     compare_to_y: bool,
-) -> tuple[Array, Array, Array, Array | None, Array | None, Array | None, Array | None]:
+    leverage: bool = False,
+) -> tuple[Array, Array, Array, Array | None, Array | None, Array | None, Array | None, Array | None]:
     """Fit every evaluation point.
 
     Parameters
@@ -537,33 +562,62 @@ def _fit_values(
     compare_to_y : bool
         Whether the fit sits on its own training points, so fitted and
         observed values line up and can be compared. Static.
+    leverage : bool
+        Whether to return the hat diagonal of every evaluation point. Static.
 
     Returns
     -------
     tuple
         The fitted mean, the coefficients, the reciprocal condition
         estimate, the derivative rows, the standard errors, the squared
-        correlation with the response and the root mean squared residual.
+        correlation with the response, the root mean squared residual and
+        the hat diagonal.
     """
     if chunk_eval is None:
         eval_idx = jnp.arange(evaluate.n)
-        mean, coef, rcond, grad, se_value = _fit_block(
-            train, bandwidth, y, evaluate, eval_idx, basis, kernels, fold, gradient, se, penalty, chunk_train, p_con
+        mean, coef, rcond, grad, se_value, lev = _fit_block(
+            train,
+            bandwidth,
+            y,
+            evaluate,
+            eval_idx,
+            basis,
+            kernels,
+            fold,
+            gradient,
+            se,
+            leverage,
+            penalty,
+            chunk_train,
+            p_con,
         )
     else:
-        mean, coef, rcond, grad, se_value = _fit_eval_chunks(
-            train, bandwidth, y, evaluate, basis, kernels, fold, gradient, se, penalty, chunk_eval, chunk_train, p_con
+        mean, coef, rcond, grad, se_value, lev = _fit_eval_chunks(
+            train,
+            bandwidth,
+            y,
+            evaluate,
+            basis,
+            kernels,
+            fold,
+            gradient,
+            se,
+            leverage,
+            penalty,
+            chunk_eval,
+            chunk_train,
+            p_con,
         )
 
     if not compare_to_y:
-        return mean, coef, rcond, grad, se_value, None, None
+        return mean, coef, rcond, grad, se_value, None, None, lev
 
     centered = y - jnp.mean(y)
     predicted = mean - jnp.mean(y)
     covariance = jnp.sum(centered * predicted)
     r_squared = covariance * covariance / (jnp.sum(centered**2) * jnp.sum(predicted**2))
 
-    return mean, coef, rcond, grad, se_value, r_squared, jnp.sqrt(jnp.mean((y - mean) ** 2))
+    return mean, coef, rcond, grad, se_value, r_squared, jnp.sqrt(jnp.mean((y - mean) ** 2)), lev
 
 
 def _fit_block(
@@ -577,16 +631,17 @@ def _fit_block(
     fold: Array | None,
     gradient: bool,
     se: bool,
+    leverage: bool,
     penalty: FloatArray | float,
     chunk_train: int | None,
     p_con: int,
-) -> tuple[Array, Array, Array, Array | None, Array | None]:
+) -> tuple[Array, Array, Array, Array | None, Array | None, Array | None]:
     """Fit every point of one evaluation block by vmapping the per-point weighted solve."""
     h_rows = bw.h if bw.h_axis == "eval" else None
 
     def step(
         con_row: Array, uno_row: Array, orde_row: Array, row_index: Array, h_row: Array | None
-    ) -> tuple[Array, Array, Array, Array | None, Array | None]:
+    ) -> tuple[Array, Array, Array, Array | None, Array | None, Array | None]:
         return _fit_point(
             train,
             bw,
@@ -601,6 +656,7 @@ def _fit_block(
             fold,
             gradient,
             se,
+            leverage,
             penalty,
             chunk_train,
             p_con,
@@ -620,12 +676,13 @@ def _fit_eval_chunks(
     fold: Array | None,
     gradient: bool,
     se: bool,
+    leverage: bool,
     penalty: FloatArray | float,
     chunk_eval: int,
     chunk_train: int | None,
     p_con: int,
-) -> tuple[Array, Array, Array, Array | None, Array | None]:
-    """Chunk the evaluation axis, fitting each block before dropping the padded tail."""
+) -> tuple[Array, Array, Array, Array | None, Array | None, Array | None]:
+    """Chunk the evaluation axis and fit each block before dropping the padded tail."""
     eval_blocks = jax.tree.map(lambda column: _pad_rows(column, chunk_eval), evaluate)
     idx_blocks = _pad_index(jnp.arange(evaluate.n), evaluate.n, chunk_eval)
     h_blocks = _pad_rows(bw.h, chunk_eval) if bw.h_axis == "eval" else None
@@ -636,12 +693,62 @@ def _fit_eval_chunks(
         eval_block, idx_block, h_block = block
         bw_block = bw if h_block is None else bw.replace(h=h_block)
         result = _fit_block(
-            train, bw_block, y, eval_block, idx_block, basis, kernels, fold, gradient, se, penalty, chunk_train, p_con
+            train,
+            bw_block,
+            y,
+            eval_block,
+            idx_block,
+            basis,
+            kernels,
+            fold,
+            gradient,
+            se,
+            leverage,
+            penalty,
+            chunk_train,
+            p_con,
         )
         return carry, result
 
     _, stacked = jax.lax.scan(jax.checkpoint(step), None, (eval_blocks, idx_blocks, h_blocks))
 
     trimmed = jax.tree.map(lambda leaf: leaf.reshape(-1, *leaf.shape[2:])[: evaluate.n], stacked)
-    mean, coef, rcond, grad, se_value = trimmed
-    return mean, coef, rcond, grad, se_value
+    mean, coef, rcond, grad, se_value, lev = trimmed
+    return mean, coef, rcond, grad, se_value, lev
+
+
+def _criterion_fit(
+    train: MixedData,
+    bw: Bandwidth,
+    y: Array,
+    kernels: KernelSet,
+    degree: int,
+    chunk: int | tuple[int, int] | None,
+) -> tuple[Array, Array]:
+    """Fit the training sample and its hat diagonal in a single pass."""
+    if chunk is None:
+        chunk_eval, chunk_train = None, None
+    elif isinstance(chunk, tuple):
+        chunk_eval, chunk_train = chunk
+    else:
+        chunk_eval, chunk_train = chunk, None
+
+    mean, _, _, _, _, _, _, leverages = _fit_values(
+        train,
+        bw,
+        y,
+        train,
+        None,
+        0.0,
+        basis=LocalPolyBasis(degree=degree),
+        kernels=kernels,
+        gradient=False,
+        se=False,
+        chunk_eval=chunk_eval,
+        chunk_train=chunk_train,
+        p_con=train.spec.p_con,
+        compare_to_y=False,
+        leverage=True,
+    )
+    _require_usable(bw)
+    return mean, leverages

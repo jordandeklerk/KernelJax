@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import dataclasses
-from functools import partial
 
 import jax
 import jax.numpy as jnp
@@ -15,7 +14,7 @@ from kerneljax.typing import Array, FloatArray, ScalarFloat
 __all__ = ["WLS", "hat_diagonal", "wls"]
 
 
-@partial(jax.tree_util.register_dataclass, data_fields=["coef", "cho", "ok", "rcond"], meta_fields=[])
+@jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True)
 class WLS:
     """Solution of a weighted least squares moment system.

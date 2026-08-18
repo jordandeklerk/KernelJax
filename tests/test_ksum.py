@@ -200,3 +200,10 @@ def test_fold_labels_beyond_float32_range_stay_distinct(ksum_data, ksum_bandwidt
     got = ksum(ksum_data, ksum_bandwidth, v, fold=large, chunk=chunk)
 
     np.testing.assert_allclose(np.asarray(got), np.asarray(reference), rtol=1e-6)
+
+
+def test_spec_mismatch_error_names_both_specs(ksum_data, ksum_bandwidth):
+    points = MixedData.continuous(jnp.zeros((4, 1)))
+
+    with pytest.raises(ValueError, match="train has kinds"):
+        kweights(ksum_data, ksum_bandwidth, at=points)

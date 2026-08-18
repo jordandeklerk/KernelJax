@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import dataclasses
 import enum
-from functools import partial
 from typing import Any
 
 import jax
@@ -81,20 +80,16 @@ class ColumnSpec:
 
     @property
     def uno_levels(self) -> tuple[int, ...]:
-        """Level counts of the unordered columns, in block order."""
+        """Level counts of the unordered columns in block order."""
         return tuple(c for k, c in zip(self.kinds, self.n_levels, strict=True) if k is Kind.UNORDERED)
 
     @property
     def ord_levels(self) -> tuple[int, ...]:
-        """Level counts of the ordered columns, in block order."""
+        """Level counts of the ordered columns in block order."""
         return tuple(c for k, c in zip(self.kinds, self.n_levels, strict=True) if k is Kind.ORDERED)
 
 
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=["con", "uno", "orde"],
-    meta_fields=["spec"],
-)
+@jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True)
 class MixedData:
     r"""A mixed-type design matrix held as three dense blocks.
@@ -116,7 +111,7 @@ class MixedData:
     con: Float[Array, "n p_con"]
     uno: Int[Array, "n p_uno"]
     orde: Int[Array, "n p_ord"]
-    spec: ColumnSpec
+    spec: ColumnSpec = dataclasses.field(metadata=dict(static=True))
 
     @property
     def n(self) -> int:
@@ -178,7 +173,10 @@ class MixedData:
         blocks = [b for b in (continuous, unordered, ordered) if b is not None]
         if not blocks:
             raise ValueError("at least one of continuous, unordered or ordered must be given")
-        n = jnp.asarray(blocks[0]).shape[0]
+        first = jnp.asarray(blocks[0])
+        if first.ndim == 0:
+            raise ValueError("blocks must have shape (n,) or (n, p), got a scalar")
+        n = first.shape[0]
 
         con_a = jnp.zeros((n, 0)) if continuous is None else jnp.asarray(continuous)
         floating = con_a.dtype if jnp.issubdtype(con_a.dtype, jnp.floating) else jnp.result_type(float)
@@ -367,7 +365,7 @@ def grid(
 
 
 def quantile_grid(data: MixedData | Array, *, n: int = 100) -> MixedData:
-    r"""Build evaluation points at evenly spaced probabilities, one point per probability.
+    r"""Build evaluation points at evenly spaced probabilities.
 
     Every column is evaluated at the same vector of probabilities
     :math:`p_1, \ldots, p_n` spanning the unit interval, so point :math:`j` is
@@ -466,7 +464,7 @@ def _reject_overwide_broadcast(levels: int, block: Array, label: str) -> None:
 
 
 def _as_points(data: MixedData | Array, spec: ColumnSpec | None = None) -> MixedData:
-    """Promote a raw array to a purely continuous sample, leaving a ``MixedData`` untouched."""
+    """Promote a raw array to a purely continuous sample and pass a ``MixedData`` through untouched."""
     if isinstance(data, MixedData):
         return data
 
@@ -490,7 +488,7 @@ def _swept_column(spec: ColumnSpec, vary: int | str) -> int:
 
 
 def _sweep_range(column: Array, trim: float) -> tuple[Array, Array]:
-    """Bounds of a swept continuous column, pulled inward or pushed past the sample."""
+    """Bounds of a swept continuous column pulled inward or pushed past the sample."""
     if trim < 0.0:
         edge = abs(trim)
         lowest, inner_low, inner_high, highest = jnp.quantile(

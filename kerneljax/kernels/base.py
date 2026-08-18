@@ -10,7 +10,7 @@ __all__ = ["ContinuousKernel", "Op", "OrderedKernel", "UnorderedKernel"]
 
 
 class Op:
-    """Operator names, resolved on a kernel instance by ``getattr``."""
+    """Operator names resolved on a kernel instance by ``getattr``."""
 
     VALUE = "value"
     DERIV = "deriv"
@@ -55,7 +55,7 @@ class ContinuousKernel(abc.ABC):
         raise NotImplementedError(f"{type(self).__name__} does not implement cdf")
 
     def conv(self, x: FloatArray, y: FloatArray, h: FloatArray) -> FloatArray:
-        """Convolve the kernel with itself, evaluated at ``x`` and ``y``."""
+        """Evaluate the self-convolution of the kernel at ``x`` and ``y``."""
         raise NotImplementedError(f"{type(self).__name__} does not implement conv")
 
 

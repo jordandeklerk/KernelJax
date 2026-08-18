@@ -348,3 +348,8 @@ def test_from_blocks_level_inference_under_jit_names_the_fix():
 
     with pytest.raises(ValueError, match="unordered_levels"):
         build(codes)
+
+
+def test_from_blocks_refuses_a_scalar_block():
+    with pytest.raises(ValueError, match="got a scalar"):
+        MixedData.from_blocks(continuous=jnp.asarray(3.0))

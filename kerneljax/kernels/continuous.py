@@ -117,7 +117,7 @@ class Gaussian(ContinuousKernel):
         return jax.scipy.special.ndtr((x - y) / h)
 
     def conv(self, x: FloatArray, y: FloatArray, h: FloatArray) -> FloatArray:
-        r"""Evaluate the self-convolution of the kernel, unnormalized.
+        r"""Evaluate the unnormalized self-convolution of the kernel.
 
         With :math:`u = (x - y) / h`, this returns
 

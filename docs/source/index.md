@@ -87,7 +87,6 @@ API.
 install
 user-guide/index
 performance
-examples/index
 background/index
 api
 development/index

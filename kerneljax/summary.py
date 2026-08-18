@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import dataclasses
 import inspect
-from functools import partial
 
 import jax
 import jax.numpy as jnp
@@ -18,21 +17,7 @@ from kerneljax.typing import Array, ScalarFloat
 __all__ = ["Summary", "summary"]
 
 
-@partial(
-    jax.tree_util.register_dataclass,
-    data_fields=[
-        "bandwidth",
-        "criterion_value",
-        "converged",
-        "n_iter",
-        "r_squared",
-        "accuracy",
-        "residual_se",
-        "log_likelihood",
-        "response_bandwidth",
-    ],
-    meta_fields=["label", "method", "degree", "n_train", "spec", "kernels", "response_spec"],
-)
+@jax.tree_util.register_dataclass
 @dataclasses.dataclass(frozen=True, repr=False)
 class Summary:
     """Goodness of fit measures for a fitted estimator.
@@ -82,12 +67,12 @@ class Summary:
         Bandwidth for the response block, set only for a conditional estimate.
     """
 
-    label: str
-    method: str | None
-    degree: int | None
-    n_train: int
-    spec: ColumnSpec
-    kernels: KernelSet
+    label: str = dataclasses.field(metadata=dict(static=True))
+    method: str | None = dataclasses.field(metadata=dict(static=True))
+    degree: int | None = dataclasses.field(metadata=dict(static=True))
+    n_train: int = dataclasses.field(metadata=dict(static=True))
+    spec: ColumnSpec = dataclasses.field(metadata=dict(static=True))
+    kernels: KernelSet = dataclasses.field(metadata=dict(static=True))
     bandwidth: Bandwidth
     criterion_value: ScalarFloat | None
     converged: Array | None
@@ -96,7 +81,7 @@ class Summary:
     residual_se: ScalarFloat | None
     log_likelihood: ScalarFloat | None
     accuracy: ScalarFloat | None = None
-    response_spec: ColumnSpec | None = None
+    response_spec: ColumnSpec | None = dataclasses.field(default=None, metadata=dict(static=True))
     response_bandwidth: Bandwidth | None = None
 
     def __repr__(self) -> str:
@@ -267,7 +252,7 @@ def _row(name: str, value: object) -> str:
 
 
 def _number(value: object) -> str:
-    """Render a value for the report, degrading to plain text for a tracer."""
+    """Render a value for the report and degrade to plain text for a tracer."""
     if isinstance(value, jax.Array) and jnp.issubdtype(value.dtype, jnp.bool_):
         return str(value)
 
@@ -284,7 +269,7 @@ def _number(value: object) -> str:
 
 
 def _criterion_name(criterion: object) -> str | None:
-    """Name the selection rule, falling back to the class for a criterion the caller wrote."""
+    """Name the selection rule and fall back to the class for a criterion the caller wrote."""
     if criterion is None:
         return None
     method = getattr(criterion, "method", None)
@@ -302,7 +287,7 @@ def _estimator_name(degree: int) -> str:
 
 
 def _kernel_name(kernels: KernelSet) -> str:
-    """Name the continuous kernel family, with its order or whatever else parameterizes it."""
+    """Name the continuous kernel family with whatever parameterizes it."""
     kernel = kernels.continuous
     name = type(kernel).__name__
 

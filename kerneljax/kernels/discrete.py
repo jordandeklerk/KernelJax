@@ -81,7 +81,7 @@ class AitchisonAitken(UnorderedKernel):
         return jnp.where(x == y, equal, unequal)
 
     def upper_bound(self, levels: int) -> float:
-        r"""Largest admissible :math:`\lambda`, equal to :math:`(c - 1) / c`.
+        r""":math:`(c - 1) / c` as the largest admissible :math:`\lambda`.
 
         Parameters
         ----------
@@ -208,7 +208,7 @@ class WangVanRyzin(OrderedKernel):
         return a * a * (safe_pow(lam, d) * (d + 3.0) + jnp.where(d == 0, 1.0, 0.0)) + safe_pow(lam, d) * cross
 
     def upper_bound(self, levels: int) -> float:
-        r"""Largest admissible :math:`\lambda`, equal to ``1``.
+        r"""``1`` as the largest admissible :math:`\lambda`.
 
         Parameters
         ----------
@@ -337,7 +337,7 @@ class LiRacine(OrderedKernel):
         return safe_pow(lam, d) * (c * c * (d + 1.0) + cross)
 
     def upper_bound(self, levels: int) -> float:
-        r"""Largest admissible :math:`\lambda`, equal to ``1``.
+        r"""``1`` as the largest admissible :math:`\lambda`.
 
         Parameters
         ----------

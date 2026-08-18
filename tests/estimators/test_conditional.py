@@ -445,3 +445,32 @@ def test_the_selector_reuses_its_compilation(conditional_sample):
     first = select_conditional_bandwidth(x, y, n_starts=1)
     second = select_conditional_bandwidth(x, y, n_starts=1)
     assert float(first.bandwidth.x.h[0]) == float(second.bandwidth.x.h[0])
+
+
+@pytest.mark.parametrize("chunk", [16, (16, 99)])
+@pytest.mark.parametrize(
+    "criterion",
+    [cv_ml_conditional, cv_ls_conditional_density, cv_ls_conditional_distribution],
+)
+def test_chunked_criterion_matches_unchunked(conditional_sample, conditional_bandwidth, criterion, chunk):
+    x, y = conditional_sample
+
+    def value(hx, chunk):
+        bandwidth = ConditionalBandwidth(x=conditional_bandwidth.x.replace(h=hx), y=conditional_bandwidth.y)
+        return criterion(x, y, bandwidth, chunk=chunk)
+
+    v0, g0 = jax.value_and_grad(value)(conditional_bandwidth.x.h, None)
+    v1, g1 = jax.value_and_grad(value)(conditional_bandwidth.x.h, chunk)
+
+    np.testing.assert_allclose(np.asarray(v1), np.asarray(v0), rtol=2e-6)
+    np.testing.assert_allclose(np.asarray(g1), np.asarray(g0), rtol=2e-5)
+
+
+def test_chunked_selection_matches_unchunked(conditional_sample):
+    x, y = conditional_sample
+
+    full = select_conditional_bandwidth(x, y, method="cv_ml")
+    chunked = select_conditional_bandwidth(x, y, method="cv_ml", chunk=16)
+
+    np.testing.assert_allclose(np.asarray(chunked.bandwidth.x.h), np.asarray(full.bandwidth.x.h), rtol=1e-4)
+    np.testing.assert_allclose(np.asarray(chunked.value), np.asarray(full.value), rtol=1e-5)
