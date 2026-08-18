@@ -253,7 +253,8 @@ def cquantile(
         a selection rule, either ``"cv_ls"`` or ``"normal_reference"``. The
         bandwidth is the one a conditional distribution uses.
     tau : float
-        The quantile level in the open unit interval. Static.
+        The quantile level in the open unit interval. Traced, so varying it
+        reuses the compiled inversion.
     at_x : MixedData or Array, optional
         Conditioning evaluation points. Defaults to ``x``.
     kernels : KernelSet, optional
