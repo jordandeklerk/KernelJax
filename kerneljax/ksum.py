@@ -627,7 +627,7 @@ def _h_divisor(bw: Bandwidth, ops: tuple[str, ...]) -> Array:
         return jnp.asarray(1.0)
 
     exponents = jnp.asarray([_divisor_exponent(name) for name in ops], dtype=bw.h.dtype)
-    powers = bw.h**exponents
+    powers = bw.h ** jnp.reshape(exponents, (1,) * (bw.h.ndim - 1) + (-1,))
 
     if bw.h_axis == "shared":
         return jnp.prod(powers)

@@ -183,3 +183,18 @@ def test_checkify_surfaces_a_bad_bandwidth_inside_jit():
 
     with pytest.raises(checkify.JaxRuntimeError, match="finite and positive"):
         err.throw()
+
+
+def test_selection_start_keeps_float32_data_in_float32_under_x64(float64_enabled):
+    import numpy as np
+
+    rng = np.random.default_rng(3)
+    data = MixedData.from_blocks(
+        continuous=rng.normal(size=20).astype(np.float32),
+        unordered=rng.integers(0, 3, 20),
+        unordered_levels=3,
+    )
+    start = _search_start(data, KernelSet())
+
+    assert start.h.dtype == jnp.float32
+    assert start.lam_uno.dtype == jnp.float32

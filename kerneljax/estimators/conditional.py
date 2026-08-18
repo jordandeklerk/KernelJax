@@ -555,7 +555,7 @@ def cv_ls_conditional_density(
     smoothed = jnp.matmul(weights_x, convolved, precision="highest")
     integrated = jnp.sum(smoothed * weights_x, axis=1) / (full_sum**2 * scale)
 
-    masked = weights_x * (1.0 - jnp.eye(x_train.n))
+    masked = weights_x * (1.0 - jnp.eye(x_train.n, dtype=weights_x.dtype))
     cross = jnp.sum(masked * values, axis=1) / (jnp.sum(masked, axis=1) * scale)
 
     return jnp.mean(integrated - 2.0 * cross)
@@ -618,7 +618,7 @@ def cv_ls_conditional_distribution(
     weights_x = kweights(x_train, bandwidth.x, kernels=kernels)
     accumulated = kweights(y_train, bandwidth.y, at=grid, kernels=kernels, op=Op.CDF)
 
-    keep = 1.0 - jnp.eye(x_train.n)
+    keep = 1.0 - jnp.eye(x_train.n, dtype=weights_x.dtype)
     masked = weights_x * keep
     numerator = jnp.matmul(masked, accumulated.T, precision="highest")
     held_out = numerator / jnp.sum(masked, axis=1, keepdims=True)

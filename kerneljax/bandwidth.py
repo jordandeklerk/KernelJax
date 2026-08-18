@@ -405,7 +405,7 @@ def normal_reference(
         q75, q25 = jnp.percentile(data.con, jnp.array([75.0, 25.0]), axis=0)
         iqr = (q75 - q25) / (2.0 * jax.scipy.special.ndtri(jnp.asarray(0.75, dtype=q75.dtype)))
 
-        mad = jnp.median(jnp.abs(data.con - jnp.median(data.con, axis=0)), axis=0) * 1.4826
+        mad = jnp.median(jnp.abs(data.con - jnp.median(data.con, axis=0)[None, :]), axis=0) * 1.4826
 
         candidates = jnp.stack([sd, iqr, mad])
         scale = jnp.min(jnp.where(candidates > 0, candidates, jnp.inf), axis=0)
@@ -436,8 +436,12 @@ def _search_start(
     reference = normal_reference(data, kernels, target=target)
     spec = data.spec
 
-    unordered_bounds = jnp.asarray([kernels.unordered.upper_bound(levels) for levels in spec.uno_levels])
-    ordered_bounds = jnp.asarray([kernels.ordered.upper_bound(levels) for levels in spec.ord_levels])
+    unordered_bounds = jnp.asarray(
+        [kernels.unordered.upper_bound(levels) for levels in spec.uno_levels], dtype=reference.h.dtype
+    )
+    ordered_bounds = jnp.asarray(
+        [kernels.ordered.upper_bound(levels) for levels in spec.ord_levels], dtype=reference.h.dtype
+    )
 
     return dataclasses.replace(
         reference,
