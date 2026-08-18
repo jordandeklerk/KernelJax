@@ -513,35 +513,7 @@ That narrower check is enough because $R(k)$ is the only convolution quantity us
 
 ### Why standard errors need `conv`
 
-Write $w_i(x)$ for the product-kernel weight of training observation $i$ at evaluation point $x$. KernelJax first estimates a local response variance
-
-$$
-\hat\sigma^2(x)
-=
-\frac{\sum_i w_i(x) Y_i^2}{\sum_i w_i(x)}
--
-\left[
-\frac{\sum_i w_i(x) Y_i}{\sum_i w_i(x)}
-\right]^2.
-$$
-
-If there are $p$ continuous columns using the same kernel family, the roughness contribution is $R(k)^p$, and KernelJax reports
-
-$$
-\widehat{\operatorname{se}}\!\left(\hat m(x)\right)
-=
-\sqrt{
-\frac{
-\hat\sigma^2(x) R(k)^p
-}{
-\sum_i w_i(x)
-}
-}.
-$$
-
-The local variance is formed from the constant basis row regardless of the polynomial degree being fitted. The earlier [Local polynomial regression](regression.md#pointwise-standard-errors) page discusses the consequences of that approximation in more detail.
-
-In the one-dimensional example above, $\sum_i w_i(x)$ behaves like $n h f(x)$, so this has the familiar leading form proportional to $R(k)\sigma^2(x) / (nhf(x))$.
+The reported standard error scales a locally weighted response variance by $R(k)^p$ for $p$ continuous columns, and $R(k) = (k*k)(0)$ is the only convolution quantity the calculation consumes. That is why the narrower check above verifies `conv` at zero alone. The [regression guide](regression.md#pointwise-standard-errors) gives the full expression along with its qualifications.
 
 ## Bandwidth selection needs usable gradients
 

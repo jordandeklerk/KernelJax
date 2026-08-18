@@ -20,7 +20,7 @@ More concretely, KernelJax mirrors the following from `np`.
 
 Every estimator and criterion is checked numerically against `np` during development. At matched inputs, machine-precision agreement is the standard rather than statistical closeness.
 
-The [contributing](contributing.md) page describes how those comparisons fit into development.
+The [code conventions](conventions.md) page describes how those comparisons fit into development.
 
 For more on `np`, see the [associated paper](https://doi.org/10.18637/jss.v027.i05) by Hayfield and Racine or the textbook [*Nonparametric Econometrics: Theory and Practice*](https://press.princeton.edu/books/hardcover/9780691121611/nonparametric-econometrics) by Li and Racine, which develops much of the theory implemented by both packages.
 
