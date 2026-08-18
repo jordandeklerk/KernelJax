@@ -1,4 +1,4 @@
-"""Invariants across bandwidth representations, code paths, limiting cases, and degenerate inputs."""
+"""Invariants across equivalent code paths and degenerate inputs."""
 
 import jax
 import jax.numpy as jnp

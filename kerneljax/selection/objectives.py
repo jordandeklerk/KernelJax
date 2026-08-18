@@ -9,11 +9,9 @@ import jax.numpy as jnp
 from jaxtyping import Float
 
 from kerneljax.bandwidth import Bandwidth
-from kerneljax.basis import LocalPolyBasis
 from kerneljax.data import MixedData, quantile_grid
 from kerneljax.kernels import KernelSet, Op
 from kerneljax.ksum import _pad_index, _pad_rows, ksum, kweights
-from kerneljax.linalg import hat_diagonal, wls
 from kerneljax.typing import Array, ScalarFloat
 
 __all__ = [
@@ -485,17 +483,16 @@ def aic_c_regression(
     .. [2] Li, Q., & Racine, J. S. (2007). Nonparametric Econometrics: Theory
            and Practice. Princeton University Press.
     """
-    from kerneljax.estimators.regression import local_poly
+    from kerneljax.estimators.regression import _criterion_fit
 
     kernels = KernelSet() if kernels is None else kernels
     n = train.n
 
-    fit = local_poly(train, y, bw, kernels=kernels, degree=degree, chunk=chunk)
-    residual = y - fit.mean
+    mean, leverages = _criterion_fit(train, bw, y, kernels, degree, chunk)
+    residual = y - mean
     sigma_squared = jnp.mean(residual * residual)
 
-    trace = _hat_trace(train, bw, kernels, degree, chunk)
-    return jnp.log(sigma_squared) + _aic_c_penalty(trace, n)
+    return jnp.log(sigma_squared) + _aic_c_penalty(jnp.sum(leverages), n)
 
 
 def _loo_density(
@@ -504,73 +501,15 @@ def _loo_density(
     kernels: KernelSet,
     chunk: int | tuple[int, int] | None,
 ) -> Array:
-    r"""Compute the leave-one-out density at every training point, divided by :math:`(n - 1)`."""
+    r"""Compute the leave-one-out density at every training point divided by :math:`(n - 1)`."""
     fold = jnp.arange(train.n)
     scale: Literal["per_train", "per_eval"] = "per_train" if bw.h_axis == "train" else "per_eval"
     total = ksum(train, bw, kernels=kernels, fold=fold, weight_scale=scale, chunk=chunk)
     return total.reshape(-1) / (train.n - 1)
 
 
-def _hat_trace(
-    train: MixedData,
-    bw: Bandwidth,
-    kernels: KernelSet,
-    degree: int,
-    chunk: int | tuple[int, int] | None,
-) -> ScalarFloat:
-    """Sum the leverage of every training point under the full weighted least squares design."""
-    from kerneljax.estimators.regression import _moments
-
-    basis = LocalPolyBasis(degree=degree)
-    dim = basis.dim(train.spec, degree)
-    onehot = jnp.zeros((dim,), dtype=train.con.dtype).at[0].set(1.0)
-    dummy_y = jnp.zeros(train.n, dtype=train.con.dtype)
-    dummy_index = jnp.asarray(0)
-
-    if chunk is None:
-        chunk_eval, chunk_train = None, None
-    elif isinstance(chunk, tuple):
-        chunk_eval, chunk_train = chunk
-    else:
-        chunk_eval, chunk_train = chunk, None
-
-    def leverage(con_row: Array, uno_row: Array, orde_row: Array, h_row: Array | None) -> Array:
-        at_row = MixedData(con=con_row[None, :], uno=uno_row[None, :], orde=orde_row[None, :], spec=train.spec)
-        self_bw = bw if h_row is None else bw.replace(h=h_row, h_axis="shared")
-        moments_bw = self_bw if bw.h_axis == "eval" else bw
-
-        xtwx, _, _ = _moments(train, moments_bw, dummy_y, at_row, basis, kernels, None, dummy_index, chunk_train)
-        cho = wls(xtwx, onehot[:, None]).cho
-        weight_self = kweights(at_row, self_bw, kernels=kernels)[0, 0]
-        return hat_diagonal(cho, onehot, weight_self)
-
-    h_rows = bw.h if bw.h_axis != "shared" else None
-
-    if chunk_eval is None:
-        in_axes = (0, 0, 0, None if h_rows is None else 0)
-        leverages = jax.vmap(leverage, in_axes=in_axes)(train.con, train.uno, train.orde, h_rows)
-        return jnp.sum(leverages)
-
-    train_blocks = jax.tree.map(lambda column: _pad_rows(column, chunk_eval), train)
-    idx_blocks = _pad_index(jnp.arange(train.n), train.n, chunk_eval)
-    h_blocks = _pad_rows(bw.h, chunk_eval) if h_rows is not None else None
-
-    def step(carry: Array, block: tuple[MixedData, Array, Array | None]) -> tuple[Array, None]:
-        train_block, idx_block, h_block = block
-        in_axes = (0, 0, 0, None if h_block is None else 0)
-        block_leverages = jax.vmap(leverage, in_axes=in_axes)(
-            train_block.con, train_block.uno, train_block.orde, h_block
-        )
-        valid = idx_block < train.n
-        return carry + jnp.sum(jnp.where(valid, block_leverages, 0.0)), None
-
-    blocks = (train_blocks, idx_blocks, h_blocks)
-    total, _ = jax.lax.scan(jax.checkpoint(step), jnp.zeros((), dtype=train.con.dtype), blocks)
-    return total
-
-
 def _aic_c_penalty(trace: ScalarFloat, n: int) -> ScalarFloat:
-    """Return the corrected AIC penalty, replacing its pole with a smooth increasing barrier."""
+    """Return the corrected AIC penalty with its pole replaced by a smooth increasing barrier."""
     denominator = 1.0 - (trace + 2.0) / n
     margin = 0.1
 

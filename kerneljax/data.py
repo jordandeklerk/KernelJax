@@ -81,12 +81,12 @@ class ColumnSpec:
 
     @property
     def uno_levels(self) -> tuple[int, ...]:
-        """Level counts of the unordered columns, in block order."""
+        """Level counts of the unordered columns in block order."""
         return tuple(c for k, c in zip(self.kinds, self.n_levels, strict=True) if k is Kind.UNORDERED)
 
     @property
     def ord_levels(self) -> tuple[int, ...]:
-        """Level counts of the ordered columns, in block order."""
+        """Level counts of the ordered columns in block order."""
         return tuple(c for k, c in zip(self.kinds, self.n_levels, strict=True) if k is Kind.ORDERED)
 
 
@@ -367,7 +367,7 @@ def grid(
 
 
 def quantile_grid(data: MixedData | Array, *, n: int = 100) -> MixedData:
-    r"""Build evaluation points at evenly spaced probabilities, one point per probability.
+    r"""Build evaluation points at evenly spaced probabilities.
 
     Every column is evaluated at the same vector of probabilities
     :math:`p_1, \ldots, p_n` spanning the unit interval, so point :math:`j` is
@@ -466,7 +466,7 @@ def _reject_overwide_broadcast(levels: int, block: Array, label: str) -> None:
 
 
 def _as_points(data: MixedData | Array, spec: ColumnSpec | None = None) -> MixedData:
-    """Promote a raw array to a purely continuous sample, leaving a ``MixedData`` untouched."""
+    """Promote a raw array to a purely continuous sample and pass a ``MixedData`` through untouched."""
     if isinstance(data, MixedData):
         return data
 
@@ -490,7 +490,7 @@ def _swept_column(spec: ColumnSpec, vary: int | str) -> int:
 
 
 def _sweep_range(column: Array, trim: float) -> tuple[Array, Array]:
-    """Bounds of a swept continuous column, pulled inward or pushed past the sample."""
+    """Bounds of a swept continuous column pulled inward or pushed past the sample."""
     if trim < 0.0:
         edge = abs(trim)
         lowest, inner_low, inner_high, highest = jnp.quantile(

@@ -671,7 +671,7 @@ def _conditional(
     n_starts: int,
     target: Literal["density", "distribution"],
 ) -> ConditionalFit:
-    """Estimate a conditional density or distribution, which differ only in the response operator."""
+    """Estimate a conditional density or distribution by swapping the response operator."""
     kernels = _resolve_kernels(kernels, getattr(bw, "kernels", None))
     x_train, y_train = _as_points(x), _as_points(y)
 
@@ -783,7 +783,7 @@ def _resolve_conditional(
 def _conditional_reference(
     x_train: MixedData, y_train: MixedData, kernels: KernelSet, *, search: bool
 ) -> ConditionalBandwidth:
-    """Build a conditional rule of thumb, or the interior point a search starts from."""
+    """Build a conditional rule of thumb or the interior point a search starts from."""
     rule = _search_start if search else normal_reference
     return ConditionalBandwidth(x=rule(x_train, kernels), y=rule(y_train, kernels))
 

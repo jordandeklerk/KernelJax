@@ -267,7 +267,7 @@ def _row(name: str, value: object) -> str:
 
 
 def _number(value: object) -> str:
-    """Render a value for the report, degrading to plain text for a tracer."""
+    """Render a value for the report and degrade to plain text for a tracer."""
     if isinstance(value, jax.Array) and jnp.issubdtype(value.dtype, jnp.bool_):
         return str(value)
 
@@ -284,7 +284,7 @@ def _number(value: object) -> str:
 
 
 def _criterion_name(criterion: object) -> str | None:
-    """Name the selection rule, falling back to the class for a criterion the caller wrote."""
+    """Name the selection rule and fall back to the class for a criterion the caller wrote."""
     if criterion is None:
         return None
     method = getattr(criterion, "method", None)
@@ -302,7 +302,7 @@ def _estimator_name(degree: int) -> str:
 
 
 def _kernel_name(kernels: KernelSet) -> str:
-    """Name the continuous kernel family, with its order or whatever else parameterizes it."""
+    """Name the continuous kernel family with whatever parameterizes it."""
     kernel = kernels.continuous
     name = type(kernel).__name__
 

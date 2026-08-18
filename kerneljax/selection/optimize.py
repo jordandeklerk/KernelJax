@@ -279,7 +279,7 @@ def lbfgs(
 
 
 def _two_loop_direction(gradient: Array, step_history: Array, grad_history: Array) -> Array:
-    """Apply the two loop recursion, approximating the inverse Hessian acting on the gradient."""
+    """Apply the two loop recursion to approximate the inverse Hessian acting on the gradient."""
     history = step_history.shape[0]
     direction = gradient
     alphas = jnp.zeros(history, dtype=gradient.dtype)
@@ -311,7 +311,7 @@ def _two_loop_direction(gradient: Array, step_history: Array, grad_history: Arra
 def _backtracking_step(
     fun: Callable[[Array], ScalarFloat], z: Array, direction: Array, value: ScalarFloat, gradient: Array
 ) -> tuple[Array, ScalarFloat]:
-    """Backtrack along direction from z until the Armijo condition holds, rejecting non-finite steps."""
+    """Backtrack along direction from z until a finite value satisfies the Armijo condition."""
 
     def line_search_cond(carry: tuple[Array, Array, Array]) -> Array:
         step, value_new, _ = carry

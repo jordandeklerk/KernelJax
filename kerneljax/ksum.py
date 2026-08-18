@@ -153,7 +153,7 @@ def kweights_grad(
     mask: Bool[Array, "n_eval n_train"] | None = None,
     chunk: int | tuple[int, int] | None = None,
 ) -> Float[Array, "p_con n_eval n_train"]:
-    r"""Compute the derivative weight tensor, one continuous factor differentiated at a time.
+    r"""Compute the derivative weight tensor with one continuous factor differentiated at a time.
 
     Every entry multiplies one kernel factor per column exactly as :func:`~kerneljax.kweights` does
     with ``op=Op.VALUE``, except that the :math:`l`-th continuous factor is replaced by its
@@ -395,7 +395,7 @@ def _sum_over_train(
     power: int,
     chunk_train: int | None,
 ) -> Array:
-    """Contract the weight matrix for one evaluation block against v, chunking the training axis when asked."""
+    """Contract the weight matrix for one evaluation block against v."""
     if chunk_train is None:
         weights = kweights(train, bw, at=eval_block, kernels=kernels, op=op, power=power)
         if fold is not None:
@@ -439,7 +439,7 @@ def _sum_over_eval_chunks(
     chunk_eval: int,
     chunk_train: int | None,
 ) -> Array:
-    """Chunk the evaluation axis, contracting each block against the training axis."""
+    """Chunk the evaluation axis and contract each block against the training axis."""
     eval_blocks = jax.tree.map(lambda column: _pad_rows(column, chunk_eval), evaluate)
     idx_blocks = _pad_index(jnp.arange(evaluate.n), evaluate.n, chunk_eval)
     h_blocks = _pad_rows(bw.h, chunk_eval) if bw.h_axis == "eval" else None
@@ -457,7 +457,7 @@ def _sum_over_eval_chunks(
 
 
 def _grad_block(train: MixedData, bw: Bandwidth, evaluate: MixedData, kernels: KernelSet) -> Array:
-    """Compute the derivative weight tensor for one train and eval block with no chunking, assuming p_con > 0."""
+    """Compute the derivative weight tensor for one unchunked train and eval block where p_con > 0."""
     spec = train.spec
     p_con = spec.p_con
 
@@ -500,7 +500,7 @@ def _grad_over_train(
     kernels: KernelSet,
     chunk_train: int | None,
 ) -> Array:
-    """Compute the derivative weight tensor for one evaluation block, chunking the training axis when asked."""
+    """Compute the derivative weight tensor for one evaluation block."""
     if chunk_train is None:
         return _grad_block(train, bw, eval_block, kernels)
 
@@ -527,7 +527,7 @@ def _grad_over_eval_chunks(
     chunk_eval: int,
     chunk_train: int | None,
 ) -> Array:
-    """Chunk the evaluation axis, computing the derivative weight tensor for each block."""
+    """Chunk the evaluation axis and compute the derivative weight tensor for each block."""
     eval_blocks = jax.tree.map(lambda column: _pad_rows(column, chunk_eval), evaluate)
     h_blocks = _pad_rows(bw.h, chunk_eval) if bw.h_axis == "eval" else None
 
@@ -635,7 +635,7 @@ def _h_divisor(bw: Bandwidth, ops: tuple[str, ...]) -> Array:
 
 
 def _pad_rows(x: Array, chunk: int) -> Array:
-    """Pad an array's leading axis to a multiple of chunk by repeating its last row, reshaped into blocks."""
+    """Pad the leading axis to a multiple of chunk and reshape into blocks."""
     n_blocks = -(-x.shape[0] // chunk)
     pad = n_blocks * chunk - x.shape[0]
     if pad:
@@ -644,7 +644,7 @@ def _pad_rows(x: Array, chunk: int) -> Array:
 
 
 def _pad_index(idx: Array, size: int, chunk: int) -> Array:
-    """Pad an index vector with an out of range fill value, reshaped into blocks."""
+    """Pad an index vector with an out of range fill and reshape into blocks."""
     n_blocks = -(-size // chunk)
     pad = n_blocks * chunk - size
     if pad:

@@ -1,4 +1,4 @@
-"""The bandwidth parameter tree, its unconstrained bijection, and starting rules."""
+"""The bandwidth parameter tree with its unconstrained bijection and starting rules."""
 
 from __future__ import annotations
 
@@ -76,7 +76,7 @@ class SelectionResult:
 )
 @dataclasses.dataclass(frozen=True)
 class Bandwidth:
-    r"""Bandwidths in natural, constrained scale.
+    r"""Bandwidths in natural constrained scale.
 
     Values are the bandwidths themselves, so :math:`h > 0` and each
     :math:`\lambda` lies in its own bounded interval. Every entry is
@@ -131,7 +131,7 @@ class Bandwidth:
 @partial(jax.tree_util.register_dataclass, data_fields=["x", "y"], meta_fields=[])
 @dataclasses.dataclass(frozen=True)
 class ConditionalBandwidth:
-    """A pair of bandwidth trees, one for the regressors and one for the response.
+    """A pair of bandwidth trees for the regressors and the response.
 
     Parameters
     ----------
@@ -494,12 +494,12 @@ def _softplus(z: Array) -> Array:
 
 
 def _softplus_inv(h: Array) -> Array:
-    """Invert the softplus map, clamped away from zero."""
+    """Invert the softplus map on values clamped away from zero."""
     h = jnp.clip(h, 1e-7, None)
     return h + jnp.log(-jnp.expm1(-h))
 
 
 def _sigmoid_inv(p: Array) -> Array:
-    """Invert the logistic map, clamped away from the interval's edges."""
+    """Invert the logistic map on values clamped away from the interval's edges."""
     p = jnp.clip(p, 1e-7, 1.0 - 1e-7)
     return jnp.log(p) - jnp.log1p(-p)
