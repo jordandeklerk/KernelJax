@@ -8,6 +8,7 @@ from typing import Any, Literal
 
 import jax
 import jax.numpy as jnp
+from jax.experimental import checkify
 from jaxtyping import Float
 
 from kerneljax.data import ColumnSpec, MixedData
@@ -450,13 +451,23 @@ def _require_usable(bw: Bandwidth) -> None:
 
     Reading the values forces a host sync, so estimators call this after
     dispatching their evaluation, letting tracing overlap a running solve while
-    the error still surfaces before any result is returned.
+    the error still surfaces before any result is returned. Under a caller's
+    jit the values are tracers, so the checks become
+    :func:`checkify.debug_check` predicates instead, which surface under a
+    ``checkify.checkify`` transform and cost nothing otherwise.
     """
+    h = jnp.reshape(bw.h, (-1,))
+    h_pred = jnp.logical_and(jnp.all(jnp.isfinite(h)), jnp.all(h > 0.0))
+    lam_pred = jnp.asarray(True)
+    for lam in (bw.lam_uno, bw.lam_ord):
+        finite = jnp.logical_and(jnp.all(jnp.isfinite(lam)), jnp.all(lam >= 0.0))
+        lam_pred = jnp.logical_and(lam_pred, finite)
+
     try:
-        h = jnp.reshape(bw.h, (-1,))
-        h_ok = bool(jnp.all(jnp.isfinite(h))) and bool(jnp.all(h > 0.0))
-        lam_ok = all(bool(jnp.all(jnp.isfinite(lam))) and bool(jnp.all(lam >= 0.0)) for lam in (bw.lam_uno, bw.lam_ord))
-    except (ValueError, TypeError, jax.errors.ConcretizationTypeError):
+        h_ok, lam_ok = bool(h_pred), bool(lam_pred)
+    except jax.errors.ConcretizationTypeError:
+        checkify.debug_check(h_pred, "every continuous bandwidth must be finite and positive")
+        checkify.debug_check(lam_pred, "every categorical smoothing parameter must be finite and non-negative")
         return
 
     if not h_ok:

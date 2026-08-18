@@ -365,6 +365,24 @@ def ksum(
     return out
 
 
+def _fold_mask(fold: Array, rows: Array, cols: Array | None, dtype: jnp.dtype) -> Array:
+    """Build the float mask that zeroes every pair sharing a fold label."""
+    # Integer labels split into two float32-exact halves. The all-float pairwise
+    # chain fuses into the surrounding reduction where an integer comparison
+    # materializes the full matrix, and a single float cast collapses labels
+    # beyond 2**24.
+    if jnp.issubdtype(fold.dtype, jnp.integer):
+        parts = ((fold >> 12).astype(dtype), (fold & 0xFFF).astype(dtype))
+    else:
+        parts = (fold.astype(dtype),)
+
+    differs = jnp.zeros((), dtype=dtype)
+    for part in parts:
+        part_cols = part if cols is None else part[cols]
+        differs = differs + jnp.abs(part[rows][:, None] - part_cols[None, :])
+    return jnp.sign(differs)
+
+
 def _sum_over_train(
     train: MixedData,
     bw: Bandwidth,
@@ -381,8 +399,7 @@ def _sum_over_train(
     if chunk_train is None:
         weights = kweights(train, bw, at=eval_block, kernels=kernels, op=op, power=power)
         if fold is not None:
-            labels = fold.astype(jnp.promote_types(weights.dtype, jnp.float32))
-            weights = weights * jnp.abs(jnp.sign(labels[eval_idx][:, None] - labels[None, :]))
+            weights = weights * _fold_mask(fold, eval_idx, None, weights.dtype)
         if v.shape[1] == 1:
             return jnp.sum(weights * v[:, 0][None, :], axis=1)[:, None]
         return jnp.matmul(weights, v, precision="highest")
@@ -397,13 +414,10 @@ def _sum_over_train(
         bw_block = bw if h_block is None else bw.replace(h=h_block)
 
         valid = (idx_block < train.n).astype(v.dtype)[None, :]
-        if fold is None:
-            mask = valid
-        else:
-            labels = fold.astype(jnp.promote_types(v.dtype, jnp.float32))
-            mask = valid * jnp.abs(jnp.sign(labels[eval_idx][:, None] - labels[idx_block][None, :]))
+        if fold is not None:
+            valid = valid * _fold_mask(fold, eval_idx, idx_block, v.dtype)
 
-        weights = kweights(train_block, bw_block, at=eval_block, kernels=kernels, op=op, power=power) * mask
+        weights = kweights(train_block, bw_block, at=eval_block, kernels=kernels, op=op, power=power) * valid
         if v.shape[1] == 1:
             return accumulated + jnp.sum(weights * v_block[:, 0][None, :], axis=1)[:, None], None
         return accumulated + jnp.matmul(weights, v_block, precision="highest"), None

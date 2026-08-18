@@ -77,7 +77,7 @@ def _resolve_kernels(explicit: KernelSet | None, carried: KernelSet | None) -> K
 
 
 def _explain_mismatch(explicit: KernelSet, carried: KernelSet) -> str:
-    """Name the kernels that differ, and call out identity equality when reprs agree."""
+    """Explain which kernels differ and diagnose identity equality."""
     differing = []
     identity_types = []
     for kind in ("continuous", "unordered", "ordered"):

@@ -327,3 +327,24 @@ def test_spec_names_stay_out_of_equality_and_the_jit_cache():
     total(renamed)
 
     assert len(calls) == 1
+
+
+def test_from_blocks_with_explicit_levels_runs_under_jit():
+    codes = jnp.array([[0], [1], [2]])
+
+    @jax.jit
+    def build(u):
+        return MixedData.from_blocks(unordered=u, unordered_levels=3).uno
+
+    assert jnp.array_equal(build(codes), codes)
+
+
+def test_from_blocks_level_inference_under_jit_names_the_fix():
+    codes = jnp.array([[0], [1], [2]])
+
+    @jax.jit
+    def build(u):
+        return MixedData.from_blocks(unordered=u).uno
+
+    with pytest.raises(ValueError, match="unordered_levels"):
+        build(codes)
