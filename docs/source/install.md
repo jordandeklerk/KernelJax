@@ -27,7 +27,8 @@ uv pip install --upgrade "jax[cuda12]"
 ```
 
 Everything in KernelJax runs on whichever device JAX is configured for, with no change to
-the calling code.
+the calling code. Notes on float32 matmul precision and on timing compiled code live on the
+[Performance](performance.md) page.
 
 ## Double precision
 
