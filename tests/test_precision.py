@@ -7,8 +7,6 @@ import pytest
 from kerneljax.estimators.conditional import cmode, cv_ls_conditional_density, cv_ls_conditional_distribution
 from kerneljax.ksum import ksum
 
-HIGHEST = jax.lax.Precision.HIGHEST
-
 
 def _subjaxprs(value):
     if hasattr(value, "jaxpr"):
@@ -38,7 +36,7 @@ def _dot_precisions(fn, *args):
 def _assert_all_highest(precisions):
     assert precisions
     for precision in precisions:
-        assert precision == (HIGHEST, HIGHEST)
+        assert precision == (jax.lax.Precision.HIGHEST, jax.lax.Precision.HIGHEST)
 
 
 @pytest.mark.parametrize("chunk", [None, (2, 2)])

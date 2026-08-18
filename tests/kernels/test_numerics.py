@@ -34,6 +34,23 @@ def test_safe_pow_gradient_is_finite_at_zero_base(exponent, dtype):
     assert jnp.isfinite(g)
 
 
+@pytest.mark.parametrize(("exponent", "expected"), [(0, 0.0), (1, 1.0), (2, 0.0)])
+def test_safe_pow_gradient_at_zero_base_is_one_sided(exponent, expected):
+    g = jax.grad(lambda base: safe_pow(base, jnp.array(exponent)))(jnp.array(0.0))
+    assert g == expected
+
+
+def test_safe_pow_second_derivative_at_zero_base_is_one_sided():
+    g2 = jax.grad(jax.grad(lambda base: safe_pow(base, jnp.array(2))))(jnp.array(0.0))
+    assert g2 == 2.0
+
+
+def test_safe_pow_gradient_matches_power_away_from_zero():
+    g = jax.grad(lambda base: safe_pow(base, jnp.array(3)))(jnp.array(0.7))
+    reference = jax.grad(lambda base: jnp.power(base, jnp.array(3)))(jnp.array(0.7))
+    assert jnp.allclose(g, reference)
+
+
 def test_naive_power_nans_but_safe_pow_is_finite():
     naive_grad = jax.grad(lambda base: jnp.power(base, jnp.array(0.0)))(jnp.array(0.0))
     safe_grad = jax.grad(lambda base: safe_pow(base, jnp.array(0.0)))(jnp.array(0.0))

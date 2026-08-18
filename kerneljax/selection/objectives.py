@@ -381,7 +381,7 @@ def cv_cdf_distribution(
             )
             return running + _cv_cdf_block(train, bw, kernels, piece, rows, evaluate.n, on_train), None
 
-        total, _ = jax.lax.scan(accumulate, jnp.zeros((), dtype=train.con.dtype), blocks)
+        total, _ = jax.lax.scan(jax.checkpoint(accumulate), jnp.zeros((), dtype=train.con.dtype), blocks)
 
     return total / (float(train.n) * evaluate.n)
 
@@ -564,7 +564,8 @@ def _hat_trace(
         valid = idx_block < train.n
         return carry + jnp.sum(jnp.where(valid, block_leverages, 0.0)), None
 
-    total, _ = jax.lax.scan(step, jnp.zeros((), dtype=train.con.dtype), (train_blocks, idx_blocks, h_blocks))
+    blocks = (train_blocks, idx_blocks, h_blocks)
+    total, _ = jax.lax.scan(jax.checkpoint(step), jnp.zeros((), dtype=train.con.dtype), blocks)
     return total
 
 
