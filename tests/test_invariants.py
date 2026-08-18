@@ -314,3 +314,16 @@ def test_lambda_follows_column_relevance(categorical_relevance, effect, smoothed
     selected = float(local_poly(train, response, "cv_ls", degree=1).bandwidth.lam_uno[0])
 
     assert (selected > 0.5 * upper) is smoothed_away
+
+
+def test_selection_and_adaptive_density_run_under_strict_rank_promotion():
+    rng = np.random.default_rng(5)
+    x = rng.normal(size=(30, 2))
+    train = MixedData.continuous(x)
+
+    with jax.numpy_rank_promotion("raise"):
+        result = select_bandwidth(train, cv_ls_density, n_starts=1)
+        per_row = result.bandwidth.replace(h=jnp.tile(result.bandwidth.h[None, :], (30, 1)), h_axis="train")
+        value = density(train, per_row).value
+
+    assert bool(jnp.all(jnp.isfinite(value)))

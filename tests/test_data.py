@@ -307,3 +307,44 @@ def test_integer_continuous_input_flows_through_the_grids():
     spread = quantile_grid(data, n=5)
     assert float(line.con[-1, 0]) == 9.0
     assert float(spread.con[-1, 0]) == 9.0
+
+
+def test_spec_names_stay_out_of_equality_and_the_jit_cache():
+    with_names = MixedData.from_blocks(continuous=jnp.arange(6.0), names=("x",))
+    renamed = MixedData.from_blocks(continuous=jnp.arange(6.0), names=("y",))
+
+    assert with_names.spec == renamed.spec
+    assert hash(with_names.spec) == hash(renamed.spec)
+
+    calls = []
+
+    @jax.jit
+    def total(data):
+        calls.append(1)
+        return jnp.sum(data.con)
+
+    total(with_names)
+    total(renamed)
+
+    assert len(calls) == 1
+
+
+def test_from_blocks_with_explicit_levels_runs_under_jit():
+    codes = jnp.array([[0], [1], [2]])
+
+    @jax.jit
+    def build(u):
+        return MixedData.from_blocks(unordered=u, unordered_levels=3).uno
+
+    assert jnp.array_equal(build(codes), codes)
+
+
+def test_from_blocks_level_inference_under_jit_names_the_fix():
+    codes = jnp.array([[0], [1], [2]])
+
+    @jax.jit
+    def build(u):
+        return MixedData.from_blocks(unordered=u).uno
+
+    with pytest.raises(ValueError, match="unordered_levels"):
+        build(codes)

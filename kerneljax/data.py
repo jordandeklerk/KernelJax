@@ -50,13 +50,14 @@ class ColumnSpec:
         The number of levels of every column, in original column order. Zero
         for continuous columns.
     names : tuple of str, optional
-        Optional column names, in original column order. Names take part in
-        equality, so two specs differing only in their names are not equal.
+        Optional column names, in original column order. Names are display
+        metadata and stay out of equality, so two specs differing only in
+        their names share one compiled computation.
     """
 
     kinds: tuple[Kind, ...]
     n_levels: tuple[int, ...]
-    names: tuple[str, ...] | None = None
+    names: tuple[str, ...] | None = dataclasses.field(default=None, compare=False)
 
     @property
     def p(self) -> int:
@@ -198,9 +199,9 @@ class MixedData:
             ordered_levels = (ordered_levels,) * ord_a.shape[1]
 
         if not unordered_levels and uno_a.shape[1]:
-            unordered_levels = tuple(int(uno_a[:, j].max()) + 1 for j in range(uno_a.shape[1]))
+            unordered_levels = _infer_levels(uno_a, "unordered")
         if not ordered_levels and ord_a.shape[1]:
-            ordered_levels = tuple(int(ord_a[:, j].max()) + 1 for j in range(ord_a.shape[1]))
+            ordered_levels = _infer_levels(ord_a, "ordered")
         if len(unordered_levels) != uno_a.shape[1]:
             raise ValueError(
                 f"unordered_levels has {len(unordered_levels)} entries for {uno_a.shape[1]} unordered columns"
@@ -212,7 +213,11 @@ class MixedData:
                 if c < 2:
                     raise ValueError(f"{label} column {j} has {c} levels, need at least 2")
                 col = block[:, j]
-                if col.size and (int(col.min()) < 0 or int(col.max()) >= c):
+                try:
+                    out_of_range = col.size and (int(col.min()) < 0 or int(col.max()) >= c)
+                except jax.errors.ConcretizationTypeError:
+                    out_of_range = False
+                if out_of_range:
                     raise ValueError(f"{label} column {j} has codes outside [0, {c})")
 
         kinds = (
@@ -431,13 +436,28 @@ def quantile_grid(data: MixedData | Array, *, n: int = 100) -> MixedData:
     )
 
 
+def _infer_levels(block: Array, label: str) -> tuple[int, ...]:
+    """Infer per-column level counts from concrete codes."""
+    try:
+        return tuple(int(block[:, j].max()) + 1 for j in range(block.shape[1]))
+    except jax.errors.ConcretizationTypeError as exc:
+        raise ValueError(
+            f"{label}_levels cannot be inferred from traced data, because a level count is "
+            f"static compiled structure. Pass {label}_levels= explicitly, or build the "
+            "MixedData outside jit and close over it."
+        ) from exc
+
+
 def _reject_overwide_broadcast(levels: int, block: Array, label: str) -> None:
     """Refuse a broadcast level count that over-declares some column of a multi-column block."""
     for j in range(block.shape[1]):
         col = block[:, j]
         if not col.size:
             continue
-        observed = int(col.max()) + 1
+        try:
+            observed = int(col.max()) + 1
+        except jax.errors.ConcretizationTypeError:
+            continue
         if levels > observed:
             raise ValueError(
                 f"{label}_levels={levels} broadcast across {block.shape[1]} columns over-declares "

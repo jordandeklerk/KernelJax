@@ -134,7 +134,7 @@ for label, grad in [("plug-in", at_plug_in), ("selected", at_selected)]:
 ```
 
 ```text
-plug-in   d/dh=-3.008e-02  d/dlam_uno=-3.304e+00  d/dlam_ord=+3.895e-07
+plug-in   d/dh=-3.008e-02  d/dlam_uno=-3.304e+00  d/dlam_ord=+2.666e+00
 selected  d/dh=+2.045e-07  d/dlam_uno=-6.394e-05  d/dlam_ord=+1.146e-06
 ```
 

@@ -77,7 +77,9 @@ def select_bandwidth(
         Optimizer called as ``solver(objective, z0)`` in the unconstrained
         parameterization, returning ``(z, value, n_iter, converged)``.
         Defaults to :func:`~kerneljax.lbfgs`; any callable matching this signature is
-        accepted. Static.
+        accepted. Static, on the same terms as ``criterion``, so bind any
+        solver settings once at module level rather than in a fresh
+        :func:`functools.partial` per call.
     n_starts : int
         Number of starting points the solver runs from, the first being the
         reference rule and the rest perturbations of it. The best solve wins.
@@ -341,8 +343,10 @@ def _multistart(
     kernels: KernelSet,
 ) -> SelectionResult:
     """Solve from several starts and keep the best usable one."""
-    perturbations = jnp.linspace(-1.5, 1.5, n_starts - 1) if n_starts > 1 else jnp.zeros(0)
-    offsets = jnp.concatenate([jnp.zeros(1), perturbations])[:, None] * jnp.ones_like(z0)[None, :]
+    perturbations = (
+        jnp.linspace(-1.5, 1.5, n_starts - 1, dtype=z0.dtype) if n_starts > 1 else jnp.zeros(0, dtype=z0.dtype)
+    )
+    offsets = jnp.concatenate([jnp.zeros(1, dtype=z0.dtype), perturbations])[:, None] * jnp.ones_like(z0)[None, :]
     candidates = z0[None, :] + offsets
     solved, values, iterations, flags = jax.lax.map(lambda start: solver(objective, start), candidates)
     usable = jnp.logical_and(jnp.isfinite(values), jnp.all(jnp.isfinite(solved), axis=1))

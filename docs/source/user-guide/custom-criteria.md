@@ -262,6 +262,8 @@ Even if the criterion does not use those values directly, include `kernels=None`
 
 When the criterion calls another KernelJax operation internally, passing them onward is important. `kernels` ensures that selection evaluates the same weighting scheme the eventual estimator will use. `chunk` preserves the requested memory and computation strategy without changing the mathematical result.
 
+The memory bound holds under differentiation as well. The chunked operations checkpoint each block, so the gradient recomputes block weights instead of storing them, and the selector's gradient pass stays within the same budget as the value. On a GPU this matters at allocation time, because XLA reserves most of the device memory up front and an oversized intermediate fails the reservation rather than degrading gradually.
+
 ## Keep static settings on the criterion
 
 The criterion may also need information of two fundamentally different kinds.

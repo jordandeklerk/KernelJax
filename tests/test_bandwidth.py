@@ -167,3 +167,34 @@ def test_normal_reference_keeps_float32_data_in_float32_under_x64(float64_enable
     data = MixedData.continuous(np.random.default_rng(0).normal(size=20).astype(np.float32))
     reference = normal_reference(data, KernelSet())
     assert reference.h.dtype == jnp.float32
+
+
+def test_checkify_surfaces_a_bad_bandwidth_inside_jit():
+    from jax.experimental import checkify
+
+    train = MixedData.continuous(jnp.linspace(-1.0, 1.0, 8).reshape(8, 1))
+    bad = Bandwidth(h=jnp.array([-1.0]), lam_uno=jnp.zeros(0), lam_ord=jnp.zeros(0))
+
+    @jax.jit
+    def value(bw):
+        return density(train, bw).value
+
+    err, _ = checkify.checkify(value)(bad)
+
+    with pytest.raises(checkify.JaxRuntimeError, match="finite and positive"):
+        err.throw()
+
+
+def test_selection_start_keeps_float32_data_in_float32_under_x64(float64_enabled):
+    import numpy as np
+
+    rng = np.random.default_rng(3)
+    data = MixedData.from_blocks(
+        continuous=rng.normal(size=20).astype(np.float32),
+        unordered=rng.integers(0, 3, 20),
+        unordered_levels=3,
+    )
+    start = _search_start(data, KernelSet())
+
+    assert start.h.dtype == jnp.float32
+    assert start.lam_uno.dtype == jnp.float32

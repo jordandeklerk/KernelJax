@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import jax
 import jax.numpy as jnp
 
 from kerneljax.typing import Array
@@ -9,8 +10,9 @@ from kerneljax.typing import Array
 __all__ = ["safe_div", "safe_pow"]
 
 
+@jax.custom_jvp
 def safe_pow(base: Array, exponent: Array) -> Array:
-    r"""Raise ``base`` to ``exponent`` with a finite gradient at ``base == 0``.
+    r"""Raise ``base`` to ``exponent`` with the one-sided derivative at ``base == 0``.
 
     Plain exponentiation gives a NaN gradient when the base is zero, since
 
@@ -21,6 +23,12 @@ def safe_pow(base: Array, exponent: Array) -> Array:
     is :math:`0 \cdot \infty` at :math:`\lambda = 0` with :math:`d = 0`. The ordered
     categorical kernels hit this, because :math:`\lambda = 0` is a real optimum meaning no
     smoothing.
+
+    A custom JVP applies the power rule verbatim, so derivatives at zero base follow the
+    limit from inside the domain rather than the zero that a masked ``jnp.where`` would
+    report. The rule reuses ``safe_pow`` for :math:`\lambda^{d - 1}`, which makes every
+    higher-order derivative inherit the same convention. The exponent is treated as a
+    constant, matching the kernels, which only ever differentiate with respect to the base.
 
     Parameters
     ----------
@@ -36,7 +44,6 @@ def safe_pow(base: Array, exponent: Array) -> Array:
         ``safe_pow(0, d) == 0`` for ``d > 0``.
     """
     positive = base > 0.0
-
     # Swap in a harmless base before calling jnp.power. jnp.where still runs
     # both sides, so passing zero through would give a NaN gradient even though
     # we throw that value away on the next line.
@@ -45,6 +52,12 @@ def safe_pow(base: Array, exponent: Array) -> Array:
 
     masked = jnp.where(positive, powered, jnp.zeros_like(powered))
     return jnp.where(exponent == 0, jnp.ones_like(masked), masked)
+
+
+safe_pow.defjvps(
+    lambda base_dot, ans, base, exponent: exponent * safe_pow(base, exponent - 1.0) * base_dot,
+    None,
+)
 
 
 def safe_div(numerator: Array, denominator: Array) -> Array:

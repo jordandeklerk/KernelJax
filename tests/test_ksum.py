@@ -188,3 +188,15 @@ def test_an_integrating_column_leaves_the_scale_to_the_others(divisor_case):
 
     assert not jnp.allclose(both, one)
     assert jnp.allclose(one, unscaled / bw.h[0], rtol=1e-6)
+
+
+@pytest.mark.parametrize("chunk", [None, (2, 2)])
+def test_fold_labels_beyond_float32_range_stay_distinct(ksum_data, ksum_bandwidth, chunk):
+    small = jnp.arange(6)
+    large = small + 2**24
+    v = jnp.asarray(np.linspace(0.5, 2.0, 6)).reshape(6, 1)
+
+    reference = ksum(ksum_data, ksum_bandwidth, v, fold=small, chunk=chunk)
+    got = ksum(ksum_data, ksum_bandwidth, v, fold=large, chunk=chunk)
+
+    np.testing.assert_allclose(np.asarray(got), np.asarray(reference), rtol=1e-6)
