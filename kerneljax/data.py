@@ -178,7 +178,10 @@ class MixedData:
         blocks = [b for b in (continuous, unordered, ordered) if b is not None]
         if not blocks:
             raise ValueError("at least one of continuous, unordered or ordered must be given")
-        n = jnp.asarray(blocks[0]).shape[0]
+        first = jnp.asarray(blocks[0])
+        if first.ndim == 0:
+            raise ValueError("blocks must have shape (n,) or (n, p), got a scalar")
+        n = first.shape[0]
 
         con_a = jnp.zeros((n, 0)) if continuous is None else jnp.asarray(continuous)
         floating = con_a.dtype if jnp.issubdtype(con_a.dtype, jnp.floating) else jnp.result_type(float)

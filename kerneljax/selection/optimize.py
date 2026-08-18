@@ -127,7 +127,7 @@ def select_bandwidth(
     extra = {} if criterion_kwargs is None else dict(criterion_kwargs)
 
     if y is not None:
-        extra["y"] = y
+        extra["y"] = jnp.asarray(y)
 
     transform = BandwidthTransform(spec=train.spec, kernels=kernels)
     start = _search_start(train, kernels)

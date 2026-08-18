@@ -104,7 +104,7 @@ def kweights(
     spec = train.spec
 
     if evaluate.spec.kinds != spec.kinds or evaluate.spec.n_levels != spec.n_levels:
-        raise ValueError("train and at must share the same column kinds and level counts")
+        raise ValueError(_spec_mismatch(spec, evaluate.spec))
 
     con_ops, uno_ops, ord_ops = _resolve_ops(spec, op)
     weights = jnp.ones((evaluate.n, train.n), dtype=train.con.dtype)
@@ -210,7 +210,7 @@ def kweights_grad(
     spec = train.spec
 
     if evaluate.spec.kinds != spec.kinds or evaluate.spec.n_levels != spec.n_levels:
-        raise ValueError("train and at must share the same column kinds and level counts")
+        raise ValueError(_spec_mismatch(spec, evaluate.spec))
 
     if chunk is None:
         chunk_eval, chunk_train = None, None
@@ -363,6 +363,15 @@ def ksum(
         out = out / divisor[:, None] if divisor.ndim else out / divisor
 
     return out
+
+
+def _spec_mismatch(spec: ColumnSpec, eval_spec: ColumnSpec) -> str:
+    """Explain a train and at spec mismatch."""
+    return (
+        "train and at must share the same column kinds and level counts, train has kinds "
+        f"{tuple(k.value for k in spec.kinds)} with levels {spec.n_levels} and at has kinds "
+        f"{tuple(k.value for k in eval_spec.kinds)} with levels {eval_spec.n_levels}"
+    )
 
 
 def _fold_mask(fold: Array, rows: Array, cols: Array | None, dtype: jnp.dtype) -> Array:

@@ -17,7 +17,7 @@ from kerneljax.kernels import KernelSet
 from kerneljax.kernels._checks import _check_conv_at_zero, _check_grad_diagonal
 from kerneljax.kernels._numerics import safe_div
 from kerneljax.kernels.sets import _resolve_kernels
-from kerneljax.ksum import _pad_index, _pad_rows, kweights
+from kerneljax.ksum import _pad_index, _pad_rows, _spec_mismatch, kweights
 from kerneljax.linalg import hat_diagonal, wls
 from kerneljax.selection.criteria import RegressionCriterion
 from kerneljax.selection.optimize import select_bandwidth
@@ -200,6 +200,7 @@ def local_poly(
     """
     kernels = _resolve_kernels(kernels, getattr(bw, "kernels", None))
     train = _as_points(train)
+    y = jnp.asarray(y)
     if train.spec.p_con:
         if isinstance(bw, str) and bw != "normal_reference":
             _check_grad_diagonal(kernels.continuous, "value")
@@ -235,7 +236,7 @@ def local_poly(
     p_con = train.spec.p_con
 
     if evaluate.spec.kinds != train.spec.kinds or evaluate.spec.n_levels != train.spec.n_levels:
-        raise ValueError("train and at must share the same column kinds and level counts")
+        raise ValueError(_spec_mismatch(train.spec, evaluate.spec))
 
     if chunk is None:
         chunk_eval, chunk_train = None, None
