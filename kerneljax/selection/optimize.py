@@ -77,7 +77,9 @@ def select_bandwidth(
         Optimizer called as ``solver(objective, z0)`` in the unconstrained
         parameterization, returning ``(z, value, n_iter, converged)``.
         Defaults to :func:`~kerneljax.lbfgs`; any callable matching this signature is
-        accepted. Static.
+        accepted. Static, on the same terms as ``criterion``, so bind any
+        solver settings once at module level rather than in a fresh
+        :func:`functools.partial` per call.
     n_starts : int
         Number of starting points the solver runs from, the first being the
         reference rule and the rest perturbations of it. The best solve wins.

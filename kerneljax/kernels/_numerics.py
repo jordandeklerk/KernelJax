@@ -44,7 +44,6 @@ def safe_pow(base: Array, exponent: Array) -> Array:
         ``safe_pow(0, d) == 0`` for ``d > 0``.
     """
     positive = base > 0.0
-
     # Swap in a harmless base before calling jnp.power. jnp.where still runs
     # both sides, so passing zero through would give a NaN gradient even though
     # we throw that value away on the next line.

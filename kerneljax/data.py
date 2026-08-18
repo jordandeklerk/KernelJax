@@ -50,13 +50,14 @@ class ColumnSpec:
         The number of levels of every column, in original column order. Zero
         for continuous columns.
     names : tuple of str, optional
-        Optional column names, in original column order. Names take part in
-        equality, so two specs differing only in their names are not equal.
+        Optional column names, in original column order. Names are display
+        metadata and stay out of equality, so two specs differing only in
+        their names share one compiled computation.
     """
 
     kinds: tuple[Kind, ...]
     n_levels: tuple[int, ...]
-    names: tuple[str, ...] | None = None
+    names: tuple[str, ...] | None = dataclasses.field(default=None, compare=False)
 
     @property
     def p(self) -> int:

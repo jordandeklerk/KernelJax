@@ -9,6 +9,7 @@ import pytest
 from kerneljax.estimators.density import density
 from kerneljax.kernels import AitchisonAitken, Gaussian, KernelSet, LiRacine, Op, WangVanRyzin
 from kerneljax.kernels.base import ContinuousKernel
+from kerneljax.kernels.sets import _resolve_kernels
 
 
 def test_defaults_are_expected_types():
@@ -124,3 +125,20 @@ def test_kernel_holding_an_array_is_refused_at_construction():
 
     with pytest.raises(TypeError, match="not hashable"):
         KernelSet(continuous=Weighted(w=jnp.ones(3)))
+
+
+def test_contradiction_error_names_the_differing_kernel(bare_continuous_kernel_cls):
+    with pytest.raises(ValueError, match="continuous"):
+        _resolve_kernels(KernelSet(continuous=bare_continuous_kernel_cls()), KernelSet())
+
+
+def test_contradiction_error_calls_out_identity_equality():
+    class PlainGaussian(ContinuousKernel):
+        def value(self, x, y, h):
+            return jnp.exp(-0.5 * ((x - y) / h) ** 2)
+
+    explicit = KernelSet(continuous=PlainGaussian())
+    carried = KernelSet(continuous=PlainGaussian())
+
+    with pytest.raises(ValueError, match="identity"):
+        _resolve_kernels(explicit, carried)

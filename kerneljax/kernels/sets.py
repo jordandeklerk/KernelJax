@@ -71,6 +71,30 @@ def _resolve_kernels(explicit: KernelSet | None, carried: KernelSet | None) -> K
         return KernelSet() if carried is None else carried
 
     if carried is not None and explicit != carried:
-        raise ValueError("kernels= contradicts the kernels that bw was selected under")
+        raise ValueError(_explain_mismatch(explicit, carried))
 
     return explicit
+
+
+def _explain_mismatch(explicit: KernelSet, carried: KernelSet) -> str:
+    """Name the kernels that differ, and call out identity equality when reprs agree."""
+    differing = []
+    identity_types = []
+    for kind in ("continuous", "unordered", "ordered"):
+        ours, theirs = getattr(explicit, kind), getattr(carried, kind)
+        if ours == theirs:
+            continue
+        differing.append(f"{kind} ({ours!r} vs {theirs!r})")
+        if repr(ours) == repr(theirs):
+            identity_types.append(type(ours).__name__)
+
+    message = "kernels= contradicts the kernels that bw was selected under, differing in " + ", ".join(differing) + "."
+    if identity_types:
+        message += (
+            " The differing reprs are identical, which means "
+            + " and ".join(identity_types)
+            + " compares instances by identity rather than by configuration. Decorate the kernel with "
+            "@dataclasses.dataclass(frozen=True) so equal configurations compare equal, or reuse the "
+            "same instance that selection used."
+        )
+    return message
