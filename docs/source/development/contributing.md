@@ -1,6 +1,6 @@
 # Development process
 
-How a change travels from a fork to a merge, and what to include when reporting a problem instead.
+Every change to KernelJax travels the same path from a fork to a merge. The steps below cover that path, and the final section covers reporting a problem instead.
 
 ## 1. Set up your environment
 

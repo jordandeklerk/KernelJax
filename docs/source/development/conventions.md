@@ -1,6 +1,6 @@
 # Code conventions
 
-What KernelJax code looks like, how it is tested, and the constraints JAX places on it. The [development process](contributing.md) describes how a change travels from a branch to a merge.
+KernelJax code follows a small set of conventions covering testing, style, tooling, and the constraints JAX places on numerical code. The [development process](contributing.md) describes how a change travels from a branch to a merge.
 
 ## Testing
 

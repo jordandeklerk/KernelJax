@@ -1,6 +1,6 @@
 # Infrastructure
 
-The workflows that run around a contribution and the dependency declarations that keep every environment consistent.
+Continuous integration runs around every contribution, and one set of dependency declarations keeps every environment consistent.
 
 ## Continuous integration
 
