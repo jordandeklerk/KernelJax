@@ -5,6 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from kerneljax.kernels.base import ContinuousKernel as kj_ContinuousKernel
 from kerneljax.kernels.continuous import Gaussian
 
 
@@ -144,3 +145,62 @@ def test_cdf_integrates_the_value_kernel():
     want = float(jnp.sum(kernel.value(midpoints, jnp.asarray(0.0), jnp.asarray(1.0))) * step)
     got = float(kernel.cdf(jnp.asarray(1.5), jnp.asarray(0.0), jnp.asarray(1.0)))
     assert got == pytest.approx(want, rel=1e-4)
+
+
+class Epanechnikov(kj_ContinuousKernel):
+    def k(self, u):
+        return jnp.where(jnp.abs(u) <= 1.0, 0.75 * (1.0 - u * u), 0.0)
+
+
+class GaussianLeaf(kj_ContinuousKernel):
+    def k(self, u):
+        return jnp.exp(-0.5 * u * u) / jnp.sqrt(2.0 * jnp.pi)
+
+
+@pytest.mark.parametrize("u", [-0.9, -0.3, 0.0, 0.4, 0.99, 1.5])
+def test_value_is_the_leaf_at_the_scaled_difference(u):
+    got = Epanechnikov().value(jnp.array(0.3 + 0.2 * u), jnp.array(0.3), jnp.array(0.2))
+    want = 0.75 * (1.0 - u * u) if abs(u) <= 1.0 else 0.0
+    assert float(got) == pytest.approx(want, abs=1e-6)
+
+
+@pytest.mark.parametrize("u", [-0.9, -0.3, 0.4, 0.99])
+def test_derived_deriv_matches_the_analytic_slope(u):
+    h = 0.2
+    got = Epanechnikov().deriv(jnp.array(0.3 + h * u), jnp.array(0.3), jnp.array(h))
+    assert float(got) == pytest.approx(-1.5 * u / h, rel=1e-5)
+
+
+def test_derived_deriv_matches_the_shipped_gaussian(gaussian):
+    x = jnp.linspace(-2.0, 2.0, 9)[:, None, None]
+    y = jnp.linspace(-1.0, 1.0, 7)[None, :, None]
+    h = jnp.array([0.5, 1.5])
+    np.testing.assert_allclose(GaussianLeaf().deriv(x, y, h), gaussian.deriv(x, y, h), rtol=1e-5, atol=1e-7)
+
+
+def test_derived_deriv_keeps_the_broadcast_shape():
+    x = jnp.zeros((5, 1, 2))
+    y = jnp.linspace(-1.0, 1.0, 7).reshape(1, 7, 1) * jnp.ones((1, 1, 2))
+    h = jnp.array([0.5, 0.7])
+    assert Epanechnikov().deriv(x, y, h).shape == (5, 7, 2)
+
+
+def test_derived_deriv_has_a_finite_bandwidth_gradient():
+    grad = jax.grad(lambda h: jnp.sum(Epanechnikov().deriv(jnp.array(0.4), jnp.array(0.0), h)))(jnp.array(0.5))
+    assert jnp.isfinite(grad)
+
+
+def test_a_kernel_with_neither_k_nor_value_is_refused():
+    class Empty(kj_ContinuousKernel):
+        pass
+
+    with pytest.raises(TypeError, match=r"k.*value|value.*k"):
+        Empty()
+
+
+def test_value_can_still_be_written_directly():
+    class Direct(kj_ContinuousKernel):
+        def value(self, x, y, h):
+            return jnp.ones_like((x - y) / h)
+
+    assert float(Direct().value(jnp.array(1.0), jnp.array(0.0), jnp.array(2.0))) == 1.0
