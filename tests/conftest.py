@@ -69,8 +69,7 @@ def bare_ordered_kernel_cls():
 
 @dataclasses.dataclass(frozen=True)
 class Epanechnikov(ContinuousKernel):
-    def value(self, x, y, h):
-        u = (x - y) / h
+    def k(self, u):
         return jnp.where(jnp.abs(u) <= 1.0, 0.75 * (1.0 - u * u), 0.0)
 
 

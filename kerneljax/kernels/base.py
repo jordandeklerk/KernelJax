@@ -142,12 +142,52 @@ class ContinuousKernel(_Leaf, abc.ABC):
         return jax.jvp(lambda z: self.value(z, y, h), (x,), (jnp.ones_like(x),))[1]
 
     def cdf(self, x: FloatArray, y: FloatArray, h: FloatArray) -> FloatArray:
-        """Integrate the kernel from below up to ``x``."""
-        raise NotImplementedError(f"{type(self).__name__} does not implement cdf")
+        r"""Integrate the kernel from below up to ``x``.
+
+        Derived from :meth:`value` by a cumulative trapezoid over a fixed grid,
+        built once per kernel instance. In ``u`` units with no :math:`1/h`.
+
+        Parameters
+        ----------
+        x : FloatArray
+            Evaluation points.
+        y : FloatArray
+            Data points, broadcastable against ``x``.
+        h : FloatArray
+            Bandwidth, broadcastable against ``x`` and ``y``.
+
+        Returns
+        -------
+        FloatArray
+            :math:`\int_{-\infty}^{(x - y) / h} k(t)\,dt`.
+        """
+        from kerneljax.kernels._derived import lookup
+
+        return lookup(self, x, y, h, "cdf")
 
     def conv(self, x: FloatArray, y: FloatArray, h: FloatArray) -> FloatArray:
-        """Evaluate the self-convolution of the kernel at ``x`` and ``y``."""
-        raise NotImplementedError(f"{type(self).__name__} does not implement conv")
+        r"""Evaluate the self-convolution of the kernel at ``x`` and ``y``.
+
+        Derived from :meth:`value` by a fast Fourier transform over a fixed grid,
+        built once per kernel instance. In ``u`` units with no :math:`1/h`.
+
+        Parameters
+        ----------
+        x : FloatArray
+            Evaluation points.
+        y : FloatArray
+            Data points, broadcastable against ``x``.
+        h : FloatArray
+            Bandwidth, broadcastable against ``x`` and ``y``.
+
+        Returns
+        -------
+        FloatArray
+            :math:`(k * k)\bigl((x - y) / h\bigr)`.
+        """
+        from kerneljax.kernels._derived import lookup
+
+        return lookup(self, x, y, h, "conv")
 
 
 class UnorderedKernel(_Leaf, abc.ABC):

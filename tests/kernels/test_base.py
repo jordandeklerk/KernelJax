@@ -20,8 +20,6 @@ def test_op_constants_are_method_names():
 @pytest.mark.parametrize(
     ("kernel_cls_fixture", "op", "call_args"),
     [
-        ("bare_continuous_kernel_cls", "cdf", (jnp.array(0.0), jnp.array(0.0), jnp.array(1.0))),
-        ("bare_continuous_kernel_cls", "conv", (jnp.array(0.0), jnp.array(0.0), jnp.array(1.0))),
         ("bare_unordered_kernel_cls", "cdf", (jnp.array(0), jnp.array(1), jnp.array(0.5), 3)),
         ("bare_unordered_kernel_cls", "conv", (jnp.array(0), jnp.array(1), jnp.array(0.5), 3)),
         ("bare_ordered_kernel_cls", "cdf", (jnp.array(0), jnp.array(1), jnp.array(0.5), 3)),
