@@ -296,7 +296,7 @@ The result also carries the structure needed to use that bandwidth later. The ba
 
 Because a selection result carries both the chosen bandwidth and the context under which it was selected, it can be reused without reconstructing that information from separate arguments. This is especially useful because selection is usually the expensive step.
 
-{func}`~kerneljax.select_bandwidth` exposes the same selection machinery that estimator shortcuts use internally. Criterion objects configure what is minimized, and the returned {class}`~kerneljax.SelectionResult` retains the criterion and kernels under which the bandwidth was selected.
+{func}`~kerneljax.select_bandwidth` exposes the same selection machinery that the unconditional estimator shortcuts use internally. The conditional estimators select through their own rule names for now. Criterion objects configure what is minimized, and the returned {class}`~kerneljax.SelectionResult` retains the criterion and kernels under which the bandwidth was selected.
 
 ```python
 sel = kj.select_bandwidth(

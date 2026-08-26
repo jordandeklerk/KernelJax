@@ -9,6 +9,7 @@ import pytest
 
 from kerneljax.estimators.conditional import cdensity, cdist, cmode, cquantile
 from kerneljax.estimators.density import density
+from kerneljax.estimators.distribution import cdf
 from kerneljax.estimators.regression import local_poly
 from kerneljax.kernels import KernelSet
 from kerneljax.kernels.base import ContinuousKernel
@@ -40,6 +41,27 @@ def test_density_reports_a_log_likelihood(criteria_train, criteria_bandwidth):
     assert report.r_squared is None
     assert report.residual_se is None
     assert report.degree is None
+
+
+def test_distribution_reports_no_fit_measure(criteria_train, criteria_bandwidth):
+    report = summary(cdf(criteria_train, criteria_bandwidth))
+
+    assert "distribution" in report.label.lower()
+    assert report.degree is None
+    assert report.log_likelihood is None
+    assert report.r_squared is None
+    assert report.residual_se is None
+    assert report.method is None
+    assert "Bandwidth" in repr(report)
+
+
+def test_distribution_selection_fields_travel_onto_the_report(criteria_train):
+    report = summary(cdf(criteria_train, "cv_cdf", n_starts=1))
+
+    assert report.method == "cv_cdf"
+    assert report.criterion_value is not None
+    assert report.converged is not None
+    assert report.n_iter is not None
 
 
 def test_regression_leaves_likelihood_unset(criteria_train, criteria_response, criteria_bandwidth):
@@ -99,7 +121,7 @@ def test_fit_away_from_training_points_raises(criteria_train, criteria_response,
 
 def test_fit_without_metadata_raises(criteria_train, criteria_response, criteria_bandwidth):
     fit = local_poly(criteria_train, criteria_response, criteria_bandwidth)
-    with pytest.raises(ValueError, match="column"):
+    with pytest.raises(ValueError, match="records the column metadata"):
         summary(dataclasses.replace(fit, spec=None))
 
 

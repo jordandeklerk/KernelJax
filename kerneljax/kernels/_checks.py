@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 
 import jax
@@ -167,7 +168,7 @@ def _check_grad_diagonal(kernel: ContinuousKernel, op: str, *, offsets: tuple[fl
         with jax.ensure_compile_time_eval():
             point = jnp.asarray(offset)
             gradient = float(jax.grad(lambda h, x=point: jnp.sum(method(x, jnp.asarray(0.0), h)))(jnp.asarray(1.0)))
-        if not jnp.isfinite(gradient):
+        if not math.isfinite(gradient):
             name = type(kernel).__name__
             raise ValueError(
                 f"{name}.{op} has a non-finite bandwidth gradient at |x - y| = {offset:g}, a "
