@@ -335,3 +335,38 @@ def test_a_criterion_composing_density_survives_the_selection_trace(probe_x):
 
     result = select_bandwidth(probe_x, KFoldLikelihood(), kernels=KernelSet(continuous=FreshGaussian()))
     assert bool(jnp.isfinite(result.bandwidth.h[0]))
+
+
+def test_the_gradient_check_runs_inside_jit():
+    import jax
+
+    from kerneljax.kernels._checks import _check_grad_diagonal, _passed
+
+    @dataclasses.dataclass(frozen=True)
+    class Epan(ContinuousKernel):
+        def value(self, x, y, h):
+            return _epan(x, y, h)
+
+    _passed.clear()
+
+    def probe(h):
+        _check_grad_diagonal(Epan(), "value")
+        return h
+
+    assert float(jax.jit(probe)(0.2)) == pytest.approx(0.2)
+    assert ("grad_value", Epan()) in _passed
+
+
+def test_an_unguarded_branch_is_still_refused_inside_jit():
+    import jax
+
+    from kerneljax.kernels._checks import _check_grad_diagonal, _passed
+
+    _passed.clear()
+
+    def probe(h):
+        _check_grad_diagonal(UnguardedSinc(), "value")
+        return h
+
+    with pytest.raises(ValueError, match="non-finite bandwidth gradient"):
+        jax.jit(probe)(0.2)
