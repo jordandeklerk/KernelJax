@@ -3,6 +3,7 @@
 import dataclasses
 import inspect
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -11,7 +12,7 @@ from kerneljax.estimators.density import density
 from kerneljax.estimators.distribution import cdf
 from kerneljax.estimators.regression import local_poly
 from kerneljax.kernels import KernelSet
-from kerneljax.kernels._checks import _check_value_mass
+from kerneljax.kernels._checks import _check_grad_diagonal, _check_value_mass, _passed
 from kerneljax.kernels.base import ContinuousKernel
 
 
@@ -338,10 +339,6 @@ def test_a_criterion_composing_density_survives_the_selection_trace(probe_x):
 
 
 def test_the_gradient_check_runs_inside_jit():
-    import jax
-
-    from kerneljax.kernels._checks import _check_grad_diagonal, _passed
-
     @dataclasses.dataclass(frozen=True)
     class Epan(ContinuousKernel):
         def value(self, x, y, h):
@@ -358,10 +355,6 @@ def test_the_gradient_check_runs_inside_jit():
 
 
 def test_an_unguarded_branch_is_still_refused_inside_jit():
-    import jax
-
-    from kerneljax.kernels._checks import _check_grad_diagonal, _passed
-
     _passed.clear()
 
     def probe(h):
