@@ -67,6 +67,7 @@ docs/source/generated/
 /R-Package-np/
 /jax/
 /statsmodels/
+/equinox/
 
 /.superpowers/
 # runnable copies of the docs examples, for local use only
