@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from kerneljax.data import MixedData
+from kerneljax.estimators.density import density
 from kerneljax.ksum import _h_divisor, ksum, kweights
 
 
@@ -166,7 +167,6 @@ def test_jit_grad_and_vmap_work_when_chunked(ksum_data, ksum_bandwidth):
         (("value", "value"), (1, 1)),
         (("value", "cdf"), (1, 0)),
         (("cdf", "cdf"), (0, 0)),
-        (("deriv", "value"), (2, 1)),
         (("conv", "cdf"), (1, 0)),
     ],
 )
@@ -188,6 +188,39 @@ def test_an_integrating_column_leaves_the_scale_to_the_others(divisor_case):
 
     assert not jnp.allclose(both, one)
     assert jnp.allclose(one, unscaled / bw.h[0], rtol=1e-6)
+
+
+def test_a_deriv_column_sums_to_the_slope_of_the_density(criteria_train, criteria_bandwidth):
+    point = 0.3
+    step = 1e-3
+
+    def at(value):
+        return MixedData.continuous(jnp.array([[value]]))
+
+    slope = (
+        density(criteria_train, criteria_bandwidth, at=at(point + step)).value[0]
+        - density(criteria_train, criteria_bandwidth, at=at(point - step)).value[0]
+    ) / (2.0 * step)
+
+    got = ksum(criteria_train, criteria_bandwidth, at=at(point), op="deriv", weight_scale="per_eval")[0, 0]
+    got = got / criteria_train.n
+
+    assert float(got) == pytest.approx(float(slope), rel=1e-3)
+
+
+def test_a_deriv_column_among_value_columns_sums_to_the_partial_slope(divisor_case):
+    data, bw = divisor_case
+    point = jnp.array([[0.1, 0.5]])
+    step = 1e-3
+
+    def at(shift):
+        return MixedData.continuous(point + jnp.array([[shift, 0.0]]))
+
+    slope = (density(data, bw, at=at(step)).value[0] - density(data, bw, at=at(-step)).value[0]) / (2.0 * step)
+
+    got = ksum(data, bw, at=at(0.0), op=("deriv", "value"), weight_scale="per_eval")[0, 0] / data.n
+
+    assert float(got) == pytest.approx(float(slope), rel=1e-3)
 
 
 @pytest.mark.parametrize("chunk", [None, (2, 2)])

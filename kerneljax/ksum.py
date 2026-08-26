@@ -622,9 +622,7 @@ def _continuous_product(
 
 
 def _divisor_exponent(op: str) -> int:
-    """Give the power of h a column contributes to the divisor."""
-    if op == Op.DERIV:
-        return 2
+    """Give the power of h a column contributes to the divisor, zero for an integrated kernel."""
     if op == Op.CDF:
         return 0
     return 1
