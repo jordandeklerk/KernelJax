@@ -10,7 +10,7 @@ import jax.numpy as jnp
 
 from kerneljax.bandwidth import Bandwidth
 from kerneljax.data import ColumnSpec, Kind
-from kerneljax.estimators.fit import ConditionalFit, DensityFit, LocalPolyFit, ModeFit, QuantileFit
+from kerneljax.estimators.fit import ConditionalFit, DensityFit, DistributionFit, LocalPolyFit, ModeFit, QuantileFit
 from kerneljax.kernels import KernelSet
 from kerneljax.typing import Array, ScalarFloat
 
@@ -133,7 +133,7 @@ class Summary:
         return "\n".join(rows)
 
 
-def summary(fit: ConditionalFit | DensityFit | LocalPolyFit | ModeFit | QuantileFit) -> Summary:
+def summary(fit: ConditionalFit | DensityFit | DistributionFit | LocalPolyFit | ModeFit | QuantileFit) -> Summary:
     r"""Measure how well a fitted estimator describes the sample it was fit on.
 
     For a regression the report carries the squared correlation between fitted
@@ -152,7 +152,7 @@ def summary(fit: ConditionalFit | DensityFit | LocalPolyFit | ModeFit | Quantile
 
     Parameters
     ----------
-    fit : DensityFit or LocalPolyFit
+    fit : ConditionalFit or DensityFit or DistributionFit or LocalPolyFit or ModeFit or QuantileFit
         A fitted estimator, evaluated at its training points.
 
     Returns
@@ -193,6 +193,7 @@ def summary(fit: ConditionalFit | DensityFit | LocalPolyFit | ModeFit | Quantile
     --------
     local_poly : Fit a local polynomial regression.
     density : Estimate a mixed-type probability density.
+    cdf : Estimate a mixed-type cumulative distribution.
     """
     if isinstance(fit, (ConditionalFit, ModeFit, QuantileFit)):
         return _conditional_summary(fit)
@@ -200,7 +201,7 @@ def summary(fit: ConditionalFit | DensityFit | LocalPolyFit | ModeFit | Quantile
     fitted = fit.mean if isinstance(fit, LocalPolyFit) else fit.value
     if fit.spec is None:
         raise ValueError(
-            "summary needs a fit from local_poly or density, which record the column metadata a report is built from"
+            "summary needs a fit from an estimator, which records the column metadata a report is built from"
         )
 
     if fitted.shape[0] != fit.n_train:
@@ -227,6 +228,23 @@ def summary(fit: ConditionalFit | DensityFit | LocalPolyFit | ModeFit | Quantile
             r_squared=None,
             residual_se=None,
             log_likelihood=jnp.sum(jnp.log(fit.value)),
+        )
+
+    if isinstance(fit, DistributionFit):
+        return Summary(
+            label="Mixed-type distribution estimate",
+            method=method,
+            degree=None,
+            n_train=fit.n_train,
+            spec=fit.spec,
+            kernels=fit.kernels,
+            bandwidth=fit.bandwidth,
+            criterion_value=None if selection is None else selection.value,
+            converged=None if selection is None else selection.converged,
+            n_iter=None if selection is None else selection.n_iter,
+            r_squared=None,
+            residual_se=None,
+            log_likelihood=None,
         )
 
     return Summary(
