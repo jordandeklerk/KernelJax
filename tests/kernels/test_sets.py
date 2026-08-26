@@ -106,13 +106,14 @@ def test_kernel_set_jit_needs_no_static_argnames(public_api_data, public_api_ban
 
 
 def test_unhashable_kernel_is_refused_at_construction():
-    @dataclasses.dataclass
-    class Mutable(ContinuousKernel):
+    class HoldsArray(ContinuousKernel):
+        scale: object = None
+
         def value(self, x, y, h):
-            return jnp.exp(-0.5 * ((x - y) / h) ** 2)
+            return (x - y) / h
 
     with pytest.raises(TypeError, match="not hashable"):
-        KernelSet(continuous=Mutable())
+        KernelSet(continuous=HoldsArray(scale=jnp.ones(2)))
 
 
 def test_kernel_holding_an_array_is_refused_at_construction():
@@ -130,15 +131,3 @@ def test_kernel_holding_an_array_is_refused_at_construction():
 def test_contradiction_error_names_the_differing_kernel(bare_continuous_kernel_cls):
     with pytest.raises(ValueError, match="continuous"):
         _resolve_kernels(KernelSet(continuous=bare_continuous_kernel_cls()), KernelSet())
-
-
-def test_contradiction_error_calls_out_identity_equality():
-    class PlainGaussian(ContinuousKernel):
-        def value(self, x, y, h):
-            return jnp.exp(-0.5 * ((x - y) / h) ** 2)
-
-    explicit = KernelSet(continuous=PlainGaussian())
-    carried = KernelSet(continuous=PlainGaussian())
-
-    with pytest.raises(ValueError, match="identity"):
-        _resolve_kernels(explicit, carried)

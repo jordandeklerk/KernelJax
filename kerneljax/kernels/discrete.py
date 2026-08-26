@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
-
-import jax
 import jax.numpy as jnp
 
 from kerneljax.kernels._numerics import safe_pow
@@ -14,8 +11,6 @@ from kerneljax.typing import FloatArray, IntArray
 __all__ = ["AitchisonAitken", "LiRacine", "WangVanRyzin"]
 
 
-@jax.tree_util.register_static
-@dataclasses.dataclass(frozen=True)
 class AitchisonAitken(UnorderedKernel):
     """Aitchison and Aitken unordered categorical kernel."""
 
@@ -96,8 +91,6 @@ class AitchisonAitken(UnorderedKernel):
         return (levels - 1.0) / levels
 
 
-@jax.tree_util.register_static
-@dataclasses.dataclass(frozen=True)
 class WangVanRyzin(OrderedKernel):
     """Wang and van Ryzin ordered categorical kernel."""
 
@@ -224,8 +217,6 @@ class WangVanRyzin(OrderedKernel):
         return 1.0
 
 
-@jax.tree_util.register_static
-@dataclasses.dataclass(frozen=True)
 class LiRacine(OrderedKernel):
     """Li and Racine ordered categorical kernel."""
 

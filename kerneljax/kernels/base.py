@@ -3,10 +3,45 @@
 from __future__ import annotations
 
 import abc
+import contextlib
+import dataclasses
+import functools
+
+import jax
 
 from kerneljax.typing import FloatArray, IntArray
 
 __all__ = ["ContinuousKernel", "Op", "OrderedKernel", "UnorderedKernel"]
+
+
+class _Leaf:
+    """Make every subclass a frozen, value-hashed, registered static object that checks its invariants."""
+
+    def __init_subclass__(cls, **kwargs: object) -> None:
+        super().__init_subclass__(**kwargs)
+        dataclasses.dataclass(frozen=True)(cls)
+        for name in ("__setattr__", "__delattr__"):
+            if name in cls.__dict__:
+                delattr(cls, name)
+        generated = cls.__init__
+
+        @functools.wraps(generated)
+        def __init__(self: object, *args: object, **kwargs: object) -> None:
+            generated(self, *args, **kwargs)
+            for klass in type(self).__mro__:
+                check = klass.__dict__.get("__check_init__")
+                if check is not None:
+                    check(self)
+
+        cls.__init__ = __init__
+        with contextlib.suppress(ValueError):
+            jax.tree_util.register_static(cls)
+
+    def __setattr__(self, name: str, value: object) -> None:
+        raise dataclasses.FrozenInstanceError(f"cannot assign to field {name!r}")
+
+    def __delattr__(self, name: str) -> None:
+        raise dataclasses.FrozenInstanceError(f"cannot delete field {name!r}")
 
 
 class Op:
@@ -18,7 +53,7 @@ class Op:
     CONV = "conv"
 
 
-class ContinuousKernel(abc.ABC):
+class ContinuousKernel(_Leaf, abc.ABC):
     """Base class for continuous kernels.
 
     A concrete kernel implements :meth:`value` on the pair ``(x, y)`` scaled
@@ -59,7 +94,7 @@ class ContinuousKernel(abc.ABC):
         raise NotImplementedError(f"{type(self).__name__} does not implement conv")
 
 
-class UnorderedKernel(abc.ABC):
+class UnorderedKernel(_Leaf, abc.ABC):
     """Base class for unordered categorical kernels.
 
     A concrete kernel implements :meth:`value` on the integer codes
@@ -112,7 +147,7 @@ class UnorderedKernel(abc.ABC):
         """
 
 
-class OrderedKernel(abc.ABC):
+class OrderedKernel(_Leaf, abc.ABC):
     """Base class for ordered categorical kernels.
 
     A concrete kernel implements :meth:`value` on the integer levels

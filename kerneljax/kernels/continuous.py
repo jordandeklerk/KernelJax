@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
-
 import jax
 import jax.numpy as jnp
 
@@ -13,8 +11,6 @@ from kerneljax.typing import FloatArray
 __all__ = ["Gaussian"]
 
 
-@jax.tree_util.register_static
-@dataclasses.dataclass(frozen=True)
 class Gaussian(ContinuousKernel):
     """Second order Gaussian kernel with no :math:`1/h` factor.
 
