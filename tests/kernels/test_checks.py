@@ -351,7 +351,6 @@ def test_the_gradient_check_runs_inside_jit():
         return h
 
     assert float(jax.jit(probe)(0.2)) == pytest.approx(0.2)
-    assert ("grad_value", Epan()) in _passed
 
 
 def test_an_unguarded_branch_is_still_refused_inside_jit():

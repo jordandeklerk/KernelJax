@@ -49,7 +49,7 @@ def select_bandwidth(
         \lambda = \lambda_{\max}\, \sigma(z)
 
     Here :math:`\sigma` is the logistic function and :math:`\lambda_{\max}` is the kernel's
-    upper bound for that column, see :class:`~kerneljax.bandwidth.BandwidthTransform`. A
+    upper bound for that column, see :class:`~kerneljax.BandwidthTransform`. A
     smoothing parameter returned at its upper bound smooths that column away entirely.
 
     Parameters
